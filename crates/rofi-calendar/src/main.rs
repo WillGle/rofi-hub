@@ -402,9 +402,9 @@ mod tests {
         let lines: Vec<&str> = sheet.lines().collect();
         assert_eq!(
             lines[1],
-            "<span foreground=\"#a89984\">T2 T3 T4 T5 T6 T7 CN</span>"
+            "<span foreground=\"#d5c4a1\">T2 T3 T4 T5 T6 T7 CN</span>"
         );
-        assert!(sheet.contains("background=\"#d79921\""));
+        assert!(sheet.contains("background=\"#fabd2f\""));
         assert!(sheet.contains("30"));
         // The last week row is 20 visible columns: 2 chars per day.
         let last = lines.last().unwrap();

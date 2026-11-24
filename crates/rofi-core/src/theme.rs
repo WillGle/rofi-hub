@@ -107,7 +107,8 @@ impl Theme {
             base: "#2e3440".to_owned(),
             mantle: "#3b4252".to_owned(),
             text: "#eceff4".to_owned(),
-            muted: "#81a1c1".to_owned(),
+            // Same role colors as crates/screen-time/src/theme.rs.
+            muted: "#d8dee9".to_owned(),
             accent: "#88c0d0".to_owned(),
             ..Self::builtin()
         }
@@ -119,8 +120,8 @@ impl Theme {
             base: "#fdf6e3".to_owned(),
             mantle: "#eee8d5".to_owned(),
             text: "#073642".to_owned(),
-            muted: "#657b83".to_owned(),
-            accent: "#268bd2".to_owned(),
+            muted: "#52676e".to_owned(),
+            accent: "#00689d".to_owned(),
             ..Self::builtin()
         }
     }
@@ -128,11 +129,11 @@ impl Theme {
     pub fn gruvbox() -> Self {
         Self {
             name: "gruvbox",
-            base: "#282828".to_owned(),
-            mantle: "#3c3836".to_owned(),
-            text: "#ebdbb2".to_owned(),
-            muted: "#a89984".to_owned(),
-            accent: "#d79921".to_owned(),
+            base: "#1d2021".to_owned(),
+            mantle: "#282828".to_owned(),
+            text: "#fbf1c7".to_owned(),
+            muted: "#d5c4a1".to_owned(),
+            accent: "#fabd2f".to_owned(),
             ..Self::builtin()
         }
     }
@@ -159,7 +160,7 @@ configuration {{
     font: "{font}";
     show-icons: true;
     disable-history: true;
-    hover-select: true;
+    hover-select: false;
     cycle: true;
     matching: "fuzzy";
 }}
@@ -173,34 +174,49 @@ configuration {{
     selected-normal-foreground: {text};
     normal-background: {base};
     normal-foreground: {text};
+    foreground: {text};
+    background: {base};
     spacing: 0;
     margin: 0;
     padding: 0;
 }}
 
+/* Match the Screen Time window: flat chrome, generous padding, and the same
+   centered geometry. */
 window {{
-    width: 600px;
+    width: calc( ( 96ch + 64px ) min 94% );
     location: center;
     anchor: center;
     border: 0;
-    padding: 16px;
+    padding: 20px;
     background-color: {base};
 }}
 
 mainbox {{
     background-color: {base};
     children: [ inputbar, listview ];
-    spacing: 10px;
+    spacing: 8px;
     padding: 0;
 }}
 
+/* Screen Time draws its header with message/textbox. The dmenu apps keep an
+   input bar for filtering, but style it as the same flat header surface. */
 inputbar {{
-    background-color: {mantle};
+    background-color: {base};
     text-color: {text};
-    padding: 9px 12px;
-    border-radius: 6px;
+    padding: 0px 5px;
+    border: 0;
     children: [ prompt, entry ];
     spacing: 8px;
+}}
+
+/* Screen Time styles its header through message/textbox. Keep the same flat
+   surface for dmenu messages such as the calendar sheet. */
+message, textbox {{
+    background-color: {base};
+    text-color: {text};
+    padding: 0px 5px;
+    border: 0;
 }}
 
 prompt {{
@@ -211,28 +227,39 @@ prompt {{
 entry {{
     background-color: transparent;
     text-color: {text};
-    placeholder: "Search apps";
+    placeholder: "Type to filter";
     placeholder-color: {muted};
 }}
 
 listview {{
     background-color: {base};
     columns: 1;
-    lines: 10;
-    spacing: 2px;
+    lines: 20;
+    spacing: 0;
     scrollbar: false;
     cycle: true;
     dynamic: true;
     fixed-height: false;
 }}
 
+/* Screen Time uses a flat row plus a 2px accent strip for the active row. */
+element normal.active, element alternate.active, element selected.active {{
+    background-color: {mantle};
+    border: 0;
+    border-radius: 0;
+}}
+
+element selected.active {{
+    border: 0px 0px 0px 2px;
+    border-color: {accent};
+}}
+
 element {{
     children: [ element-icon, element-text ];
-    padding: 9px 12px;
-    border-radius: 6px;
+    padding: 3px 10px;
     background-color: {base};
     text-color: {text};
-    spacing: 10px;
+    spacing: 8px;
 }}
 
 element selected {{
@@ -241,24 +268,15 @@ element selected {{
 }}
 
 element-icon {{
-    size: 1.3em;
+    size: 1.2em;
     background-color: transparent;
 }}
 
 element-text {{
     background-color: transparent;
     text-color: inherit;
+    font: "{font}";
     vertical-align: 0.5;
-}}
-
-element normal.active, element alternate.active {{
-    background-color: {base};
-}}
-
-element selected.active {{
-    background-color: {mantle};
-    border: 0px 0px 0px 2px;
-    border-color: {accent};
 }}
 "#
         );
@@ -272,7 +290,14 @@ element selected.active {{
 /// back to the saved hub choice, then to `auto`. Generated Palettes only
 /// affect the Rofi window; rows use these shared role colors.
 pub fn active() -> Theme {
-    let mode = env::var("ROFI_HUB_THEME")
+    Theme::for_mode(active_mode())
+}
+
+/// The mode behind [`active`]. Direct app launches need the mode as well as
+/// the palette so a saved Nord/Gruvbox choice generates the matching theme
+/// instead of falling back to the static auto theme.
+pub fn active_mode() -> Mode {
+    env::var("ROFI_HUB_THEME")
         .ok()
         .and_then(|value| value.trim().parse().ok())
         .or_else(|| {
@@ -280,8 +305,7 @@ pub fn active() -> Theme {
                 .ok()
                 .and_then(|value| value.trim().parse().ok())
         })
-        .unwrap_or(Mode::Auto);
-    Theme::for_mode(mode)
+        .unwrap_or(Mode::Auto)
 }
 
 /// Resolve `auto` to a user Rofi theme when one exists, otherwise generate
@@ -297,6 +321,15 @@ pub fn prepare(mode: Mode, theme: &Theme) -> Option<std::path::PathBuf> {
         }
         let path = paths::config_home().join("rofi/theme.rasi");
         if path.is_file() {
+            return Some(path);
+        }
+        // A distro package installs a static fallback next to the providers.
+        // Use it before generating a runtime copy so packaged and manual
+        // installs look the same.
+        if let Some(path) = paths::hub_theme_candidates()
+            .into_iter()
+            .find(|candidate| candidate.is_file())
+        {
             return Some(path);
         }
     }
@@ -359,12 +392,51 @@ mod tests {
     }
 
     #[test]
+    fn palettes_match_screen_time_roles() {
+        let nord = Theme::nord();
+        assert_eq!(
+            (nord.muted.as_str(), nord.accent.as_str()),
+            ("#d8dee9", "#88c0d0")
+        );
+        let solarized = Theme::solarized();
+        assert_eq!(
+            (solarized.muted.as_str(), solarized.accent.as_str()),
+            ("#52676e", "#00689d")
+        );
+        let gruvbox = Theme::gruvbox();
+        assert_eq!(
+            (
+                gruvbox.base.as_str(),
+                gruvbox.mantle.as_str(),
+                gruvbox.text.as_str(),
+                gruvbox.muted.as_str(),
+                gruvbox.accent.as_str(),
+            ),
+            ("#1d2021", "#282828", "#fbf1c7", "#d5c4a1", "#fabd2f")
+        );
+    }
+
+    #[test]
     fn generated_theme_has_selection_and_entry_rules() {
         let rasi = Theme::nord().rasi();
         assert!(rasi.contains("element selected"));
         assert!(rasi.contains("inputbar"));
         assert!(!rasi.contains("Nord"));
         assert!(rasi.contains("font: \"JetBrainsMono Nerd Font 12\""));
+    }
+
+    #[test]
+    fn generated_theme_matches_screen_time_chrome() {
+        let rasi = Theme::nord().rasi();
+        // Shared visual tokens with crates/screen-time/src/theme.rs.
+        assert!(rasi.contains("padding: 20px;"));
+        assert!(rasi.contains("width: calc( ( 96ch + 64px ) min 94% );"));
+        assert!(rasi.contains("border: 0px 0px 0px 2px;"));
+        assert!(rasi.contains("border-color: #88c0d0;"));
+        assert!(rasi.contains("hover-select: false;"));
+        assert!(rasi.contains("lines: 20;"));
+        assert!(rasi.contains("padding: 3px 10px;"));
+        assert!(!rasi.contains("border-radius: 6px"));
     }
 
     #[test]

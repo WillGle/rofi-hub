@@ -30,7 +30,11 @@ pub fn config_path() -> Option<PathBuf> {
 ///
 /// 1. `ROFI_THEME`
 /// 2. `ROFI_HUB_THEME_FILE` (the hub's generated theme for this launch)
-/// 3. `~/.config/rofi/<app>.rasi`
+/// 3. `$XDG_CONFIG_HOME/rofi/<app>.rasi`
+/// 4. each `$XDG_DATA_DIRS/rofi/<app>.rasi`, then `/usr/share/rofi/<app>.rasi`
+///
+/// Step 4 is what makes a distro package's fallback theme work without a
+/// per-user copy.
 pub fn theme_path(app: &str) -> Option<PathBuf> {
     for variable in ["ROFI_THEME", "ROFI_HUB_THEME_FILE"] {
         let Some(raw) = env::var_os(variable) else {
@@ -42,10 +46,20 @@ pub fn theme_path(app: &str) -> Option<PathBuf> {
         }
     }
 
-    let path = paths::config_home()
-        .join("rofi")
-        .join(format!("{app}.rasi"));
-    path.is_file().then_some(path)
+    if let Some(path) = paths::rofi_theme_candidates(app)
+        .into_iter()
+        .find(|path| path.is_file())
+    {
+        return Some(path);
+    }
+
+    // Direct launches (keybinds, Waybar, a terminal) should still get the
+    // same flat chrome as the hub and Screen Time. `prepare` honors
+    // ROFI_THEME, the user's rofi/theme.rasi, and the packaged
+    // rofi-hub/themes/hub.rasi before generating a runtime copy.
+    let mode = crate::theme::active_mode();
+    let palette = crate::Theme::for_mode(mode);
+    crate::theme::prepare(mode, &palette)
 }
 
 /// A private PID file under the hub runtime directory. The directory is

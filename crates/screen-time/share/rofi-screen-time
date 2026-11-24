@@ -100,10 +100,40 @@ run_popup() {
         fi
     fi
     if [ "${#theme_args[@]}" -eq 0 ]; then
-        theme=${ROFI_THEME:-${SCREEN_TIME_THEME:-${XDG_DATA_HOME:-"$HOME/.local/share"}/screen-time/rofi/screen-time.rasi}}
-        if [ -r "$theme" ]; then
-            theme_args=(-theme "$theme")
+        # Explicit overrides first, then the per-user install, then system
+        # data dirs (including /usr/share for distro packages).
+        theme_candidates=()
+        if [ -n "${ROFI_THEME:-}" ]; then
+            theme_candidates+=("$ROFI_THEME")
         fi
+        if [ -n "${SCREEN_TIME_THEME:-}" ]; then
+            theme_candidates+=("$SCREEN_TIME_THEME")
+        fi
+        theme_candidates+=(
+            "${XDG_DATA_HOME:-${HOME:-/nonexistent}/.local/share}/screen-time/rofi/screen-time.rasi"
+        )
+        data_dirs=${XDG_DATA_DIRS:-/usr/local/share:/usr/share}
+        old_ifs=$IFS
+        IFS=:
+        for data_dir in $data_dirs; do
+            if [ -n "$data_dir" ]; then
+                theme_candidates+=(
+                    "$data_dir/screen-time/rofi/screen-time.rasi"
+                    "$data_dir/rofi/screen-time.rasi"
+                )
+            fi
+        done
+        IFS=$old_ifs
+        theme_candidates+=(
+            /usr/share/screen-time/rofi/screen-time.rasi
+            /usr/share/rofi/screen-time.rasi
+        )
+        for theme in "${theme_candidates[@]}"; do
+            if [ -r "$theme" ]; then
+                theme_args=(-theme "$theme")
+                break
+            fi
+        done
     fi
 
     "$rofi_bin" \

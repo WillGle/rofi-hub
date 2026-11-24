@@ -76,10 +76,13 @@ Theme modes are `auto`, `nord`, `solarized`, and `gruvbox`. Resolution order:
 5. `auto`
 
 `auto` uses `ROFI_THEME` or `~/.config/rofi/theme.rasi` when present. Otherwise
-the hub generates a complete theme in `$XDG_RUNTIME_DIR/rofi-hub/theme.rasi`
-(falling back to the state directory). The installed
-`share/rofi-hub/themes/hub.rasi` is a readable fallback, not a file the hub
-rewrites.
+the installed `share/rofi-hub/themes/hub.rasi` is used; when that file is
+absent (a source checkout), the hub generates a complete theme in
+`$XDG_RUNTIME_DIR/rofi-hub/theme.rasi` (falling back to the state directory).
+Direct launches of `rofi-calendar`, `rofi-keybinds`, and `rofi-clipboard` use
+the same fallback and the saved mode, so every app shares Screen Time's flat
+chrome: 20px window padding, 20 rows, the same palette roles, and a 2px accent
+strip on the active row.
 
 Menu shortcuts mirror Screen Time: `Alt+1` Nord, `Alt+2` Solarized Light,
 `Alt+3` Gruvbox Dark, `Alt+4` Auto. A shortcut writes the separate `theme`
