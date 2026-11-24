@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.willgle.rofi-hub</id>
+  <name>Rofi Hub</name>
+  <summary>Keyboard-driven launcher for Rofi apps</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Rofi Hub is a small launcher that presents the installed Rofi apps in one
+      keyboard-driven menu. It remembers the selected theme and starts the
+      chosen app directly.
+    </p>
+    <p>The bundle includes:</p>
+    <ul>
+      <li>Calendar: a month sheet with date search.</li>
+      <li>Keyboard Shortcuts: a Hyprland binding reference that can run exec bindings.</li>
+      <li>Clipboard History: a cliphist picker that copies the selected entry again.</li>
+      <li>Screen Time: local daily app timelines and totals for Hyprland sessions.</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">rofi-hub.desktop</launchable>
+  <url type="homepage">https://github.com/WillGle/rofi-hub</url>
+  <url type="bugtracker">https://github.com/WillGle/rofi-hub/issues</url>
+  <developer id="github.com.willgle">
+    <name>WillGle</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Utility</category>
+  </categories>
+  <provides>
+    <binary>rofi-hub</binary>
+    <binary>rofi-calendar</binary>
+    <binary>rofi-keybinds</binary>
+    <binary>rofi-clipboard</binary>
+    <binary>screen-time</binary>
+    <binary>rofi-screen-time</binary>
+  </provides>
+  <releases>
+    <release version="0.2.0" date="2026-11-24">
+      <description>
+        <p>First multi-app release with calendar, keybinds, and clipboard providers.</p>
+      </description>
+    </release>
+  </releases>
+</component>

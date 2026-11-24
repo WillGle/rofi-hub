@@ -1,0 +1,45 @@
+#compdef screen-time
+
+_screen-time() {
+    _arguments -C \
+        '1: :->command' \
+        '*::argument:->args'
+
+    case $state in
+        command)
+            _values 'screen-time command' \
+                'daemon[run the per-user tracker daemon]' \
+                'render[render the main screen or one app detail]' \
+                'doctor[check runtime, database, and snapshot health]' \
+                'snapshot[write a consistent database snapshot]' \
+                'check-data[compare the live database with a snapshot]' \
+                'schema-version[print the supported schema version]' \
+                'checkpoint[checkpoint and truncate the WAL]' \
+                'config[print or create the user configuration]'
+            ;;
+        args)
+            case $words[1] in
+                render)
+                    _arguments \
+                        '--format[output format]:format:(rofi rofi-theme)' \
+                        '--date[view a local date]:date:' \
+                        '--app[open one app detail]:key:'
+                    ;;
+                doctor)
+                    _arguments '--json[emit JSON]' '--no-runtime[skip runtime checks]'
+                    ;;
+                snapshot)
+                    _arguments '--to[destination directory]:dir:_files -/' '--json[emit JSON]' '--no-config-hash[omit the config hash]'
+                    ;;
+                check-data)
+                    _arguments '--against[snapshot directory]:dir:_files -/' '--json[emit JSON]' '--allow-migration[accept a documented migration]'
+                    ;;
+                config)
+                    _values 'config command' example path init
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_screen-time "$@"

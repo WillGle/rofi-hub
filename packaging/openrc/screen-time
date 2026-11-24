@@ -1,0 +1,33 @@
+#!/sbin/openrc-run
+# shellcheck shell=sh
+# shellcheck disable=SC2034
+# OpenRC service for Screen Time.
+#
+# Install as /etc/init.d/screen-time after installing the rofi-hub package,
+# then: rc-update add screen-time default && rc-service screen-time start
+#
+# Screen Time is a *user* daemon. On a single-user desktop the service can run
+# as that user; set SCREEN_TIME_USER to override the default (the invoking
+# user). A system-wide service should not run as root.
+description="Screen Time tracker"
+command="/usr/bin/screen-time"
+command_args="daemon"
+command_user="${SCREEN_TIME_USER:-}"
+pidfile="/run/screen-time/screen-time.pid"
+command_background=true
+
+depend() {
+    need dbus
+    after graphical.target
+}
+
+start_pre() {
+    checkpath --directory --mode 0700 /run/screen-time
+    if [ -z "$command_user" ]; then
+        eerror "Set SCREEN_TIME_USER to the desktop user before starting screen-time"
+        return 1
+    fi
+    export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u "$command_user")}"
+    export XDG_STATE_HOME="${XDG_STATE_HOME:-/home/$command_user/.local/state}"
+    export HOME="${HOME:-/home/$command_user}"
+}

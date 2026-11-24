@@ -1,0 +1,47 @@
+.TH ROFI-CALENDAR 1 "rofi-hub 0.2.0" "rofi-hub" "User Commands"
+.SH NAME
+rofi-calendar \- month sheet with a date search box for Rofi
+.SH SYNOPSIS
+.B rofi-calendar
+.SH DESCRIPTION
+.B rofi-calendar
+shows a month grid in Rofi. Enter on a day or on the today button opens the
+selected date with the system handler. Typing a date jumps to it.
+.PP
+Accepted search forms are
+.BR 15 ,
+.BR 15/3 ,
+.BR 3/2027 ,
+.BR 15/3/2027 ,
+and
+.BR 2027-03-15 .
+.SH KEYS
+.TP
+.B Left / Right
+Browse months.
+.TP
+.B Ctrl+t
+Return to today.
+.SH ENVIRONMENT
+.TP
+.B ROFI_BIN
+Rofi executable. Defaults to
+.BR rofi .
+.TP
+.B ROFI_CONFIG
+Explicit Rofi configuration file.
+.TP
+.B ROFI_THEME
+Theme override. Otherwise
+.I ~/.config/rofi/calendar.rasi
+and the system data directories are searched.
+.TP
+.B ROFI_CALENDAR_TODAY
+Pin "today" to a
+.I YYYY-MM-DD
+date. Intended for tests.
+.SH EXIT STATUS
+Zero on success or cancel; non-zero when Rofi cannot be started.
+.SH SEE ALSO
+.BR rofi-hub (1),
+.BR rofi (1)

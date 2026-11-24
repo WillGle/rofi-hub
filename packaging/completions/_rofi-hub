@@ -1,0 +1,34 @@
+#compdef rofi-hub
+
+_rofi-hub() {
+    _arguments -C \
+        '1: :->command' \
+        '--theme[theme override]:mode:(auto nord solarized gruvbox)' \
+        '--no-theme[do not pass a generated theme]' \
+        '*::argument:->args'
+
+    case $state in
+        command)
+            _values 'rofi-hub command' \
+                'open[open the hub menu or one provider]' \
+                'list[list installed providers]' \
+                'theme[show or change the hub theme]' \
+                'doctor[check Rofi, providers, and themes]'
+            ;;
+        args)
+            case $words[1] in
+                theme)
+                    _values 'theme command' show set list dump
+                    ;;
+                list|doctor)
+                    _arguments '--json[emit machine-readable JSON]'
+                    ;;
+                open)
+                    _arguments '--theme[theme override]:mode:(auto nord solarized gruvbox)' '--no-theme[do not pass a generated theme]'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_rofi-hub "$@"

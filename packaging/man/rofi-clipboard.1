@@ -1,0 +1,43 @@
+.TH ROFI-CLIPBOARD 1 "rofi-hub 0.2.0" "rofi-hub" "User Commands"
+.SH NAME
+rofi-clipboard \- pick an entry from cliphist and copy it again
+.SH SYNOPSIS
+.B rofi-clipboard
+.SH DESCRIPTION
+.B rofi-clipboard
+lists the entries reported by
+.BR "cliphist list"
+and, on Enter, decodes the selected entry and pipes it to
+.BR wl-copy .
+Only the list index is carried in the Rofi row id, so clipboard contents
+cannot break the dmenu metadata protocol.
+.PP
+Both
+.B cliphist
+and
+.B wl-copy
+must be present in
+.BR PATH .
+The command fails cleanly, with a dependency hint, when either is missing or
+when the history is empty.
+.SH ENVIRONMENT
+.TP
+.B ROFI_BIN
+Rofi executable. Defaults to
+.BR rofi .
+.TP
+.B ROFI_CONFIG
+Explicit Rofi configuration file.
+.TP
+.B ROFI_THEME
+Theme override. Otherwise
+.I ~/.config/rofi/clipboard.rasi
+and the system data directories are searched.
+.SH EXIT STATUS
+Zero on success, cancel, or an empty history. Non-zero when a dependency is
+missing or a subprocess fails.
+.SH SEE ALSO
+.BR rofi-hub (1),
+.BR rofi (1),
+.BR cliphist (1),
+.BR wl-copy (1)
