@@ -18,8 +18,9 @@ if [ "${ROFI_RETV+x}" = x ]; then
     exec "$dir/screen-time" render --format rofi
 fi
 
-if ! command -v rofi >/dev/null 2>&1; then
-    printf 'rofi-screen-time: rofi is required but was not found in PATH\n' >&2
+rofi_bin=${ROFI_BIN:-rofi}
+if ! command -v "$rofi_bin" >/dev/null 2>&1; then
+    printf 'rofi-screen-time: %s is required but was not found in PATH\n' "$rofi_bin" >&2
     printf 'Install Rofi 2.x, then run: screen-time doctor\n' >&2
     exit 127
 fi
@@ -80,6 +81,10 @@ if [ -n "$theme_request" ]; then
 fi
 
 run_popup() {
+    config_args=()
+    if [ -n "${ROFI_CONFIG:-}" ] && [ -r "$ROFI_CONFIG" ]; then
+        config_args=(-config "$ROFI_CONFIG")
+    fi
     theme_args=()
     if mkdir -p "$theme_dir" 2>/dev/null; then
         theme_tmp=$(mktemp "${theme_dir}/rofi-theme.XXXXXX" 2>/dev/null || true)
@@ -101,7 +106,8 @@ run_popup() {
         fi
     fi
 
-    rofi \
+    "$rofi_bin" \
+        "${config_args[@]}" \
         -show screen-time \
         -modes "screen-time:$self" \
         -pid "${ROFI_PIDFILE:-${XDG_RUNTIME_DIR:-/tmp}/rofi-screen-time.pid}" \

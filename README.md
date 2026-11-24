@@ -129,6 +129,26 @@ install.sh              signed bundle installer/updater
 flake.nix               packages and the Home Manager module
 ```
 
+## Environment
+
+| Variable | Effect |
+| --- | --- |
+| `ROFI_BIN` | Rofi executable used by the hub and the Screen Time wrapper. |
+| `ROFI_CONFIG` | Extra Rofi config passed with `-config`; both UIs honor it. |
+| `ROFI_THEME` | Base theme used by the hub's `auto` mode and the Screen Time fallback. |
+| `ROFI_HUB_THEME` | One-run theme override; does not change the saved choice. |
+| `ROFI_HUB_PROVIDER_DIR` | Extra provider directories, colon-separated. |
+| `ROFI_HUB_PROVIDER`, `ROFI_HUB_THEME`, `ROFI_HUB_THEME_FILE` | Set for the launched provider. |
+
+Providers are resolved from `PATH`, then from the directory containing the
+`rofi-hub` binary, so a `~/.local/bin` install works even when the graphical
+session does not include that directory in `PATH`. The hub never kills other
+Rofi processes; each app owns its PID file.
+
+`rofi-hub list --json` is the stable registry for desktop integrations
+(Hyprland, Waybar, keybind menus): read ids, names, commands, and availability
+from it instead of hardcoding labels.
+
 See [architecture](docs/ARCHITECTURE.md) for the provider contract and update
 model, and [migration notes](docs/MIGRATING.md) if you used the standalone
 `screen-time-rofi` repository.

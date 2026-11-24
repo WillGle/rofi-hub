@@ -32,7 +32,7 @@ jobs:
       - name: Evaluation charts
         run: python3 crates/screen-time/scripts/render-evaluation-charts.py --check
       - name: Shell scripts
-        run: shellcheck install.sh uninstall.sh scripts/package-release.sh scripts/sign-release.sh scripts/test-installer.sh crates/screen-time/share/rofi-screen-time crates/screen-time/scripts/restore-drill.sh crates/screen-time/scripts/benchmark-linux-sandbox.sh
+        run: shellcheck install.sh uninstall.sh scripts/*.sh crates/screen-time/scripts/*.sh crates/screen-time/share/rofi-screen-time
       - name: Installer integration and fault injection
         env:
           RUSTUP_TOOLCHAIN: stable

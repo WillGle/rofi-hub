@@ -41,13 +41,28 @@ version = "0.5.0"
 
 `exec` is executed directly with `std::process::Command`. The hub does not
 evaluate shell syntax. It passes `ROFI_HUB_PROVIDER`, `ROFI_HUB_THEME`, and,
-when a generated theme exists, `ROFI_HUB_THEME_FILE` to the child.
+when a generated theme exists, `ROFI_HUB_THEME_FILE` to the child. `ROFI_BIN`,
+`ROFI_CONFIG`, and `ROFI_THEME` are inherited, and the Screen Time wrapper
+honors the same variables.
+
+`rofi-hub list --json` is the supported registry for Hyprland, Waybar, and
+keybind menus. Those consumers should read ids, names, commands, and
+availability from the hub instead of matching command strings; that avoids
+label drift when a provider is renamed.
 
 ## Menu and theming
 
 The hub builds one dmenu row per provider. The row `id` is the manifest id;
 `rofi -format s` returns the text before the first NUL, which maps straight
 back to the provider. Rows carry Pango display text and optional icons.
+
+The runner resolves `ROFI_BIN` first (an invalid override is an error, not a
+silent fallback), passes `ROFI_CONFIG` with `-config`, and uses a hub-specific
+`-pid` file. It never calls `pkill`/`killall`; a second launch therefore cannot
+close an askpass prompt or the Screen Time popup. Provider commands are
+resolved from `PATH`, then from the directory containing the hub binary, so a
+user install works even when `~/.local/bin` is missing from the session
+`PATH`.
 
 Theme modes are `auto`, `nord`, `solarized`, and `gruvbox`. Resolution order:
 

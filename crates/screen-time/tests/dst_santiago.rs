@@ -3,6 +3,16 @@ use std::sync::Once;
 use chrono::NaiveDate;
 use screen_time::timeutil;
 
+/// Chrono's local-time reader only searches the hard-coded system zoneinfo
+/// directories. When the build provides `TZDIR` (for example in the Nix
+/// sandbox), point at the file directly so the DST cases still run.
+fn test_tz(zone: &str) -> String {
+    match std::env::var("TZDIR") {
+        Ok(dir) if !dir.is_empty() => format!(":{dir}/{zone}"),
+        _ => zone.to_owned(),
+    }
+}
+
 static INIT_TZ: Once = Once::new();
 
 /// This binary uses one zone only. America/Santiago skips 00:00-01:00 on
@@ -10,7 +20,7 @@ static INIT_TZ: Once = Once::new();
 fn init_tz() {
     INIT_TZ.call_once(|| {
         // SAFETY: single-zone test binary; set before any Local conversion.
-        unsafe { std::env::set_var("TZ", "America/Santiago") };
+        unsafe { std::env::set_var("TZ", test_tz("America/Santiago")) };
     });
 }
 

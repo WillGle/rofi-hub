@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::env;
+use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
@@ -57,6 +58,7 @@ fn open(
         eprintln!("rofi-hub: warning: {warning}");
     }
 
+    let explicit_provider = provider.is_some();
     if let Some(id) = provider {
         let provider = manifests.find(&id).ok_or_else(|| {
             let available = manifests
@@ -89,7 +91,15 @@ fn open(
         );
     }
 
-    let rofi = Rofi::find()?;
+    let rofi = match Rofi::find() {
+        Ok(rofi) => rofi,
+        Err(error) => {
+            if !explicit_provider {
+                notify::notify_error("Rofi Hub", "Rofi is required but was not found in PATH");
+            }
+            return Err(error.into());
+        }
+    };
     let providers = manifests.providers();
 
     loop {
@@ -101,6 +111,10 @@ fn open(
         if !no_theme {
             options.theme = choice.path.clone();
         }
+        options.config = rofi_config();
+        let runtime = paths::hub_runtime_dir();
+        let _ = std::fs::create_dir_all(&runtime);
+        options.pid = Some(runtime.join("rofi.pid"));
         for (index, (_, key)) in THEME_BINDINGS.iter().enumerate() {
             options.extra_args.push(format!("-kb-custom-{}", index + 1));
             options.extra_args.push((*key).to_owned());
@@ -154,25 +168,48 @@ fn provider_item(provider: &ProviderManifest, theme: &Theme) -> Item {
     item
 }
 
-pub fn exec_available(exec: &[String]) -> bool {
-    let Some(program) = exec.first() else {
-        return false;
-    };
+/// Rofi's `-config` override, when the user set a readable `ROFI_CONFIG`.
+pub fn rofi_config() -> Option<PathBuf> {
+    let raw = env::var_os("ROFI_CONFIG")?;
+    let value = raw.to_string_lossy();
+    let path = paths::expand_tilde(value.trim());
+    path.is_file().then_some(path)
+}
+
+/// Resolve a provider command. Prefer `PATH`, then the directory containing
+/// the hub binary. The second step keeps a user install working even when
+/// `~/.local/bin` is missing from a graphical session's `PATH`.
+fn resolve_program(program: &str) -> Option<PathBuf> {
     if program.contains('/') {
-        which::is_executable(Path::new(program))
-    } else {
-        which::find(program).is_some()
+        let path = PathBuf::from(program);
+        return which::is_executable(&path).then_some(path);
     }
+    if let Some(path) = which::find(program) {
+        return Some(path);
+    }
+    let own = env::current_exe().ok()?;
+    let sibling = own.parent()?.join(program);
+    which::is_executable(&sibling).then_some(sibling)
+}
+
+pub fn exec_available(exec: &[String]) -> bool {
+    exec.first()
+        .and_then(|program| resolve_program(program))
+        .is_some()
 }
 
 fn launch(provider: &ProviderManifest, choice: &Choice) -> Result<()> {
-    if !exec_available(&provider.exec) {
+    let Some(program) = provider
+        .exec
+        .first()
+        .and_then(|program| resolve_program(program))
+    else {
         let message = format!("{} is not installed or not in PATH", provider.exec[0]);
         notify::notify_error("Rofi Hub", &message);
         bail!("{}: {message}", provider.name);
-    }
+    };
 
-    let mut command = Command::new(&provider.exec[0]);
+    let mut command = Command::new(program);
     command
         .args(&provider.exec[1..])
         .env("ROFI_HUB_PROVIDER", &provider.id)
@@ -182,6 +219,9 @@ fn launch(provider: &ProviderManifest, choice: &Choice) -> Result<()> {
         .stderr(Stdio::inherit());
     if let Some(path) = &choice.path {
         command.env("ROFI_HUB_THEME_FILE", path);
+    }
+    if let Some(config) = rofi_config() {
+        command.env("ROFI_CONFIG", config);
     }
 
     match command.spawn() {

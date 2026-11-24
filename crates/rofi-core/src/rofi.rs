@@ -1,10 +1,11 @@
 //! Small wrapper around `rofi -dmenu`.
 
+use std::env;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::{Error, Item, Result, which};
+use crate::{Error, Item, Result, paths, which};
 
 /// What the user did in the menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,6 +22,11 @@ pub enum Outcome {
 pub struct DmenuOptions {
     pub prompt: Option<String>,
     pub theme: Option<PathBuf>,
+    /// Rofi configuration passed with `-config` (for example `ROFI_CONFIG`).
+    pub config: Option<PathBuf>,
+    /// Per-launcher pidfile passed with `-pid`. Keeping this separate from
+    /// the default rofi.pid avoids interfering with other Rofi prompts.
+    pub pid: Option<PathBuf>,
     pub extra_args: Vec<String>,
 }
 
@@ -39,7 +45,25 @@ pub struct Rofi {
 }
 
 impl Rofi {
+    /// Resolve `ROFI_BIN` first, then `PATH`. The override is a path or a
+    /// command name; an invalid override is an error rather than a silent
+    /// fallback, so a broken desktop shortcut is visible.
     pub fn find() -> Result<Self> {
+        if let Some(raw) = env::var_os("ROFI_BIN") {
+            let value = raw.to_string_lossy();
+            let value = value.trim();
+            if !value.is_empty() {
+                let binary = if value.contains('/') {
+                    let path = paths::expand_tilde(value);
+                    which::is_executable(&path).then_some(path)
+                } else {
+                    which::find(value)
+                };
+                return binary
+                    .map(|binary| Self { binary })
+                    .ok_or(Error::RofiMissing);
+            }
+        }
         let binary = which::find("rofi").ok_or(Error::RofiMissing)?;
         Ok(Self { binary })
     }
@@ -89,6 +113,12 @@ impl Rofi {
         }
         if let Some(prompt) = &options.prompt {
             command.arg("-p").arg(prompt);
+        }
+        if let Some(config) = &options.config {
+            command.arg("-config").arg(config);
+        }
+        if let Some(pid) = &options.pid {
+            command.arg("-pid").arg(pid);
         }
         if let Some(theme) = &options.theme {
             command.arg("-theme").arg(theme);
@@ -161,6 +191,8 @@ mod tests {
         let options = DmenuOptions {
             prompt: Some("Hub".to_owned()),
             theme: Some(PathBuf::from("/tmp/theme.rasi")),
+            config: Some(PathBuf::from("/tmp/config.rasi")),
+            pid: Some(PathBuf::from("/tmp/rofi-hub.pid")),
             extra_args: vec!["-kb-custom-1".to_owned(), "Alt+1".to_owned()],
         };
         let args = args(&options, true);
@@ -169,6 +201,8 @@ mod tests {
         assert!(args.contains(&"s".to_owned()));
         assert!(args.contains(&"-show-icons".to_owned()));
         assert!(args.contains(&"/tmp/theme.rasi".to_owned()));
+        assert!(args.contains(&"/tmp/config.rasi".to_owned()));
+        assert!(args.contains(&"/tmp/rofi-hub.pid".to_owned()));
         assert_eq!(args[args.len() - 2], "-kb-custom-1");
     }
 

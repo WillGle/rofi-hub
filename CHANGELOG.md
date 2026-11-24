@@ -11,5 +11,10 @@
   tracking, the static day timeline, SQLite history, and signed updater.
 - Keep the conservative update path: release verification, database snapshot,
   verified backups, rollback, periodic checks, and opt-in auto-apply timers.
+- Honor `ROFI_BIN`, `ROFI_CONFIG`, and `ROFI_THEME` consistently in the hub and
+  the Screen Time wrapper; providers resolve from `PATH` or next to the hub
+  binary. The hub uses a private PID file and never kills other Rofi prompts.
+- Keep CLI failures on stderr instead of desktop notifications, and cover
+  dispatch, provider environment, themes, and `doctor` with integration tests.
 - Add a Nix flake with all-in-one, launcher-only, and tracker-only packages plus
   Home Manager modules.

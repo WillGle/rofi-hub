@@ -369,7 +369,8 @@ font change applies on the next popup open; the daemon does not restart. The
 wrapper generates a complete Rofi theme in
 `$XDG_RUNTIME_DIR/screen-time/rofi-theme.rasi`, imports the configured/user Rofi
 theme for chrome if it exists, and passes the resolved font/colors to Rofi.
-`ROFI_THEME` overrides the base Rofi theme. The installed
+`ROFI_THEME` overrides the base Rofi theme, `ROFI_BIN` selects the Rofi
+executable, and `ROFI_CONFIG` adds a `-config` file for the popup. The installed
 `share/rofi/screen-time.rasi` is only a fallback. The installer never overwrites
 `~/.config/screen-time/config.toml`.
 

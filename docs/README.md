@@ -15,7 +15,7 @@ From the workspace root:
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-shellcheck install.sh uninstall.sh scripts/*.sh crates/screen-time/share/rofi-screen-time
+shellcheck install.sh uninstall.sh scripts/*.sh crates/screen-time/scripts/*.sh crates/screen-time/share/rofi-screen-time
 scripts/test-installer.sh
 nix flake check
 ```

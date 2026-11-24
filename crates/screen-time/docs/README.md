@@ -13,7 +13,7 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo test --package screen-time --features session-count --lib
-shellcheck install.sh uninstall.sh scripts/*.sh crates/screen-time/share/rofi-screen-time
+shellcheck install.sh uninstall.sh scripts/*.sh crates/screen-time/scripts/*.sh crates/screen-time/share/rofi-screen-time
 nix build .#
 nix flake check
 python3 crates/screen-time/scripts/render-evaluation-charts.py --check
