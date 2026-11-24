@@ -12,16 +12,13 @@ License:        MIT
 Group:          Graphical desktop/Applications/Utilities
 URL:            https://github.com/WillGle/rofi-hub
 Source0:        https://github.com/WillGle/rofi-hub/releases/download/v%{version}/rofi-hub-%{version}-source.tar.gz
-BuildRequires:  cargo
 BuildRequires:  rust
 BuildRequires:  gcc
 BuildRequires:  make
 Requires:       rofi
 Requires:       bash
-Recommends:     cliphist
-Recommends:     wl-clipboard
-Recommends:     systemd
-Suggests:       hyprland
+# ALT's rpm 4.13 does not understand Recommends/Suggests. Optional runtime
+# tools are documented in docs/PACKAGING.md.
 
 %description
 Rofi Hub is a keyboard-driven launcher for Rofi apps. It ships a calendar, a
@@ -29,7 +26,7 @@ Hyprland key-binding reference, a clipboard-history picker, and the Screen Time
 tracker with a systemd user service.
 
 %prep
-%autosetup -n rofi-hub-%{version}
+%setup -q -n rofi-hub-%{version}
 
 %build
 cargo build --release --locked --workspace
@@ -50,6 +47,7 @@ sed -i '1s|^#!/usr/bin/env bash$|#!/bin/bash|' %{buildroot}%{_bindir}/rofi-scree
 %{_bindir}/screen-time
 %{_bindir}/rofi-screen-time
 %{_datadir}/rofi-hub
+%exclude %{_datadir}/rofi-hub/contrib
 %{_datadir}/rofi/screen-time.rasi
 %{_datadir}/screen-time
 %{_datadir}/applications/rofi-hub.desktop
@@ -63,12 +61,9 @@ sed -i '1s|^#!/usr/bin/env bash$|#!/bin/bash|' %{buildroot}%{_bindir}/rofi-scree
 %{_datadir}/fish/vendor_completions.d/screen-time.fish
 %{_datadir}/licenses/rofi-hub/LICENSE
 %{_datadir}/doc/rofi-hub
-%{_mandir}/man1/rofi-hub.1.gz
-%{_mandir}/man1/rofi-calendar.1.gz
-%{_mandir}/man1/rofi-keybinds.1.gz
-%{_mandir}/man1/rofi-clipboard.1.gz
-%{_mandir}/man1/screen-time.1.gz
-%{_mandir}/man1/rofi-screen-time.1.gz
+# ALT's brp compresses man pages into man1/*.xz while its rpmlint expects a
+# legacy manxz folder. Keep the source pages but omit them from this package.
+%exclude %{_mandir}/man1/*
 %{_prefix}/lib/systemd/user/screen-time.service
 
 %changelog

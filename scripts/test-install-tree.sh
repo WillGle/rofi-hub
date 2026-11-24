@@ -127,13 +127,25 @@ else
 fi
 
 if command -v rofi >/dev/null 2>&1; then
+    rofi_ok=1
     for theme in \
         "$FULL${PREFIX}/share/rofi-hub/themes/hub.rasi" \
         "$FULL${PREFIX}/share/rofi/screen-time.rasi"; do
-        rofi -no-config -theme "$theme" -dump-theme >/dev/null ||
+        if ! output="$(rofi -no-config -theme "$theme" -dump-theme 2>&1)"; then
+            # Some distro builds refuse to dump a theme without X/Wayland.
+            if printf '%s' "$output" | grep -q "Failed to open display\|Connection has error"; then
+                rofi_ok=0
+                continue
+            fi
+            printf '%s\n' "$output" >&2
             fail "Rofi rejected the installed theme: $theme"
+        fi
     done
-    pass "rofi parses the installed hub and screen-time themes"
+    if [ "$rofi_ok" -eq 1 ]; then
+        pass "rofi parses the installed hub and screen-time themes"
+    else
+        skip "rofi needs a display to dump themes"
+    fi
 else
     skip "rofi not installed"
 fi
