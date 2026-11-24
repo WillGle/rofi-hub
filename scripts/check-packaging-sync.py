@@ -7,6 +7,7 @@ manifest, distro recipes, and the release workflow.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -127,8 +128,6 @@ def main() -> int:
     arch_bin = read("packaging/arch/rofi-hub-bin/PKGBUILD")
     if "sha256sums_x86_64=('SKIP')" in arch_bin:
         warn("packaging/arch/rofi-hub-bin/PKGBUILD: replace SKIP checksums after publishing")
-    if "sha256sums=('dea9c784" not in read("packaging/arch/PKGBUILD"):
-        warn("packaging/arch/PKGBUILD: update the source checksum at release time")
 
     # MANIFEST is exactly the --dry-run output.
     env = os.environ.copy()
@@ -164,6 +163,31 @@ def main() -> int:
             fail(f"packaging/MANIFEST is out of date (missing: {missing[:5]}, extra: {extra[:5]})")
         else:
             print(f"check-packaging-sync: manifest matches {len(manifest)} files")
+
+    # If the release source archive has been built locally, every recipe must
+    # carry its checksum. CI builds it before this check.
+    archive = ROOT / "dist" / f"rofi-hub-{version}-source.tar.gz"
+    if archive.is_file():
+        data = archive.read_bytes()
+        sha256 = hashlib.sha256(data).hexdigest()
+        sha512 = hashlib.sha512(data).hexdigest()
+        md5 = hashlib.md5(data).hexdigest()
+        blake = hashlib.blake2b(data, digest_size=64).hexdigest()
+        size = len(data)
+        checks = [
+            ("packaging/arch/PKGBUILD", sha256),
+            ("packaging/arch/.SRCINFO", sha256),
+            ("packaging/alpine/APKBUILD", sha512),
+            ("packaging/void/template", sha256),
+            ("packaging/slackbuilds/rofi-hub.info", md5),
+            ("packaging/gentoo/Manifest", blake),
+        ]
+        for path, digest in checks:
+            if digest not in read(path):
+                fail(f"{path}: checksum does not match {archive.name}")
+        if f"DIST rofi-hub-{version}.tar.gz {size} " not in read("packaging/gentoo/Manifest"):
+            fail("packaging/gentoo/Manifest: source size does not match the archive")
+        print(f"check-packaging-sync: source checksums match {archive.name}")
 
     # Desktop and AppStream assets agree.
     desktop = read("packaging/rofi-hub.desktop")

@@ -21,11 +21,18 @@ tmp="$DIST/.$NAME-source.tar.gz.$$"
 trap 'rm -f -- "$tmp"' EXIT INT TERM
 
 # Keep the tree taggable and reproducible: no build output, no local state,
-# no git metadata, no user goal file. packaging/ is included on purpose.
+# no git metadata, no user goal file. packaging/ install assets are included;
+# distro recipe directories are excluded because their checksums describe
+# this archive, which would otherwise be self-referential.
 tar --sort=name --mtime="@$EPOCH" --owner=0 --group=0 --numeric-owner \
     --exclude='./target' --exclude='./dist' --exclude='./result' \
     --exclude='./.git' --exclude='./.direnv' --exclude='./state' \
     --exclude='./goal.md' \
+    --exclude='./packaging/arch' --exclude='./packaging/alpine' \
+    --exclude='./packaging/gentoo' --exclude='./packaging/void' \
+    --exclude='./packaging/slackbuilds' --exclude='./packaging/fedora' \
+    --exclude='./packaging/opensuse' --exclude='./packaging/alt' \
+    --exclude='./packaging/debian' \
     --transform="s,^\./,${NAME}/," --transform="s,^\.,${NAME}," \
     -cf - . | gzip -9n >"$tmp"
 mv -f -- "$tmp" "$ASSET"

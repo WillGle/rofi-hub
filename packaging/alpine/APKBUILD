@@ -4,14 +4,14 @@ pkgver=0.2.0
 pkgrel=0
 pkgdesc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps"
 url="https://github.com/WillGle/rofi-hub"
+maintainer="WillGle <willgle@users.noreply.github.com>"
 arch="x86_64 aarch64"
 license="MIT"
 depends="rofi bash"
 makedepends="cargo rust"
 checkdepends="tzdata"
-subpackages="$pkgname-doc"
 source="$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz"
-sha512sums="9a69eb6fec4107197d8d744ca7aca2f298c048e6096c94da60c8195bd1c687601ed454ef1a70b501590caf1c08e0d7e16b510bdf389d49890ee4a1dae94b3339  rofi-hub-$pkgver.tar.gz"
+sha512sums="a92d5984bb5ca3bbc028dd6582c6a34ca437aefb662b0caba6eb221821822d9adb7e863c2ac761f81b747447ae262c2f3fd28b20c8f0ae0079294572d4151e4e  rofi-hub-$pkgver.tar.gz"
 builddir="$srcdir/rofi-hub-$pkgver"
 
 build() {
