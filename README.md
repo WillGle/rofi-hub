@@ -14,6 +14,8 @@ all-in-one hub, only selected apps, or only the launcher.
 
 [![Memory and fast-switch coverage across UI-capable Linux trackers](crates/screen-time/docs/charts/memory-coverage.svg)](crates/screen-time/docs/EVALUATION.md)
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/rofi-hub.svg)](https://repology.org/project/rofi-hub/versions)
+
 ## Quick start
 
 On Linux with Hyprland, Rofi 2.x, minisign, and a systemd user session, download
@@ -91,7 +93,32 @@ With flakes and Home Manager:
 `services.screen-time.enable = true` is still available through
 `homeManagerModules.screen-time` for standalone tracker installs.
 
+## Packaging
+
+Native packages use `packaging/install-tree.sh` with `PREFIX=/usr` and
+`DESTDIR`, so nothing is written to `$HOME` while staging. Release artifacts
+(`.deb`, `.rpm`, `.apk`) and distro recipes are built from the same tree. See
+[packaging](docs/PACKAGING.md) for the dependency matrix, layout, service
+files, and per-distro commands.
+
+| Target | Version | Status |
+|---|---|---|
+| Arch/AUR (`rofi-hub`, `-bin`) | 0.2.0 | ✅ validated; AUR push pending |
+| Debian/Ubuntu `.deb` | 0.2.0 | ✅ artifact validated |
+| Fedora `.spec` | 0.2.0 | ✅ validated (`rpmbuild`/`dnf`) |
+| Alpine `APKBUILD` | 0.2.0 | ⏳ recipe |
+| Gentoo GURU | 0.2.0 | ⏳ recipe |
+| openSUSE | 0.2.0 | ⏳ recipe |
+| Void / Slackware / ALT | 0.2.0 | ⏳ recipe |
+| Nix flake | 0.2.0 | ✅ |
+| nixpkgs | — | ⏸ deferred |
+
 ## Use
+
+All Rofi apps share Screen Time's flat chrome: 20px window padding, the same
+palette roles, and a 2px accent strip on the active row. Direct launches use
+the installed `rofi-hub/themes/hub.rasi`, so the look stays consistent without
+starting the hub first.
 
 ### Hub
 
