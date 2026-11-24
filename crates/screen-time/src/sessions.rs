@@ -117,7 +117,7 @@ pub fn median_seconds(sessions: &[Session]) -> i64 {
     let mut values: Vec<i64> = sessions.iter().map(|session| session.seconds).collect();
     values.sort_unstable();
     let middle = values.len() / 2;
-    if values.len() % 2 == 0 {
+    if values.len().is_multiple_of(2) {
         (values[middle - 1] + values[middle]) / 2
     } else {
         values[middle]

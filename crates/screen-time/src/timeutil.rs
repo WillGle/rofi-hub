@@ -10,10 +10,10 @@ pub const SLOT_SECONDS: i64 = 30 * 60;
 pub const SLOT_COUNT: usize = 48;
 
 pub fn now() -> DateTime<Local> {
-    if let Ok(value) = env::var("SCREEN_TIME_NOW") {
-        if let Ok(parsed) = DateTime::parse_from_rfc3339(&value) {
-            return parsed.with_timezone(&Local);
-        }
+    if let Ok(value) = env::var("SCREEN_TIME_NOW")
+        && let Ok(parsed) = DateTime::parse_from_rfc3339(&value)
+    {
+        return parsed.with_timezone(&Local);
     }
     Local::now()
 }
@@ -150,7 +150,7 @@ pub fn slot_index(ts: i64) -> usize {
 
 pub fn slot_start_ts(date: NaiveDate, slot: usize) -> i64 {
     let hour = (slot / 2) as u32;
-    let minute = if slot % 2 == 0 { 0 } else { 30 };
+    let minute = if slot.is_multiple_of(2) { 0 } else { 30 };
     let naive = date
         .and_hms_opt(hour.min(23), minute, 0)
         .expect("valid slot");
@@ -165,7 +165,7 @@ pub fn next_slot_boundary(ts: i64) -> i64 {
     let mut candidate = ts - ts.rem_euclid(60) + 60;
     for _ in 0..(2 * 60) {
         let dt = local(candidate);
-        if dt.second() == 0 && dt.minute() % 30 == 0 {
+        if dt.second() == 0 && dt.minute().is_multiple_of(30) {
             return candidate;
         }
         candidate += 60;

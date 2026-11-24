@@ -281,20 +281,18 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
             mode,
         );
     }
-    if show_other {
-        if let Some(other) = &other {
-            emit(
-                &mut out,
-                &panel_line(
-                    &other_line(other, view.active_seconds, theme, &layout, mode),
-                    width,
-                    theme,
-                    mode,
-                ),
-                RowMeta::NonSelectable,
+    if show_other && let Some(other) = &other {
+        emit(
+            &mut out,
+            &panel_line(
+                &other_line(other, view.active_seconds, theme, &layout, mode),
+                width,
+                theme,
                 mode,
-            );
-        }
+            ),
+            RowMeta::NonSelectable,
+            mode,
+        );
     }
     if view.rows.is_empty() && view.active_seconds == 0 {
         emit(

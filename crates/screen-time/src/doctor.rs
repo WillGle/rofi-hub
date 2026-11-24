@@ -484,12 +484,12 @@ fn capture_report(
     } else {
         (first_status, first_sample)
     };
-    if status == CaptureStatus::Mismatch {
-        if let (Some(active), Some(tracked)) = (&sample.active_app, &sample.tracked_app) {
-            warnings.push(format!(
+    if status == CaptureStatus::Mismatch
+        && let (Some(active), Some(tracked)) = (&sample.active_app, &sample.tracked_app)
+    {
+        warnings.push(format!(
                 "daemon is not following Hyprland focus (active \"{active}\", tracked \"{tracked}\"); check journalctl --user -u screen-time"
             ));
-        }
     }
     CaptureReport {
         status: status.as_str().to_owned(),

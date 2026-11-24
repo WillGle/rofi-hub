@@ -369,10 +369,10 @@ impl Tracker {
         } else {
             self.idle = false;
             self.record_event(ts, "idle", self.last_focus.clone(), "end");
-            if !self.sleeping {
-                if let Some(app) = self.last_focus.clone() {
-                    self.open = Some(OpenSession { app, start_ts: ts });
-                }
+            if !self.sleeping
+                && let Some(app) = self.last_focus.clone()
+            {
+                self.open = Some(OpenSession { app, start_ts: ts });
             }
         }
         true
@@ -389,10 +389,10 @@ impl Tracker {
         } else {
             self.sleeping = false;
             self.record_event(ts, "sleep", self.last_focus.clone(), "end");
-            if !self.idle {
-                if let Some(app) = self.last_focus.clone() {
-                    self.open = Some(OpenSession { app, start_ts: ts });
-                }
+            if !self.idle
+                && let Some(app) = self.last_focus.clone()
+            {
+                self.open = Some(OpenSession { app, start_ts: ts });
             }
         }
         true
@@ -612,13 +612,14 @@ impl Tracker {
 
         self.date = new_date;
         self.day = db.load_day_closed(new_date, now_ts)?;
-        if !self.idle && !self.sleeping {
-            if let (Some(app), true) = (resume, old_date.succ_opt() == Some(new_date)) {
-                self.open = Some(OpenSession {
-                    app,
-                    start_ts: old_end,
-                });
-            }
+        if !self.idle
+            && !self.sleeping
+            && let (Some(app), true) = (resume, old_date.succ_opt() == Some(new_date))
+        {
+            self.open = Some(OpenSession {
+                app,
+                start_ts: old_end,
+            });
         }
         self.record_event(now_ts, "rollover", None, "begin");
         let (config, config_error) = Config::load_default_lenient();

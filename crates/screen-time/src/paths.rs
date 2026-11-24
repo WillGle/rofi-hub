@@ -112,10 +112,10 @@ fn create_private_dir(path: &Path) -> Result<()> {
 
 /// Current boot identity, or `unknown` when the kernel file is unavailable.
 pub fn boot_id() -> String {
-    if let Ok(value) = env::var("SCREEN_TIME_BOOT_ID") {
-        if !value.is_empty() {
-            return value;
-        }
+    if let Ok(value) = env::var("SCREEN_TIME_BOOT_ID")
+        && !value.is_empty()
+    {
+        return value;
     }
     fs::read_to_string("/proc/sys/kernel/random/boot_id")
         .map(|value| value.trim().to_owned())

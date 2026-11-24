@@ -95,11 +95,11 @@ pub fn handle_rofi(paths: &Paths, args: &RenderArgs, now: DateTime<Local>) -> Re
         write_state(paths, &state)?;
         // The popup height is determined on open. Reload it when changing
         // between the app list and the taller detail view.
-        if was_detail != state.app.is_some() || (17..=20).contains(&retv) {
-            if let Some(request) = std::env::var_os("SCREEN_TIME_ROFI_THEME_REQUEST") {
-                fs::write(request, b"reopen")?;
-                return Ok(String::new());
-            }
+        if (was_detail != state.app.is_some() || (17..=20).contains(&retv))
+            && let Some(request) = std::env::var_os("SCREEN_TIME_ROFI_THEME_REQUEST")
+        {
+            fs::write(request, b"reopen")?;
+            return Ok(String::new());
         }
     }
 

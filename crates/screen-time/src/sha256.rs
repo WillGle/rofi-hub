@@ -75,7 +75,7 @@ impl Sha256 {
         }
         self.buffer.extend_from_slice(&length_bits.to_be_bytes());
         let buffer = std::mem::take(&mut self.buffer);
-        for block in buffer.chunks_exact(64) {
+        for block in buffer.as_chunks::<64>().0 {
             self.compress(block);
         }
         let mut digest = [0u8; 32];
@@ -88,7 +88,7 @@ impl Sha256 {
     fn compress(&mut self, block: &[u8]) {
         debug_assert_eq!(block.len(), 64);
         let mut w = [0u32; 64];
-        for (index, chunk) in block.chunks_exact(4).enumerate() {
+        for (index, chunk) in block.as_chunks::<4>().0.iter().enumerate() {
             w[index] = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         }
         for index in 16..64 {

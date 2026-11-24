@@ -172,10 +172,11 @@ impl LiveSnapshot {
                 slots[index] = (*seconds).max(0);
             }
         }
-        if !stale && self.open.as_ref().is_some_and(|open| open.app == app) {
-            if let Some(start) = self.open_start_ts() {
-                timeutil::add_interval_to_slots(&mut slots, date, start, now_ts);
-            }
+        if !stale
+            && self.open.as_ref().is_some_and(|open| open.app == app)
+            && let Some(start) = self.open_start_ts()
+        {
+            timeutil::add_interval_to_slots(&mut slots, date, start, now_ts);
         }
         slots
     }
@@ -190,10 +191,8 @@ impl LiveSnapshot {
         for (index, seconds) in self.slots.iter().take(SLOT_COUNT).enumerate() {
             slots[index] = (*seconds).max(0);
         }
-        if !stale {
-            if let Some(start) = self.open_start_ts() {
-                timeutil::add_interval_to_slots(&mut slots, date, start, now_ts);
-            }
+        if !stale && let Some(start) = self.open_start_ts() {
+            timeutil::add_interval_to_slots(&mut slots, date, start, now_ts);
         }
         slots
     }
@@ -208,10 +207,8 @@ impl LiveSnapshot {
         for (index, seconds) in self.power_slots.iter().take(SLOT_COUNT).enumerate() {
             slots[index] = (*seconds).max(0);
         }
-        if !stale {
-            if let Some(start) = self.powered_open_start_ts() {
-                timeutil::add_interval_to_slots(&mut slots, date, start, now_ts);
-            }
+        if !stale && let Some(start) = self.powered_open_start_ts() {
+            timeutil::add_interval_to_slots(&mut slots, date, start, now_ts);
         }
         slots
     }

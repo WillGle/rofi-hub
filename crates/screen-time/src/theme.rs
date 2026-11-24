@@ -101,10 +101,10 @@ impl Theme {
                 font_family = family.to_owned();
             }
         }
-        if let Some(size) = config.font.size {
-            if (6..=72).contains(&size) {
-                font_size = size;
-            }
+        if let Some(size) = config.font.size
+            && (6..=72).contains(&size)
+        {
+            font_size = size;
         }
 
         Self {
@@ -546,41 +546,41 @@ fn apply_explicit_colors(colors: &mut Colors, config: &Config) {
     }
     let mut values = values.into_iter();
     let mut next = || values.next();
-    if supplied[0].is_some() {
-        if let Some(value) = next() {
-            colors.base = value.to_owned();
-        }
+    if supplied[0].is_some()
+        && let Some(value) = next()
+    {
+        colors.base = value.to_owned();
     }
-    if supplied[1].is_some() {
-        if let Some(value) = next() {
-            colors.mantle = value.to_owned();
-        }
+    if supplied[1].is_some()
+        && let Some(value) = next()
+    {
+        colors.mantle = value.to_owned();
     }
-    if supplied[2].is_some() {
-        if let Some(value) = next() {
-            colors.text = value.to_owned();
-        }
+    if supplied[2].is_some()
+        && let Some(value) = next()
+    {
+        colors.text = value.to_owned();
     }
-    if supplied[3].is_some() {
-        if let Some(value) = next() {
-            colors.muted = value.to_owned();
-        }
+    if supplied[3].is_some()
+        && let Some(value) = next()
+    {
+        colors.muted = value.to_owned();
     }
-    if supplied[4].is_some() {
-        if let Some(value) = next() {
-            colors.accent = value.to_owned();
-            colors.work.clone_from(&colors.accent);
-        }
+    if supplied[4].is_some()
+        && let Some(value) = next()
+    {
+        colors.accent = value.to_owned();
+        colors.work.clone_from(&colors.accent);
     }
-    if supplied[5].is_some() {
-        if let Some(value) = next() {
-            colors.power = value.to_owned();
-        }
+    if supplied[5].is_some()
+        && let Some(value) = next()
+    {
+        colors.power = value.to_owned();
     }
-    if supplied[6].is_some() {
-        if let Some(value) = next() {
-            colors.other = value.to_owned();
-        }
+    if supplied[6].is_some()
+        && let Some(value) = next()
+    {
+        colors.other = value.to_owned();
     }
     // `other` follows `muted` unless explicitly set.
     if supplied[3].is_some() && supplied[6].is_none() {

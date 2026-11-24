@@ -352,20 +352,20 @@ pub fn load_detail(
         None
     };
 
-    if let Some(snapshot) = live_today {
-        if !live_stale {
-            day_seconds = snapshot.total_active(now_ts, false);
-        }
+    if let Some(snapshot) = live_today
+        && !live_stale
+    {
+        day_seconds = snapshot.total_active(now_ts, false);
     }
     if trend.is_empty() && db.is_ok() {
         trend = vec![None; 7];
     }
-    if let (Some(snapshot), true) = (live_today, date == today) {
-        if !live_stale && snapshot.open.as_ref().is_some_and(|open| open.app == app) {
-            if let Some(last) = trend.last_mut() {
-                *last = Some(total_seconds);
-            }
-        }
+    if let (Some(snapshot), true) = (live_today, date == today)
+        && !live_stale
+        && snapshot.open.as_ref().is_some_and(|open| open.app == app)
+        && let Some(last) = trend.last_mut()
+    {
+        *last = Some(total_seconds);
     }
 
     let all_bursts = sessions::group_bursts(&sessions, sessions::BURST_GAP_SECONDS);
@@ -453,10 +453,10 @@ fn trend_for(
 ) -> (Vec<Option<i64>>, Option<i64>, usize) {
     let Some(db) = db else {
         let mut trend = vec![None; 7];
-        if let Some(current) = today_override {
-            if let Some(last) = trend.last_mut() {
-                *last = Some(current);
-            }
+        if let Some(current) = today_override
+            && let Some(last) = trend.last_mut()
+        {
+            *last = Some(current);
         }
         return (trend, None, 0);
     };
