@@ -166,6 +166,9 @@ objdump -T target/release/rofi-hub | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -
 - `rofi-hub-<version>-1.x86_64.rpm`
 - `rofi-hub-<version>-r0.apk`
 
+`.deb` and `.rpm` must be built from binaries built inside Debian 12, not from
+a host with a newer glibc. The nfpm `.apk` is metadata-only today: Alpine
+`apk-tools` 3 rejects it. Use the `abuild`-generated `.apk` for publication.
 Checksums are written to `dist/SHA256SUMS`; release signatures use the existing
 minisign key. Validate with:
 
@@ -246,18 +249,32 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 | Arch/AUR source | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
 | Arch/AUR `-bin` | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
 | Arch/AUR `-git` | 0.2.0 | ⏳ recipe; needs AUR push | WillGle | `makepkg` |
-| Debian/Ubuntu `.deb` | 0.2.0 | ✅ artifact validated | WillGle | `dpkg-deb`/`dpkg -i` |
+| Debian/Ubuntu `.deb` | 0.2.0 | ✅ artifact metadata validated; rebuild in Debian 12 | WillGle | `dpkg-deb` |
 | Debian official | 0.2.0 | ⏳ skeleton | WillGle | `sbuild`/`lintian` |
 | Fedora `.spec` | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
-| Alpine `APKBUILD` | 0.2.0 | ⏳ recipe | WillGle | `abuild` |
-| Gentoo GURU | 0.2.0 | ⏳ recipe | WillGle | `pkgcheck` |
-| openSUSE | 0.2.0 | ⏳ recipe | WillGle | `osc`/`rpmlint` |
-| Void | 0.2.0 | ⏳ recipe | WillGle | `xbps-src` |
-| SlackBuilds | 0.2.0 | ⏳ recipe | WillGle | `sbopkg` |
-| ALT Sisyphus | 0.2.0 | ⏳ recipe | WillGle | `rpmlint` |
+| Alpine `APKBUILD` | 0.2.0 | ✅ validated | WillGle | `abuild -r`/`apk add`/`apk del` |
+| Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |
+| openSUSE | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`zypper install`/`remove` |
+| Void | 0.2.0 | ✅ validated | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
+| SlackBuilds | 0.2.0 | ⏳ metadata/shellcheck; no Slackware image | WillGle | `bash -n`/`shellcheck` |
+| ALT Sisyphus | 0.2.0 | ✅ validated (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
 | Nix flake | 0.2.0 | ✅ | WillGle | `nix flake check`/`nix build`/smoke |
 | nixpkgs | — | ⏸ deferred | — | — |
 | Flatpak/Snap/Scoop | — | ❌ N/A | — | — |
+
+### Current release blockers
+
+- **AUR publication** requires the AUR SSH key and a release that actually
+  hosts `rofi-hub-<version>-source.tar.gz`; the recipes and `.SRCINFO` are
+  ready, but nothing has been pushed to `aur.archlinux.org`.
+- **GitHub release** requires `MINISIGN_SECRET_KEY`, a release token, and a
+  tag/asset upload. The local `.deb`/`.rpm`/`.apk` metadata is validated, but
+  no signed GitHub release exists yet.
+- **APK runtime**: Alpine `apk-tools` 3 rejects the nfpm APK payload. The
+  validated `.apk` is the one produced by `abuild` in `alpine:edge`; the
+  release job must upload that artifact rather than the nfpm output.
+- **Repology** has no package to track until the AUR or another repository
+  actually publishes one.
 
 The Repology badge is added once at least one package outside the flake is
 published:

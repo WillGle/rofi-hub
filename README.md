@@ -104,12 +104,14 @@ files, and per-distro commands.
 | Target | Version | Status |
 |---|---|---|
 | Arch/AUR (`rofi-hub`, `-bin`) | 0.2.0 | ✅ validated; AUR push pending |
-| Debian/Ubuntu `.deb` | 0.2.0 | ✅ artifact validated |
+| Debian/Ubuntu `.deb` | 0.2.0 | ✅ metadata validated |
 | Fedora `.spec` | 0.2.0 | ✅ validated (`rpmbuild`/`dnf`) |
-| Alpine `APKBUILD` | 0.2.0 | ⏳ recipe |
-| Gentoo GURU | 0.2.0 | ⏳ recipe |
-| openSUSE | 0.2.0 | ⏳ recipe |
-| Void / Slackware / ALT | 0.2.0 | ⏳ recipe |
+| Alpine `APKBUILD` | 0.2.0 | ✅ validated (`abuild`/`apk`) |
+| Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; PR pending |
+| openSUSE | 0.2.0 | ✅ validated (`rpmbuild`/`zypper`) |
+| Void | 0.2.0 | ✅ validated (`xbps-src`/`xbps-install`) |
+| ALT Sisyphus | 0.2.0 | ✅ validated (`rpmbuild`/`rpm`) |
+| SlackBuilds | 0.2.0 | ⏳ metadata/shellcheck |
 | Nix flake | 0.2.0 | ✅ |
 | nixpkgs | — | ⏸ deferred |
 
