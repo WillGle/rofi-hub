@@ -16,3 +16,7 @@ path = "src/main.rs"
 anyhow.workspace = true
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 rofi-core = { path = "../rofi-core" }
+
+[dev-dependencies]
+rofi-core = { path = "../rofi-core", features = ["test-support"] }
+tempfile = "3"

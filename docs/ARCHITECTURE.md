@@ -85,6 +85,22 @@ Menu shortcuts mirror Screen Time: `Alt+1` Nord, `Alt+2` Solarized Light,
 `Alt+3` Gruvbox Dark, `Alt+4` Auto. A shortcut writes the separate `theme`
 file, so `config.toml` is never rewritten by the UI.
 
+## App sync
+
+`providers/*.toml` is the canonical app list. Every manifest must have a
+matching crate and executable, and the provider version must match the crate
+version. `scripts/check-app-sync.py` verifies that the Cargo workspace,
+`install.sh` `KNOWN_APPS` and `--list-apps`, `flake.nix` packages and Home
+Manager `apps`, `scripts/package-release.sh`, the installer test fixture, and
+the CI workflow all mention the same apps. CI runs the check before building
+release assets.
+
+The app crates have end-to-end tests with a fake `rofi`:
+`crates/rofi-calendar/tests/cli.rs`, `crates/rofi-keybinds/tests/cli.rs`, and
+`crates/rofi-clipboard/tests/cli.rs`. They run the real binaries against an
+isolated XDG environment and assert the dmenu arguments, rendered rows, and
+selected actions.
+
 ## Installer components
 
 The release bundle always contains the hub and every app. `install.sh` decides

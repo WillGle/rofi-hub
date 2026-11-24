@@ -4,6 +4,7 @@
 //! `15/3`, `3/2027`, `15/3/2027`, `2027-03-15`, or just `15`.
 //! Left/Right browse months and Ctrl+t returns to today.
 
+use std::env;
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -58,9 +59,17 @@ impl View {
     }
 }
 
+/// The visible "today". `ROFI_CALENDAR_TODAY` pins it for deterministic tests.
+fn local_today() -> NaiveDate {
+    env::var("ROFI_CALENDAR_TODAY")
+        .ok()
+        .and_then(|value| NaiveDate::parse_from_str(value.trim(), "%Y-%m-%d").ok())
+        .unwrap_or_else(|| Local::now().date_naive())
+}
+
 fn run() -> Result<()> {
     let rofi = Rofi::find()?;
-    let today = Local::now().date_naive();
+    let today = local_today();
     let mut view = View::today(today);
     let mut note: Option<String> = None;
 

@@ -181,17 +181,29 @@ model, and [migration notes](docs/MIGRATING.md) if you used the retired
 
 ```bash
 nix develop
-cargo fmt --check
+python3 scripts/check-app-sync.py
+cargo fmt --check --all
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo test --workspace --locked
 shellcheck install.sh uninstall.sh scripts/*.sh
-scripts/package-release.sh
 scripts/test-installer.sh
+scripts/package-release.sh
+scripts/test-bundle.sh dist/rofi-hub-$(uname -m)-linux.tar.gz
 nix flake check
+nix build .#
 ```
 
-The release workflow runs the same checks, builds x86_64 and aarch64 bundles,
-signs `SHA256SUMS` and `install.sh`, and uploads them to the GitHub release.
+`check-app-sync.py` treats `providers/*.toml` as the canonical app list and
+fails when the workspace, installer, Nix outputs, release package, or installer
+fixture drift. `test-bundle.sh` unpacks a release bundle, runs
+`rofi-hub list --json`, and checks every provider binary, version, and Screen
+Time support file. The app crates also have integration tests with a fake Rofi
+(`crates/*/tests/cli.rs`).
+
+The CI pipeline runs lint, workspace tests, the MSRV (Rust 1.89), installer
+fault injection, bundle smoke tests on x86_64 and aarch64, and Nix flake checks.
+Tag builds sign `SHA256SUMS` and `install.sh` and upload them to the GitHub
+release.
 
 ## License
 

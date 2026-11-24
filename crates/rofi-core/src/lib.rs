@@ -7,6 +7,8 @@ pub mod manifest;
 pub mod notify;
 pub mod paths;
 pub mod rofi;
+#[cfg(feature = "test-support")]
+pub mod test_support;
 pub mod theme;
 pub mod which;
 

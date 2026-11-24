@@ -6,3 +6,5 @@
 .DS_Store
 minisign.key
 *.minisign.key
+__pycache__/
+*.pyc

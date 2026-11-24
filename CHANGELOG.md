@@ -9,6 +9,10 @@
   Home Manager module to cover the new apps.
 - Share app theme/config/PID resolution in `rofi-core`, including
   `ROFI_HUB_THEME_FILE` so providers opened from the hub keep the chosen look.
+- Add app integration tests with a fake Rofi, an app-sync checker that validates
+  provider manifests against the workspace, installer, flake, packaging, and CI,
+  a release-bundle smoke test, and a CI pipeline with lint, workspace tests,
+  MSRV, installer fault injection, bundle builds, and Nix checks.
 
 ## 0.1.0
 

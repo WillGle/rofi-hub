@@ -15,3 +15,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 rofi-core = { path = "../rofi-core" }
+
+[dev-dependencies]
+rofi-core = { path = "../rofi-core", features = ["test-support"] }
+tempfile = "3"

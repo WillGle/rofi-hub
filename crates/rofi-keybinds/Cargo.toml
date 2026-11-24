@@ -16,3 +16,7 @@ path = "src/main.rs"
 anyhow.workspace = true
 rofi-core = { path = "../rofi-core" }
 serde_json.workspace = true
+
+[dev-dependencies]
+rofi-core = { path = "../rofi-core", features = ["test-support"] }
+tempfile = "3"

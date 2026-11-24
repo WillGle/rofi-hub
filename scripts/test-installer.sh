@@ -289,7 +289,14 @@ assert_eq "nord" "$(sed -n '/^\[theme\]/,/^\[/p' "$SC_CONFIG" | sed -n 's/^mode 
 assert_eq "$TEST_VERSION" "$(cat "$VERSION_FILE")" "installed version is recorded"
 assert_eq "calendar clipboard hub keybinds screen-time" "$(tr '\n' ' ' <"$COMPONENTS_FILE" | sed 's/ $//')" "component selection is recorded"
 assert_file "$SYSTEMCTL_STATE/active" "service starts on first install"
-assert_success "installed hub lists the provider" env ROFI_HUB_PROVIDER_DIR="$XDG_DATA_HOME/rofi-hub/providers" "$HUB_BIN" list
+hub_registry="$(env ROFI_HUB_PROVIDER_DIR="$XDG_DATA_HOME/rofi-hub/providers" "$HUB_BIN" list --json)"
+for app in screen-time calendar keybinds clipboard; do
+    if printf '%s' "$hub_registry" | jq -e --arg id "$app" 'any(.[]; .id == $id and .available)' >/dev/null; then
+        pass "hub registry exposes $app"
+    else
+        fail "hub registry exposes $app"
+    fi
+done
 
 seed_database
 before="$(doctor_json)"
@@ -499,9 +506,14 @@ assert_file "$CAL_PROVIDER" "calendar-only installs the provider"
 assert_not_file "$HUB_BIN" "calendar-only does not install the hub"
 assert_not_file "$SC_BIN" "calendar-only does not install screen-time"
 assert_eq "calendar" "$(cat "$COMPONENTS_FILE")" "calendar-only records the selection"
-assert_success "calendar-only uninstall" bash "$ROOT/install.sh" --uninstall --no-hub --app calendar --yes
+assert_success "add keybinds to the calendar install" run_install --app calendar --app keybinds --no-hub
+assert_file "$KEYBINDS_BIN" "adding keybinds installs the binary"
+assert_file "$KEYBINDS_PROVIDER" "adding keybinds installs the provider"
+assert_eq "calendar keybinds" "$(tr '\n' ' ' <"$COMPONENTS_FILE" | sed 's/ $//')" "adding an app updates the selection"
+assert_success "calendar-only uninstall" bash "$ROOT/install.sh" --uninstall --no-hub --app calendar --app keybinds --yes
 assert_not_file "$CAL_BIN" "calendar-only uninstall removes the binary"
 assert_not_file "$CAL_PROVIDER" "calendar-only uninstall removes the provider"
+assert_not_file "$KEYBINDS_BIN" "multi-app uninstall removes keybinds"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
