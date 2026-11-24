@@ -56,13 +56,20 @@ ARCH="$NFPM_ARCH" VERSION="$VERSION" RELEASE=1 STAGE="$STAGE" \
     "$NFPM" package -f packaging/nfpm.yaml -p deb -t "$DEB"
 ARCH="$NFPM_ARCH" VERSION="$VERSION" RELEASE=1 STAGE="$STAGE" \
     "$NFPM" package -f packaging/nfpm.yaml -p rpm -t "$RPM"
-ARCH="$NFPM_ARCH" VERSION="$VERSION" RELEASE=0 STAGE="$STAGE" \
-    "$NFPM" package -f packaging/nfpm.yaml -p apk -t "$APK"
+
+packages=("$DEB" "$RPM")
+if [ "${SKIP_APK:-0}" -eq 1 ]; then
+    printf 'build-package-artifacts: skipping nfpm APK (abuild owns APK releases)\n' >&2
+else
+    ARCH="$NFPM_ARCH" VERSION="$VERSION" RELEASE=0 STAGE="$STAGE" \
+        "$NFPM" package -f packaging/nfpm.yaml -p apk -t "$APK"
+    packages+=("$APK")
+fi
 
 (
     cd "$DIST"
-    sha256sum "$(basename "$DEB")" "$(basename "$RPM")" "$(basename "$APK")" > SHA256SUMS.packages
+    sha256sum "${packages[@]##*/}" > SHA256SUMS.packages
     cat SHA256SUMS.packages
 )
 
-printf 'build-package-artifacts: wrote %s, %s, %s\n' "$DEB" "$RPM" "$APK"
+printf 'build-package-artifacts: wrote %s\n' "${packages[*]}"

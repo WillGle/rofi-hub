@@ -189,11 +189,8 @@ jobs:
               rpmlint packaging/fedora/rofi-hub.spec
               ;;
             alpine)
-              if command -v apkbuild-lint >/dev/null 2>&1; then
-                apkbuild-lint packaging/alpine/APKBUILD
-              else
-                abuild -n -P /tmp/abuild-rofi-hub
-              fi
+              cd packaging/alpine
+              abuild -F validate
               ;;
             opensuse)
               rpmlint packaging/opensuse/rofi-hub.spec
@@ -221,7 +218,7 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential ca-certificates curl git pkg-config python3 xz-utils
+            build-essential ca-certificates curl git pkg-config python3 xz-utils rpm
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Record glibc baseline
@@ -243,26 +240,35 @@ jobs:
           if-no-files-found: error
 
   artifacts:
-    name: packages (.deb/.rpm/.apk)
+    name: packages (.deb/.rpm)
     runs-on: ubuntu-latest
+    container: debian:12
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git pkg-config python3 xz-utils
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Install nfpm
         run: |
-          curl -fsSL -o /tmp/nfpm.tar.gz \
-            https://github.com/goreleaser/nfpm/releases/download/v2.46.3/nfpm_2.46.3_linux_amd64.tar.gz
-          sudo tar -xzf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
+          curl -fsSL -o /tmp/nfpm.deb \
+            https://github.com/goreleaser/nfpm/releases/download/v2.46.3/nfpm_2.46.3_amd64.deb
+          dpkg -i /tmp/nfpm.deb
           nfpm --version
       - name: Build workspace
         run: cargo build --release --locked --workspace
       - name: Build packages
         env:
           SKIP_BUILD: "1"
+          SKIP_APK: "1"
         run: scripts/build-package-artifacts.sh
       - name: Validate packages
+        env:
+          ALLOW_PARTIAL: "1"
         run: scripts/test-package-artifacts.sh
       - name: Upload packages
         uses: actions/upload-artifact@v7
@@ -271,13 +277,43 @@ jobs:
           path: |
             dist/*.deb
             dist/*.rpm
-            dist/*.apk
             dist/SHA256SUMS.packages
+          if-no-files-found: error
+
+  apk-package:
+    name: package (.apk via abuild)
+    runs-on: ubuntu-latest
+    container: alpine:edge
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Alpine build tools
+        run: apk add --no-cache alpine-sdk cargo rust bash fakeroot tzdata python3
+      - name: Build source asset and APK
+        run: |
+          set -eux
+          VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/p' Cargo.toml | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)
+          scripts/package-source.sh
+          adduser -D -s /bin/sh builder
+          mkdir -p /tmp/srcdest
+          cp "dist/rofi-hub-$VERSION-source.tar.gz" "/tmp/srcdest/rofi-hub-$VERSION.tar.gz"
+          chown -R builder:builder "$PWD" /tmp/srcdest
+          su builder -c 'abuild-keygen -a -n'
+          cp /home/builder/.config/abuild/*.rsa.pub /etc/apk/keys/
+          chmod 644 /etc/apk/keys/*.rsa.pub
+          su builder -c "cd '$PWD/packaging/alpine' && abuild -r -d -s /tmp/srcdest"
+          find /home/builder/.local/share/abuild -name "rofi-hub-$VERSION-r*.apk" -exec cp {} "dist/rofi-hub-$VERSION-r0.apk" \;
+          test -f "dist/rofi-hub-$VERSION-r0.apk"
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: apk
+          path: dist/rofi-hub-*-r0.apk
           if-no-files-found: error
 
   release-smoke:
     name: release-smoke (${{ matrix.family }})
-    needs: [artifacts]
+    needs: [artifacts, apk-package]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     container:
@@ -302,6 +338,10 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: packages
+          path: /tmp/artifacts
+      - uses: actions/download-artifact@v8
+        with:
+          name: apk
           path: /tmp/artifacts
       - name: Install dependencies and package
         run: |
@@ -409,6 +449,7 @@ jobs:
       - distro-build
       - bundle
       - artifacts
+      - apk-package
       - release-smoke
       - nix
     runs-on: ubuntu-latest

@@ -9,6 +9,7 @@ scripts/build-package-artifacts.sh.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -141,7 +142,11 @@ def check_apk(path: Path, expected: set[str], want: str) -> None:
             die(f"{path.name}: missing .PKGINFO")
         pkginfo = archive.extractfile(".PKGINFO").read().decode()  # type: ignore[union-attr]
         file_names = {
-            member.name for member in members if member.isfile() and member.name != ".PKGINFO"
+            member.name
+            for member in members
+            if member.isfile()
+            and member.name != ".PKGINFO"
+            and not member.name.startswith(".SIGN.")
         }
     fields = {}
     depends = []
@@ -192,8 +197,10 @@ def main() -> int:
             die(f"unknown artifact type: {path}")
 
     missing = {"deb", "rpm", "apk"} - seen
-    if missing:
+    if missing and os.environ.get("ALLOW_PARTIAL") != "1":
         die(f"missing artifact types: {', '.join(sorted(missing))}")
+    if missing:
+        print(f"test-package-artifacts: ok: partial validation (missing: {', '.join(sorted(missing))})")
     print("test-package-artifacts: all checks passed")
     return 0
 
