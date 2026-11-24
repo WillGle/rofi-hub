@@ -1,0 +1,26 @@
+pkgbase = rofi-hub-git
+	pkgdesc = Rofi launcher with screen-time, calendar, keybinds, and clipboard apps (git)
+	pkgver = 0.2.0.r0.gfc0e5aa
+	pkgrel = 1
+	url = https://github.com/WillGle/rofi-hub
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cargo
+	makedepends = rust
+	makedepends = git
+	depends = rofi
+	depends = bash
+	depends = hicolor-icon-theme
+	optdepends = cliphist: clipboard history
+	optdepends = wl-clipboard: clipboard copy
+	optdepends = hyprland: keybinds and screen-time
+	optdepends = systemd: Screen Time user service
+	provides = rofi-hub
+	conflicts = rofi-hub
+	conflicts = rofi-hub-bin
+	options = !lto
+	source = rofi-hub::git+https://github.com/WillGle/rofi-hub.git
+	sha256sums = SKIP
+
+pkgname = rofi-hub-git

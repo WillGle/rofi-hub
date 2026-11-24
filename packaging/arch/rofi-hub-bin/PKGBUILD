@@ -1,0 +1,34 @@
+# Maintainer: WillGle <willgle@users.noreply.github.com>
+# Prebuilt release tarball. The asset is installed through the same
+# packaging/install-tree.sh shipped inside the tarball.
+pkgname=rofi-hub-bin
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps (binary release)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/WillGle/rofi-hub"
+license=('MIT')
+depends=('rofi' 'bash' 'hicolor-icon-theme')
+optdepends=(
+  'cliphist: clipboard history'
+  'wl-clipboard: clipboard copy'
+  'hyprland: keybinds and screen-time'
+  'systemd: Screen Time user service'
+)
+provides=('rofi-hub')
+conflicts=('rofi-hub' 'rofi-hub-git')
+options=('!strip' '!debug')
+source_x86_64=("rofi-hub-$pkgver-x86_64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-x86_64-linux.tar.gz")
+source_aarch64=("rofi-hub-$pkgver-aarch64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-aarch64-linux.tar.gz")
+# Replace SKIP with `updpkgsums` output after publishing the release assets.
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  cd "$srcdir"
+  DESTDIR="$pkgdir" PREFIX=/usr packaging/install-tree.sh --all
+  # The release tree ships the shared project license. Arch expects a
+  # package-name license directory for -bin variants.
+  install -Dm644 "$pkgdir/usr/share/licenses/rofi-hub/LICENSE" \
+    "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

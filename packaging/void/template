@@ -1,0 +1,26 @@
+# Template file for 'rofi-hub'
+# Build with: xbps-src pkg rofi-hub
+pkgname=rofi-hub
+version=0.2.0
+revision=1
+build_style=cargo
+hostmakedepends="cargo rust gcc make pkg-config"
+depends="rofi bash"
+short_desc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps"
+maintainer="WillGle <willgle@users.noreply.github.com>"
+license="MIT"
+homepage="https://github.com/WillGle/rofi-hub"
+distfiles="https://github.com/WillGle/rofi-hub/releases/download/v${version}/rofi-hub-${version}-source.tar.gz>rofi-hub-${version}.tar.gz"
+checksum=e9d291ac5dc1aed545d8c769aad07d9e3bd1d9a56686617d5cfc23b40d84a527
+wrksrc="rofi-hub-${version}"
+
+do_check() {
+	cd "${wrksrc}"
+	cargo test --workspace --locked
+}
+
+do_install() {
+	cd "${wrksrc}"
+	DESTDIR="${DESTDIR}" PREFIX=/usr TARGETDIR="${wrksrc}/target/release" \
+		./packaging/install-tree.sh --all
+}

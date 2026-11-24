@@ -1,0 +1,20 @@
+Source: rofi-hub
+Section: utils
+Priority: optional
+Maintainer: WillGle <willgle@users.noreply.github.com>
+Build-Depends: debhelper-compat (= 13), cargo, rustc, gcc, make
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+Homepage: https://github.com/WillGle/rofi-hub
+Vcs-Git: https://github.com/WillGle/rofi-hub.git
+Vcs-Browser: https://github.com/WillGle/rofi-hub
+
+Package: rofi-hub
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, rofi, bash
+Recommends: cliphist, wl-clipboard, systemd
+Suggests: hyprland
+Description: Rofi launcher with screen-time, calendar, keybinds, and clipboard apps
+ Rofi Hub is a keyboard-driven launcher for Rofi apps. It ships a calendar, a
+ Hyprland keybinding reference, a cliphist picker, and the Screen Time tracker
+ with a systemd user service.

@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+# Debian packaging skeleton.
+#
+# The official Debian track needs a vendored crate set and a dh-cargo
+# cargo-checksum.json. This rules file is intentionally simple: it builds the
+# tagged source with cargo and stages packaging/install-tree.sh, which is also
+# how the release .deb is produced. Do not upload this directory to Debian
+# without the vendor work described in README.source.
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+	cargo build --release --locked --workspace
+
+override_dh_auto_test:
+	cargo test --workspace --locked
+
+override_dh_auto_install:
+	DESTDIR=$(CURDIR)/debian/rofi-hub PREFIX=/usr packaging/install-tree.sh --all
+
+override_dh_auto_clean:
+	cargo clean || true
+
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
