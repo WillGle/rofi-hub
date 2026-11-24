@@ -1,0 +1,33 @@
+# nfpm builds the release .deb, .rpm, and .apk from the staged install tree.
+# scripts/build-package-artifacts.sh sets ARCH, VERSION, RELEASE, and STAGE.
+name: rofi-hub
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: ${RELEASE}
+section: utils
+priority: optional
+maintainer: WillGle <willgle@users.noreply.github.com>
+description: |
+  Rofi launcher with screen-time, calendar, keybinds, and clipboard apps.
+
+  Rofi Hub is a keyboard-driven launcher for Rofi apps. It ships a calendar, a
+  Hyprland keybinding reference, a cliphist picker, and the Screen Time tracker
+  with a systemd user service.
+vendor: WillGle
+homepage: https://github.com/WillGle/rofi-hub
+license: MIT
+depends:
+  - rofi
+  - bash
+recommends:
+  - cliphist
+  - wl-clipboard
+  - systemd
+suggests:
+  - hyprland
+contents:
+  - src: ${STAGE}/usr
+    dst: /usr
+    type: tree
+    expand: true
