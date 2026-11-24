@@ -45,7 +45,7 @@ ORIGINAL_ARGS=("$@")
 
 # Components. The default fresh install is the hub plus every app. An explicit
 # --app or --no-hub narrows it; a later bare run reuses the recorded set.
-KNOWN_APPS=("screen-time")
+KNOWN_APPS=("screen-time" "calendar" "keybinds" "clipboard")
 HUB_SELECTED=1
 HUB_EXPLICIT=0
 APPS_SELECTED=()
@@ -72,7 +72,8 @@ Install, check, update, or remove rofi-hub for the current user. No root.
 Install:
   --all                      install the hub and every app (fresh default)
   --app NAME                 install the hub plus one app; repeat or use
-                             commas for more than one (screen-time)
+                             commas for more than one
+                             (screen-time, calendar, keybinds, clipboard)
   --hub-only                 install the launcher without any app
   --no-hub                   skip the hub launcher
   --theme MODE               hub theme: auto, nord, solarized, gruvbox
@@ -352,6 +353,9 @@ fi
 if [ "$LIST_APPS" -eq 1 ]; then
     printf 'Available apps:\n'
     printf '  screen-time  Local screen-time tracker with a Rofi day timeline\n'
+    printf '  calendar     Month sheet with a date search box\n'
+    printf '  keybinds     Hyprland keyboard shortcuts, runnable where supported\n'
+    printf '  clipboard    Clipboard history picker for cliphist and wl-copy\n'
     exit 0
 fi
 
@@ -432,6 +436,22 @@ HUB_DATA_DIR="${DATA_HOME}/rofi-hub"
 PROVIDER_DIR="${HUB_DATA_DIR}/providers"
 PROVIDER_FILE="${PROVIDER_DIR}/screen-time.toml"
 HUB_THEME="${HUB_DATA_DIR}/themes/hub.rasi"
+
+app_binary_name() {
+    case "$1" in
+        screen-time) printf 'screen-time' ;;
+        *) printf 'rofi-%s' "$1" ;;
+    esac
+}
+
+app_bin_path() {
+    printf '%s/%s' "$BIN_DIR" "$(app_binary_name "$1")"
+}
+
+app_provider_path() {
+    printf '%s/%s.toml' "$PROVIDER_DIR" "$1"
+}
+
 SC_DATA_DIR="${DATA_HOME}/screen-time"
 SC_THEME="${SC_DATA_DIR}/rofi/screen-time.rasi"
 SC_EXAMPLE_CONFIG="${SC_DATA_DIR}/config.example.toml"
@@ -733,7 +753,7 @@ require_base_tools() {
 }
 
 require_runtime_tools() {
-    if [ "$HUB_SELECTED" -eq 1 ] || has_app screen-time; then
+    if [ "$HUB_SELECTED" -eq 1 ] || [ "${#APPS_SELECTED[@]}" -gt 0 ]; then
         have rofi || die "rofi is required for the UI; install rofi first"
     fi
     if has_app screen-time && [ "$NO_SERVICE" -eq 0 ]; then
@@ -974,6 +994,15 @@ extract_release() {
                 || die "release is missing share/rofi/screen-time.rasi"
         fi
     fi
+    local app
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        [ -f "${STAGE}/extract/bin/$(app_binary_name "$app")" ] \
+            || die "release is missing bin/$(app_binary_name "$app")"
+        [ -f "${STAGE}/extract/share/rofi-hub/providers/${app}.toml" ] \
+            || die "release is missing share/rofi-hub/providers/${app}.toml"
+    done
     STAGED_HUB="${STAGE}/extract/bin/rofi-hub"
     STAGED_SC="${STAGE}/extract/bin/screen-time"
 }
@@ -1099,6 +1128,7 @@ write_backup_manifest() {
 }
 
 create_backup() {
+    local app
     GENERATION="$(date +%Y%m%d-%H%M%S)-$$"
     BACKUP="${BACKUP_ROOT}/${GENERATION}"
     mkdir -p "$BACKUP" || die "cannot create backup directory $BACKUP"
@@ -1121,6 +1151,12 @@ create_backup() {
     backup_file "$HUB_BIN" "bin-rofi-hub"
     backup_file "$PROVIDER_FILE" "provider-screen-time.toml"
     backup_file "$HUB_THEME" "hub-theme.rasi"
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        backup_file "$(app_bin_path "$app")" "bin-${app}"
+        backup_file "$(app_provider_path "$app")" "provider-${app}.toml"
+    done
     backup_file "$SC_BIN" "bin-screen-time"
     backup_file "$SC_WRAPPER" "bin-rofi-screen-time"
     backup_file "$SC_THEME" "theme.rasi"
@@ -1146,7 +1182,7 @@ backup_file() {
 }
 
 restore_backup_files() {
-    local backup="$1"
+    local backup="$1" app
     [ -d "$backup" ] || return 1
     stop_service
 
@@ -1162,6 +1198,21 @@ restore_backup_files() {
             rm -f -- "$HUB_THEME"
         fi
     fi
+
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        if [ -f "${backup}/bin-${app}" ]; then
+            atomic_install "${backup}/bin-${app}" "$(app_bin_path "$app")" 755
+        else
+            rm -f -- "$(app_bin_path "$app")"
+        fi
+        if [ -f "${backup}/provider-${app}.toml" ]; then
+            atomic_install "${backup}/provider-${app}.toml" "$(app_provider_path "$app")" 644
+        else
+            rm -f -- "$(app_provider_path "$app")"
+        fi
+    done
 
     if has_app screen-time; then
         if [ -f "${backup}/bin-screen-time" ]; then
@@ -1499,10 +1550,23 @@ EOF
 # ---------------------------------------------------------------------------
 
 refuse_nix_update_units() {
-    local path
+    local path app target
     for path in "$HUB_BIN" "$SC_BIN" "$SC_WRAPPER" "$SC_UNIT" "$SC_THEME"; do
         if [ -L "$path" ]; then
-            local target
+            target="$(readlink -f -- "$path" 2>/dev/null || true)"
+            [ -n "$target" ] || target="$(readlink -- "$path" 2>/dev/null || true)"
+            case "$target" in
+                /nix/store/*)
+                    die "refusing to create update units: $path is Nix/Home Manager-owned"
+                    ;;
+            esac
+        fi
+    done
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        path="$(app_bin_path "$app")"
+        if [ -L "$path" ]; then
             target="$(readlink -f -- "$path" 2>/dev/null || true)"
             [ -n "$target" ] || target="$(readlink -- "$path" 2>/dev/null || true)"
             case "$target" in
@@ -1837,12 +1901,18 @@ confirm_purge() {
 }
 
 do_uninstall() {
+    local app
     info "uninstalling rofi-hub ($(json_components))"
     if [ "$DRY_RUN" -eq 1 ]; then
         if [ "$HUB_SELECTED" -eq 1 ]; then
-            info "dry-run: remove $HUB_BIN $HUB_THEME $PROVIDER_FILE"
+            info "dry-run: remove $HUB_BIN $HUB_THEME"
             info "dry-run: remove update units, version, and installer copy under $STATE_DIR"
         fi
+        for app in "${APPS_SELECTED[@]:-}"; do
+            [ -n "$app" ] || continue
+            [ "$app" = "screen-time" ] && continue
+            info "dry-run: remove $(app_bin_path "$app") $(app_provider_path "$app")"
+        done
         if has_app screen-time; then
             info "dry-run: stop/disable screen-time.service and remove $SC_BIN $SC_WRAPPER $SC_THEME $SC_UNIT"
         fi
@@ -1873,6 +1943,11 @@ do_uninstall() {
         rmdir "$RUNTIME_DIR" >/dev/null 2>&1 || true
         rmdir "$(dirname "$SC_THEME")" "$SC_DATA_DIR" >/dev/null 2>&1 || true
     fi
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        rm -f -- "$(app_bin_path "$app")" "$(app_provider_path "$app")"
+    done
     if [ "$HUB_SELECTED" -eq 1 ]; then
         rm -f -- "$HUB_BIN" "$HUB_THEME" "$VERSION_FILE"
         rmdir "$(dirname "$HUB_THEME")" "$HUB_DATA_DIR" "$PROVIDER_DIR" >/dev/null 2>&1 || true
@@ -1887,12 +1962,12 @@ do_uninstall() {
 
     # Record what remains so a later bare install does not resurrect removed
     # components.
-    local remaining_hub=0 remaining_apps=() app
+    local remaining_hub=0 remaining_apps=()
     if [ "$HUB_SELECTED" -eq 0 ] && [ -x "$HUB_BIN" ]; then
         remaining_hub=1
     fi
     for app in "${KNOWN_APPS[@]}"; do
-        if ! has_app "$app" && [ -x "$SC_BIN" ] && [ "$app" = "screen-time" ]; then
+        if ! has_app "$app" && [ -x "$(app_bin_path "$app")" ]; then
             remaining_apps+=("$app")
         fi
     done
@@ -2005,8 +2080,9 @@ apply_theme_choice() {
 }
 
 do_install() {
+    local app
     require_base_tools
-    if [ "$HUB_SELECTED" -eq 0 ] && ! has_app screen-time; then
+    if [ "$HUB_SELECTED" -eq 0 ] && [ "${#APPS_SELECTED[@]}" -eq 0 ]; then
         die "nothing selected; use --app NAME or drop --no-hub"
     fi
     local requested_hub="$HUB_SELECTED"
@@ -2017,6 +2093,11 @@ do_install() {
     if [ "${#APPS_SELECTED[@]}" -eq 1 ] && [ -z "${APPS_SELECTED[0]:-}" ]; then
         APPS_SELECTED=()
     fi
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        refuse_nix_managed_path "$(app_bin_path "$app")"
+    done
     clean_junk
     disable_legacy_units
 
@@ -2101,6 +2182,12 @@ do_install() {
         if [ "$HUB_SELECTED" -eq 1 ]; then
             info "dry-run: hub binary $HUB_BIN"
         fi
+        for app in "${APPS_SELECTED[@]:-}"; do
+            [ -n "$app" ] || continue
+            [ "$app" = "screen-time" ] && continue
+            info "dry-run: app binary $(app_bin_path "$app")"
+            info "dry-run: provider $(app_provider_path "$app")"
+        done
         if has_app screen-time; then
             info "dry-run: screen-time binary $SC_BIN"
             info "dry-run: wrapper $SC_WRAPPER"
@@ -2143,6 +2230,13 @@ do_install() {
         atomic_install "${STAGE}/extract/share/rofi-hub/themes/hub.rasi" "$HUB_THEME" 644
         inject_failure "hub-theme"
     fi
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        atomic_install "${STAGE}/extract/bin/$(app_binary_name "$app")" "$(app_bin_path "$app")" 755
+        atomic_install "${STAGE}/extract/share/rofi-hub/providers/${app}.toml" "$(app_provider_path "$app")" 644
+        inject_failure "app-${app}"
+    done
     if has_app screen-time; then
         atomic_install "$STAGED_SC" "$SC_BIN" 755
         inject_failure "binary"
@@ -2337,6 +2431,11 @@ if [ "$DRY_RUN" -eq 1 ]; then
     if [ "$HUB_SELECTED" -eq 1 ]; then
         info "dry-run: hub binary $HUB_BIN"
     fi
+    for app in "${APPS_SELECTED[@]:-}"; do
+        [ -n "$app" ] || continue
+        [ "$app" = "screen-time" ] && continue
+        info "dry-run: app binary $(app_bin_path "$app")"
+    done
     if has_app screen-time; then
         info "dry-run: screen-time binary $SC_BIN"
         info "dry-run: wrapper $SC_WRAPPER"

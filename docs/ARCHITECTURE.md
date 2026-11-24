@@ -11,6 +11,9 @@ UI, daemons, and storage.
 | --- | --- |
 | `crates/rofi-core` | Manifest parsing, `rofi -dmenu` wrapper, Pango row encoding, XDG paths, palettes, notifications. |
 | `crates/rofi-hub` | The `rofi-hub` launcher: menu, theme shortcuts, `list`, `doctor`, and theme commands. |
+| `crates/rofi-calendar` | Month sheet with a date search box. |
+| `crates/rofi-keybinds` | Hyprland shortcut reference; `exec` rows are runnable. |
+| `crates/rofi-clipboard` | `cliphist` history picker backed by `wl-copy`. |
 | `crates/screen-time` | The Screen Time tracker daemon, SQLite store, static Rofi timeline, doctor, snapshots, and updater integration. |
 
 `screen-time` depends on `rofi-core` for Pango escaping and paths, but its
@@ -87,7 +90,7 @@ file, so `config.toml` is never rewritten by the UI.
 The release bundle always contains the hub and every app. `install.sh` decides
 what to install:
 
-- default: hub and all apps;
+- default: hub and all apps (`screen-time`, `calendar`, `keybinds`, `clipboard`);
 - `--app NAME`: hub and the named app (repeatable, comma-separated);
 - `--no-hub`: apps only;
 - `--all`: explicit all-in-one.
@@ -101,7 +104,10 @@ Installed paths:
 
 | Component | Paths |
 | --- | --- |
-| hub | `~/.local/bin/rofi-hub`, `~/.local/share/rofi-hub/themes/`, `~/.local/share/rofi-hub/providers/screen-time.toml` |
+| hub | `~/.local/bin/rofi-hub`, `~/.local/share/rofi-hub/themes/`, `~/.local/share/rofi-hub/providers/*.toml` |
+| calendar | `~/.local/bin/rofi-calendar`, `~/.local/share/rofi-hub/providers/calendar.toml` |
+| keybinds | `~/.local/bin/rofi-keybinds`, `~/.local/share/rofi-hub/providers/keybinds.toml` |
+| clipboard | `~/.local/bin/rofi-clipboard`, `~/.local/share/rofi-hub/providers/clipboard.toml` |
 | screen-time | `~/.local/bin/screen-time`, `~/.local/bin/rofi-screen-time`, `~/.local/share/screen-time/`, `~/.config/systemd/user/screen-time.service` |
 | update state | `~/.local/state/rofi-hub/` |
 | screen-time data | `~/.local/state/screen-time/screen-time.db` |
@@ -142,11 +148,13 @@ version, and exponential-backoff gates.
 
 - `packages.default` and `packages.rofi-hub`: the all-in-one symlink join;
 - `packages.rofi-hub-only`: the launcher with no provider baked in;
+- `packages.rofi-hub-apps`: the launcher plus calendar, keybinds, and clipboard;
+- `packages.rofi-apps`: the built-in apps without the launcher;
 - `packages.screen-time`: the tracker, including its provider manifest;
 - `homeManagerModules.default`: installs the hub and the selected apps, and
   enables the tracker service when `screen-time` is selected;
 - `homeManagerModules.screen-time`: the old standalone tracker module.
 
-The all-in-one wrapper puts the tracker on `PATH` and sets
-`ROFI_HUB_PROVIDER_DIR` to the package's provider directory. User manifests are
-still scanned after that directory.
+The all-in-one wrapper puts every app on `PATH` and sets
+`ROFI_HUB_PROVIDER_DIR` to the package provider directories. User manifests are
+still scanned after those directories.

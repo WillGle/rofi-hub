@@ -4,7 +4,9 @@
 //! manager window. Sharing the mode names means a user can pick the same look
 //! for both.
 
+use std::env;
 use std::fmt::Write as _;
+use std::fs;
 use std::str::FromStr;
 
 use crate::paths;
@@ -262,6 +264,24 @@ element selected.active {{
         );
         out
     }
+}
+
+/// The theme colors currently in effect.
+///
+/// The hub passes `ROFI_HUB_THEME` to every provider. Direct launches fall
+/// back to the saved hub choice, then to `auto`. Generated Palettes only
+/// affect the Rofi window; rows use these shared role colors.
+pub fn active() -> Theme {
+    let mode = env::var("ROFI_HUB_THEME")
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .or_else(|| {
+            fs::read_to_string(paths::hub_theme_state_path())
+                .ok()
+                .and_then(|value| value.trim().parse().ok())
+        })
+        .unwrap_or(Mode::Auto);
+    Theme::for_mode(mode)
 }
 
 /// Resolve `auto` to a user Rofi theme when one exists, otherwise generate

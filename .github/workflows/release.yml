@@ -54,7 +54,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Build
-        run: cargo build --release --locked --package rofi-hub --package screen-time
+        run: >
+          cargo build --release --locked
+          --package rofi-hub
+          --package rofi-calendar
+          --package rofi-keybinds
+          --package rofi-clipboard
+          --package screen-time
       - name: Package
         env:
           ARCH: ${{ matrix.arch }}
@@ -66,9 +72,14 @@ jobs:
           mkdir -p "$stage/bin" "$stage/share/rofi-hub/providers" "$stage/share/rofi-hub/themes" \
             "$stage/share/rofi" "$stage/share/screen-time" "$stage/systemd" dist
           install -m 755 target/release/rofi-hub "$stage/bin/rofi-hub"
+          install -m 755 target/release/rofi-calendar "$stage/bin/rofi-calendar"
+          install -m 755 target/release/rofi-keybinds "$stage/bin/rofi-keybinds"
+          install -m 755 target/release/rofi-clipboard "$stage/bin/rofi-clipboard"
           install -m 755 target/release/screen-time "$stage/bin/screen-time"
           install -m 755 crates/screen-time/share/rofi-screen-time "$stage/bin/rofi-screen-time"
           install -m 644 themes/hub.rasi "$stage/share/rofi-hub/themes/hub.rasi"
+          install -m 644 providers/calendar.toml providers/keybinds.toml \
+            providers/clipboard.toml "$stage/share/rofi-hub/providers/"
           install -m 644 providers/screen-time.toml "$stage/share/rofi-hub/providers/screen-time.toml"
           install -m 644 crates/screen-time/share/rofi/screen-time.rasi "$stage/share/rofi/screen-time.rasi"
           install -m 644 crates/screen-time/share/screen-time/config.example.toml "$stage/share/screen-time/config.example.toml"

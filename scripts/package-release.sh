@@ -17,7 +17,8 @@ esac
 [ -n "$VERSION" ] || { printf 'cannot read workspace version\n' >&2; exit 1; }
 
 cd "$ROOT"
-cargo build --release --locked --package rofi-hub --package screen-time
+cargo build --release --locked --package rofi-hub --package rofi-calendar \
+    --package rofi-keybinds --package rofi-clipboard --package screen-time
 
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/rofi-hub-release.XXXXXX")"
 trap 'rm -rf -- "$STAGE"' EXIT INT TERM
@@ -25,9 +26,14 @@ trap 'rm -rf -- "$STAGE"' EXIT INT TERM
 mkdir -p "$STAGE/bin" "$STAGE/share/rofi-hub/providers" "$STAGE/share/rofi-hub/themes" \
     "$STAGE/share/rofi" "$STAGE/share/screen-time" "$STAGE/systemd" "$ROOT/dist"
 install -m 755 target/release/rofi-hub "$STAGE/bin/rofi-hub"
+install -m 755 target/release/rofi-calendar "$STAGE/bin/rofi-calendar"
+install -m 755 target/release/rofi-keybinds "$STAGE/bin/rofi-keybinds"
+install -m 755 target/release/rofi-clipboard "$STAGE/bin/rofi-clipboard"
 install -m 755 target/release/screen-time "$STAGE/bin/screen-time"
 install -m 755 crates/screen-time/share/rofi-screen-time "$STAGE/bin/rofi-screen-time"
 install -m 644 themes/hub.rasi "$STAGE/share/rofi-hub/themes/hub.rasi"
+install -m 644 providers/calendar.toml providers/keybinds.toml \
+    providers/clipboard.toml "$STAGE/share/rofi-hub/providers/"
 install -m 644 providers/screen-time.toml "$STAGE/share/rofi-hub/providers/screen-time.toml"
 install -m 644 crates/screen-time/share/rofi/screen-time.rasi "$STAGE/share/rofi/screen-time.rasi"
 install -m 644 crates/screen-time/share/screen-time/config.example.toml "$STAGE/share/screen-time/config.example.toml"

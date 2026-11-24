@@ -2,8 +2,8 @@
 
 A small Rust workspace for Rofi desktop tools. The `rofi-hub` launcher shows
 installed sub-apps in one keyboard-driven menu, remembers your theme, and
-starts the selected app. The first app is **Screen Time**, a local Hyprland
-tracker with daily totals, timelines, and session details.
+starts the selected app. The bundle ships **Screen Time** (a local Hyprland
+tracker), **Calendar**, **Keyboard Shortcuts**, and **Clipboard History**.
 
 One signed bundle contains the hub and every app. The installer can install the
 all-in-one hub, only selected apps, or only the launcher.
@@ -32,11 +32,11 @@ bash install.sh
 `install.sh` with no component flags installs the hub and every app.
 
 ```bash
-# the hub plus only Screen Time (the current default)
+# the hub plus only Screen Time
 bash install.sh --app screen-time
 
-# Screen Time without the hub launcher
-bash install.sh --app screen-time --no-hub
+# the hub plus the built-in apps, without the tracker
+bash install.sh --app calendar,keybinds,clipboard
 
 # list the apps in the bundle
 bash install.sh --list-apps
@@ -82,6 +82,7 @@ With flakes and Home Manager:
   services.rofi-hub = {
     enable = true;
     apps = [ "screen-time" ];       # [] installs only the hub
+    # Built-in apps can be added alone: [ "calendar" "keybinds" "clipboard" ]
     # providerDirs = [ "/home/me/.local/share/rofi-hub/providers" ];
   };
 }
@@ -102,6 +103,22 @@ With flakes and Home Manager:
 - `rofi-hub theme list`, `rofi-hub theme set nord`, and `rofi-hub theme show`
   manage the saved theme from a terminal.
 - `rofi-hub screen-time` opens one app directly.
+
+### Calendar
+
+- Enter on the sheet opens today; type `15`, `15/3`, `3/2027`,
+  `15/3/2027`, or `2027-03-15` to jump.
+- `←` / `→` browse months and `Ctrl+t` returns to today.
+
+### Keyboard Shortcuts
+
+- Sections come from `# --- Name ---` comments in `hyprland.conf`.
+- `Enter` runs a shortcut whose dispatcher is `exec`; other rows are
+  reference only.
+
+### Clipboard History
+
+- Lists `cliphist` entries; `Enter` copies the selected entry with `wl-copy`.
 
 ### Screen Time
 
@@ -126,6 +143,9 @@ and suspend gaps are excluded. The database lives at
 ```
 crates/rofi-core/       provider manifests, Rofi dmenu, themes, paths
 crates/rofi-hub/        the hub launcher
+crates/rofi-calendar/   month sheet with date search
+crates/rofi-keybinds/   Hyprland shortcut reference
+crates/rofi-clipboard/  cliphist picker
 crates/screen-time/     the Screen Time tracker and its Rofi UI
 providers/              provider manifests shipped in the bundle
 themes/                 fallback hub theme

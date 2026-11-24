@@ -27,6 +27,9 @@ pub struct DmenuOptions {
     /// Per-launcher pidfile passed with `-pid`. Keeping this separate from
     /// the default rofi.pid avoids interfering with other Rofi prompts.
     pub pid: Option<PathBuf>,
+    /// Allow free-form input instead of only the supplied rows. The calendar
+    /// uses this for its date search box.
+    pub allow_custom: bool,
     pub extra_args: Vec<String>,
 }
 
@@ -102,11 +105,14 @@ impl Rofi {
         command
             .arg("-dmenu")
             .arg("-i")
-            .arg("-no-custom")
             .arg("-format")
             .arg("s")
             .arg("-disable-history")
             .arg("-markup-rows");
+
+        if !options.allow_custom {
+            command.arg("-no-custom");
+        }
 
         if icons {
             command.arg("-show-icons");
@@ -193,10 +199,12 @@ mod tests {
             theme: Some(PathBuf::from("/tmp/theme.rasi")),
             config: Some(PathBuf::from("/tmp/config.rasi")),
             pid: Some(PathBuf::from("/tmp/rofi-hub.pid")),
+            allow_custom: false,
             extra_args: vec!["-kb-custom-1".to_owned(), "Alt+1".to_owned()],
         };
         let args = args(&options, true);
         assert_eq!(args[0], "-dmenu");
+        assert!(args.contains(&"-no-custom".to_owned()));
         assert!(args.contains(&"-format".to_owned()));
         assert!(args.contains(&"s".to_owned()));
         assert!(args.contains(&"-show-icons".to_owned()));

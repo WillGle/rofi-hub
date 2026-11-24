@@ -1,0 +1,18 @@
+[package]
+name = "rofi-calendar"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Month sheet with date search for the Rofi Hub ecosystem"
+publish = false
+
+[[bin]]
+name = "rofi-calendar"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+rofi-core = { path = "../rofi-core" }

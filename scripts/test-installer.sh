@@ -156,8 +156,14 @@ export NOTIFY_LOG="$WORK/notifications.log"
 HUB_BIN="$HOME/.local/bin/rofi-hub"
 SC_BIN="$HOME/.local/bin/screen-time"
 SC_WRAPPER="$HOME/.local/bin/rofi-screen-time"
+CAL_BIN="$HOME/.local/bin/rofi-calendar"
+KEYBINDS_BIN="$HOME/.local/bin/rofi-keybinds"
+CLIPBOARD_BIN="$HOME/.local/bin/rofi-clipboard"
 HUB_THEME="$XDG_DATA_HOME/rofi-hub/themes/hub.rasi"
 PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/screen-time.toml"
+CAL_PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/calendar.toml"
+KEYBINDS_PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/keybinds.toml"
+CLIPBOARD_PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/clipboard.toml"
 SC_THEME="$XDG_DATA_HOME/screen-time/rofi/screen-time.rasi"
 SC_THEME_STATE="$XDG_CONFIG_HOME/rofi-hub/theme"
 SC_CONFIG="$XDG_CONFIG_HOME/screen-time/config.toml"
@@ -170,7 +176,8 @@ COMPONENTS_FILE="$STATE/components"
 DB="$SC_STATE/screen-time.db"
 
 # Build once. The installer always installs release-shaped tarballs.
-(cd "$ROOT" && cargo build --locked --package rofi-hub --package screen-time)
+(cd "$ROOT" && cargo build --locked --package rofi-hub --package rofi-calendar \
+    --package rofi-keybinds --package rofi-clipboard --package screen-time)
 
 make_bundle() {
     local out="$1" version="$2"
@@ -180,9 +187,18 @@ make_bundle() {
     mkdir -p "$stage/bin" "$stage/share/rofi-hub/providers" "$stage/share/rofi-hub/themes" \
         "$stage/share/rofi" "$stage/share/screen-time" "$stage/systemd" "$dir"
     install -m 755 "$ROOT/target/debug/rofi-hub" "$stage/bin/rofi-hub"
+    install -m 755 "$ROOT/target/debug/rofi-calendar" "$stage/bin/rofi-calendar"
+    install -m 755 "$ROOT/target/debug/rofi-keybinds" "$stage/bin/rofi-keybinds"
+    install -m 755 "$ROOT/target/debug/rofi-clipboard" "$stage/bin/rofi-clipboard"
     install -m 755 "$ROOT/target/debug/screen-time" "$stage/bin/screen-time"
     install -m 755 "$ROOT/crates/screen-time/share/rofi-screen-time" "$stage/bin/rofi-screen-time"
     install -m 644 "$ROOT/themes/hub.rasi" "$stage/share/rofi-hub/themes/hub.rasi"
+    install -m 644 "$ROOT/providers/calendar.toml" \
+        "$stage/share/rofi-hub/providers/calendar.toml"
+    install -m 644 "$ROOT/providers/keybinds.toml" \
+        "$stage/share/rofi-hub/providers/keybinds.toml"
+    install -m 644 "$ROOT/providers/clipboard.toml" \
+        "$stage/share/rofi-hub/providers/clipboard.toml"
     install -m 644 "$ROOT/providers/screen-time.toml" "$stage/share/rofi-hub/providers/screen-time.toml"
     install -m 644 "$ROOT/crates/screen-time/share/rofi/screen-time.rasi" "$stage/share/rofi/screen-time.rasi"
     install -m 644 "$ROOT/crates/screen-time/share/screen-time/config.example.toml" "$stage/share/screen-time/config.example.toml"
@@ -258,14 +274,20 @@ rm -rf -- "$RECENT_STAGE"
 assert_file "$HUB_BIN" "hub binary installed"
 assert_file "$SC_BIN" "screen-time binary installed"
 assert_file "$SC_WRAPPER" "screen-time wrapper installed"
+assert_file "$CAL_BIN" "calendar binary installed"
+assert_file "$KEYBINDS_BIN" "keybinds binary installed"
+assert_file "$CLIPBOARD_BIN" "clipboard binary installed"
 assert_file "$HUB_THEME" "hub fallback theme installed"
 assert_file "$PROVIDER" "provider manifest installed"
+assert_file "$CAL_PROVIDER" "calendar provider installed"
+assert_file "$KEYBINDS_PROVIDER" "keybinds provider installed"
+assert_file "$CLIPBOARD_PROVIDER" "clipboard provider installed"
 assert_file "$SC_THEME" "screen-time theme installed"
 assert_file "$UNIT" "screen-time unit installed"
 assert_eq "nord" "$(cat "$SC_THEME_STATE")" "hub theme choice is recorded"
 assert_eq "nord" "$(sed -n '/^\[theme\]/,/^\[/p' "$SC_CONFIG" | sed -n 's/^mode = "\(.*\)"/\1/p' | head -n1)" "screen-time config is seeded from --theme"
 assert_eq "$TEST_VERSION" "$(cat "$VERSION_FILE")" "installed version is recorded"
-assert_eq "hub screen-time" "$(tr '\n' ' ' <"$COMPONENTS_FILE" | sed 's/ $//')" "component selection is recorded"
+assert_eq "calendar clipboard hub keybinds screen-time" "$(tr '\n' ' ' <"$COMPONENTS_FILE" | sed 's/ $//')" "component selection is recorded"
 assert_file "$SYSTEMCTL_STATE/active" "service starts on first install"
 assert_success "installed hub lists the provider" env ROFI_HUB_PROVIDER_DIR="$XDG_DATA_HOME/rofi-hub/providers" "$HUB_BIN" list
 
@@ -288,7 +310,7 @@ backup="$(find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d | sort | tail -n1)"
 assert_file "$backup/manifest.json" "backup manifest exists"
 assert_eq "verified" "$(jq -r '.status' "$backup/manifest.json")" "successful backup is verified"
 assert_eq "300" "$(jq -r '.snapshot.fingerprint.session_seconds' "$backup/manifest.json")" "backup records the fingerprint"
-assert_eq "hub screen-time" "$(jq -r '.components | join(" ")' "$backup/manifest.json")" "backup records components"
+assert_eq "hub calendar clipboard keybinds screen-time" "$(jq -r '.components | join(" ")' "$backup/manifest.json")" "backup records components"
 assert_mode 700 "$backup" "backup directory is private"
 assert_mode 600 "$backup/manifest.json" "backup manifest is private"
 assert_mode 600 "$backup/db/screen-time.db" "backup database is private"
@@ -300,7 +322,7 @@ cp -a "$backup/db" "$REFERENCE"
 # Fault injection and interrupted updates
 # ---------------------------------------------------------------------------
 
-for stage in hub hub-theme binary wrapper theme unit version data-check doctor; do
+for stage in hub hub-theme app-calendar app-keybinds app-clipboard binary wrapper theme unit version data-check doctor; do
     assert_failure "fault after $stage rolls back" \
         env ROFI_HUB_INSTALLER_FAIL_AFTER="$stage" bash "$ROOT/install.sh" --tarball "$BUNDLE" --allow-unsigned >/dev/null 2>&1
     assert_eq "$TEST_VERSION" "$(cat "$VERSION_FILE")" "version restored after fault at $stage"
@@ -348,12 +370,21 @@ assert_not_file "$XDG_CONFIG_HOME/systemd/user/screen-time-update-check.service"
 assert_success "uninstall all components" bash "$ROOT/install.sh" --uninstall --yes
 assert_not_file "$HUB_BIN" "uninstall removes the hub"
 assert_not_file "$SC_BIN" "uninstall removes screen-time"
+assert_not_file "$CAL_BIN" "uninstall removes calendar"
+assert_not_file "$KEYBINDS_BIN" "uninstall removes keybinds"
+assert_not_file "$CLIPBOARD_BIN" "uninstall removes clipboard"
+assert_not_file "$CAL_PROVIDER" "uninstall removes the calendar provider"
+assert_not_file "$KEYBINDS_PROVIDER" "uninstall removes the keybinds provider"
+assert_not_file "$CLIPBOARD_PROVIDER" "uninstall removes the clipboard provider"
 assert_not_file "$COMPONENTS_FILE" "uninstall clears the component list"
 assert_file "$DB" "uninstall keeps the database"
 
 assert_success "hub-only install" run_install --hub-only --no-service
 assert_file "$HUB_BIN" "hub-only installs the hub"
 assert_not_file "$SC_BIN" "hub-only does not install screen-time"
+assert_not_file "$CAL_BIN" "hub-only does not install calendar"
+assert_not_file "$KEYBINDS_BIN" "hub-only does not install keybinds"
+assert_not_file "$CLIPBOARD_BIN" "hub-only does not install clipboard"
 assert_not_file "$UNIT" "hub-only does not install the tracker unit"
 assert_not_file "$PROVIDER" "hub-only does not install a provider"
 assert_eq "hub" "$(cat "$COMPONENTS_FILE")" "hub-only records the selection"
@@ -457,6 +488,20 @@ assert_success "reinstall app-only for purge" run_install --app screen-time --no
 assert_success "purge removes state and history" bash "$ROOT/install.sh" --uninstall --no-hub --app screen-time --purge --yes
 assert_not_file "$DB" "purge removes the database"
 assert_not_file "$STATE" "purge removes hub update state"
+
+# ---------------------------------------------------------------------------
+# Built-in app-only installs
+# ---------------------------------------------------------------------------
+
+assert_success "calendar-only install" run_install --app calendar --no-hub
+assert_file "$CAL_BIN" "calendar-only installs the calendar binary"
+assert_file "$CAL_PROVIDER" "calendar-only installs the provider"
+assert_not_file "$HUB_BIN" "calendar-only does not install the hub"
+assert_not_file "$SC_BIN" "calendar-only does not install screen-time"
+assert_eq "calendar" "$(cat "$COMPONENTS_FILE")" "calendar-only records the selection"
+assert_success "calendar-only uninstall" bash "$ROOT/install.sh" --uninstall --no-hub --app calendar --yes
+assert_not_file "$CAL_BIN" "calendar-only uninstall removes the binary"
+assert_not_file "$CAL_PROVIDER" "calendar-only uninstall removes the provider"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

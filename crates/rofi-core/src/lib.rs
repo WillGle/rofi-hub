@@ -1,5 +1,6 @@
 //! Shared building blocks for the Rofi Hub provider ecosystem.
 
+pub mod app;
 pub mod error;
 pub mod item;
 pub mod manifest;

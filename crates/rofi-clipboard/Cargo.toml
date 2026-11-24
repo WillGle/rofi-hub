@@ -1,0 +1,17 @@
+[package]
+name = "rofi-clipboard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Clipboard history picker for cliphist and wl-copy"
+publish = false
+
+[[bin]]
+name = "rofi-clipboard"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+rofi-core = { path = "../rofi-core" }

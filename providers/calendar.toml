@@ -1,0 +1,8 @@
+id = "calendar"
+name = "Calendar"
+description = "Month sheet with a date search box"
+category = "Productivity"
+icon = "x-office-calendar"
+keywords = ["date", "month", "calendar", "schedule"]
+exec = ["rofi-calendar"]
+version = "0.1.0"

@@ -1,13 +1,19 @@
 [workspace]
 resolver = "3"
 members = [
+  "crates/rofi-calendar",
+  "crates/rofi-clipboard",
   "crates/rofi-core",
   "crates/rofi-hub",
+  "crates/rofi-keybinds",
   "crates/screen-time",
 ]
 default-members = [
+  "crates/rofi-calendar",
+  "crates/rofi-clipboard",
   "crates/rofi-core",
   "crates/rofi-hub",
+  "crates/rofi-keybinds",
   "crates/screen-time",
 ]
 

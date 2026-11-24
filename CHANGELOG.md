@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add three built-in provider apps: `calendar` (month sheet with date search),
+  `keybinds` (Hyprland shortcut reference with runnable `exec` rows), and
+  `clipboard` (`cliphist` history copied back with `wl-copy`).
+- Extend the release bundle, installer component selection, Nix packages, and
+  Home Manager module to cover the new apps.
+- Share app theme/config/PID resolution in `rofi-core`, including
+  `ROFI_HUB_THEME_FILE` so providers opened from the hub keep the chosen look.
+
 ## 0.1.0
 
 - Introduce the `rofi-hub` launcher, `rofi-core` provider protocol, provider

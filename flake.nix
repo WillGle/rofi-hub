@@ -72,12 +72,45 @@
             }
           );
 
+          rofiApps = pkgs.rustPlatform.buildRustPackage (
+            common
+            // {
+              pname = "rofi-hub-apps";
+              version = workspaceVersion;
+              cargoBuildFlags = [
+                "--package"
+                "rofi-calendar"
+                "--package"
+                "rofi-keybinds"
+                "--package"
+                "rofi-clipboard"
+              ];
+              cargoTestFlags = [
+                "--package"
+                "rofi-calendar"
+                "--package"
+                "rofi-keybinds"
+                "--package"
+                "rofi-clipboard"
+              ];
+              postInstall = ''
+                mkdir -p "$out/share/rofi-hub/providers"
+                install -m 644 providers/calendar.toml providers/keybinds.toml \
+                  providers/clipboard.toml "$out/share/rofi-hub/providers/"
+              '';
+              meta = {
+                description = "Built-in Rofi apps: calendar, keybinds, and clipboard";
+                license = lib.licenses.mit;
+                platforms = systems;
+              };
+            }
+          );
+
           screenTime = pkgs.rustPlatform.buildRustPackage (
             common
             // {
               pname = "screen-time";
-              version = screenTimeVersion;
-              cargoBuildFlags = [ "--package" "screen-time" ];
+              version = screenTimeVersion;              cargoBuildFlags = [ "--package" "screen-time" ];
               cargoTestFlags = [ "--package" "screen-time" ];
               preCheck = ''
                 export TZ=UTC
@@ -110,17 +143,35 @@
             }
           );
 
+          hubWithApps = pkgs.symlinkJoin {
+            name = "rofi-hub-with-apps-${workspaceVersion}";
+            paths = [
+              rofiHub
+              rofiApps
+            ];
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            postBuild = ''
+              wrapProgram "$out/bin/rofi-hub" \
+                --prefix PATH : "${rofiApps}/bin" \
+                --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers"
+            '';
+            meta = rofiHub.meta // {
+              mainProgram = "rofi-hub";
+            };
+          };
+
           allInOne = pkgs.symlinkJoin {
             name = "rofi-hub-all-in-one-${workspaceVersion}";
             paths = [
               rofiHub
+              rofiApps
               screenTime
             ];
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
               wrapProgram "$out/bin/rofi-hub" \
-                --prefix PATH : "${screenTime}/bin" \
-                --set-default ROFI_HUB_PROVIDER_DIR "${screenTime}/share/rofi-hub/providers"
+                --prefix PATH : "${rofiApps}/bin:${screenTime}/bin" \
+                --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers:${screenTime}/share/rofi-hub/providers"
             '';
             meta = rofiHub.meta // {
               mainProgram = "rofi-hub";
@@ -131,6 +182,8 @@
           default = allInOne;
           rofi-hub = allInOne;
           rofi-hub-only = rofiHub;
+          rofi-hub-apps = hubWithApps;
+          rofi-apps = rofiApps;
           screen-time = screenTime;
         }
       );
@@ -166,9 +219,11 @@
           system = pkgs.stdenv.hostPlatform.system;
           allInOne = self.packages.${system}.default;
           hubOnly = self.packages.${system}.rofi-hub-only;
+          hubWithApps = self.packages.${system}.rofi-hub-apps;
           screenTime = self.packages.${system}.screen-time;
           withScreenTime = builtins.elem "screen-time" cfg.apps;
-          package = if cfg.package != null then cfg.package else if withScreenTime then allInOne else hubOnly;
+          withBundledApps = builtins.any (app: app != "screen-time") cfg.apps;
+          package = if cfg.package != null then cfg.package else if withScreenTime then allInOne else if withBundledApps then hubWithApps else hubOnly;
         in
         {
           options.services.rofi-hub = {
@@ -185,11 +240,18 @@
             };
 
             apps = lib.mkOption {
-              type = lib.types.listOf (lib.types.enum [ "screen-time" ]);
+              type = lib.types.listOf (lib.types.enum [
+                "screen-time"
+                "calendar"
+                "keybinds"
+                "clipboard"
+              ]);
               default = [ "screen-time" ];
               description = ''
                 Sub-apps to install with the hub. The screen-time tracker
-                service is enabled when `screen-time` is selected.
+                service is enabled when `screen-time` is selected. Calendar,
+                keybinds, and clipboard are built-in apps, so selecting any of
+                them installs the hub with the built-in app set.
               '';
             };
 
