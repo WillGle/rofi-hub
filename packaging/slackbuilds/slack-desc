@@ -1,8 +1,9 @@
 rofi-hub: rofi-hub (Rofi launcher and apps)
 rofi-hub:
-rofi-hub: Rofi Hub is a keyboard-driven launcher for Rofi apps. It ships a
-rofi-hub: calendar, a Hyprland keybinding reference, a cliphist picker, and
-rofi-hub: the Screen Time tracker with a systemd user service.
+rofi-hub: Rofi Hub is a keyboard-driven launcher for Rofi apps. It
+rofi-hub: ships a calendar, a Hyprland keybinding reference, a cliphist
+rofi-hub: picker, and the Screen Time tracker with a systemd user
+rofi-hub: service.
 rofi-hub:
 rofi-hub: Requires rofi at runtime. Optional: cliphist, wl-clipboard,
 rofi-hub: and Hyprland. Build requires rust and cargo.
