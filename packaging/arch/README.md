@@ -4,18 +4,23 @@ Three recipes share the same install tree:
 
 | Directory | Package | Source |
 |---|---|---|
-| `.` | `rofi-hub` | tagged source tarball, `cargo build --release` |
-| `rofi-hub-bin` | `rofi-hub-bin` | GitHub release tarball, `packaging/install-tree.sh` from the tarball |
+| `.` | `rofi-hub` | release source asset from `scripts/package-source.sh`, `cargo build --release` |
+| `rofi-hub-bin` | `rofi-hub-bin` | GitHub release binary tarball, `packaging/install-tree.sh` from the tarball |
 | `rofi-hub-git` | `rofi-hub-git` | live git checkout |
+
+The source asset is a complete, taggable tree including `packaging/`. The
+`v0.2.0` Git tag predates the packaging work, so the recipe does not use the
+GitHub tag archive.
 
 ## Validated locally
 
 Inside `archlinux:base-devel`:
 
 ```bash
-# source package
+# source package; the exact source asset is available locally, so checksums
+# are verified.
 cd packaging/arch
-makepkg -f --skipchecksums --noconfirm
+makepkg -f --noconfirm
 namcap PKGBUILD
 namcap rofi-hub-0.2.0-1-x86_64.pkg.tar.zst
 pacman -U --noconfirm rofi-hub-0.2.0-1-x86_64.pkg.tar.zst
@@ -37,9 +42,10 @@ be consumed by rustc's lld link step.
 
 ## Before publishing to AUR
 
-1. Tag a release that contains `packaging/` (the v0.2.0 tag predates it).
-2. Run `updpkgsums` in `rofi-hub` and `rofi-hub-bin` to replace the source
-   checksums (the `-bin` recipe currently uses `SKIP` until assets exist).
+1. Run `scripts/package-source.sh` and upload
+   `dist/rofi-hub-<version>-source.tar.gz` to the `v<version>` release.
+2. Run `updpkgsums` in `rofi-hub` and `rofi-hub-bin` to replace the source and
+   binary checksums (the `-bin` recipe uses `SKIP` until assets exist).
 3. Regenerate metadata: `makepkg --printsrcinfo > .SRCINFO`.
 4. Verify `pacman -U` and `pacman -Rns` in a clean container.
 5. Push `PKGBUILD` and `.SRCINFO` to the three AUR repositories. This step
