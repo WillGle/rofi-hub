@@ -7,7 +7,7 @@
 Name:           rofi-hub
 Version:        0.2.0
 Release:        alt1
-Summary:        Rofi launcher with screen-time, calendar, keybinds, and clipboard apps
+Summary:        Rofi launcher with screen-time, calendar, key bindings, and clipboard apps
 License:        MIT
 Group:          Graphical desktop/Applications/Utilities
 URL:            https://github.com/WillGle/rofi-hub
@@ -25,8 +25,8 @@ Suggests:       hyprland
 
 %description
 Rofi Hub is a keyboard-driven launcher for Rofi apps. It ships a calendar, a
-Hyprland keybinding reference, a cliphist picker, and the Screen Time tracker
-with a systemd user service.
+Hyprland key-binding reference, a clipboard-history picker, and the Screen Time
+tracker with a systemd user service.
 
 %prep
 %autosetup -n rofi-hub-%{version}
@@ -39,6 +39,8 @@ cargo test --workspace --locked
 
 %install
 DESTDIR=%{buildroot} PREFIX=/usr packaging/install-tree.sh --all
+# RPM lint: use the absolute shell path in packaged scripts.
+sed -i '1s|^#!/usr/bin/env bash$|#!/bin/bash|' %{buildroot}%{_bindir}/rofi-screen-time
 
 %files
 %{_bindir}/rofi-hub
