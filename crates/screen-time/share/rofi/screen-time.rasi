@@ -1,0 +1,98 @@
+configuration {
+    font: "JetBrainsMono Nerd Font 12";
+    show-icons: false;
+    disable-history: true;
+    hover-select: false;
+    cycle: true;
+    matching: "fuzzy";
+}
+
+* {
+    font: "JetBrainsMono Nerd Font 12";
+    background-color: #0d1117;
+    text-color: #f0f6fc;
+    border-color: #161b22;
+    selected-normal-background: #161b22;
+    selected-normal-foreground: #f0f6fc;
+    normal-background: #0d1117;
+    normal-foreground: #f0f6fc;
+    foreground: #f0f6fc;
+    background: #0d1117;
+    spacing: 0;
+    margin: 0;
+    padding: 0;
+}
+
+window {
+    width: calc( ( 144ch + 64px ) min 94% );
+    location: center;
+    anchor: center;
+    border: 0;
+    padding: 20px;
+    background-color: #0d1117;
+}
+
+mainbox {
+    background-color: #0d1117;
+    padding: 0;
+    children: [ message, listview ];
+    spacing: 0;
+}
+
+message, textbox {
+    background-color: #0d1117;
+    text-color: #f0f6fc;
+    padding: 0px 5px;
+    border: 0;
+}
+
+textbox {
+    font: "JetBrainsMono Nerd Font 26";
+    markup: true;
+    vertical-align: 0.5;
+}
+
+element normal.active, element alternate.active, element selected.active {
+    background-color: #161b22;
+    border: 0;
+    border-radius: 0;
+}
+
+element selected.active {
+    border: 0px 0px 0px 2px;
+    border-color: #58a6ff;
+}
+
+inputbar {
+    enabled: false;
+}
+
+listview {
+    background-color: #0d1117;
+    columns: 1;
+    lines: 24;
+    spacing: 0;
+    scrollbar: false;
+    cycle: true;
+    dynamic: true;
+    fixed-height: false;
+}
+
+element {
+    children: [ element-text ];
+    padding: 3px 10px;
+    background-color: #0d1117;
+    text-color: #f0f6fc;
+}
+
+element selected {
+    background-color: #161b22;
+    text-color: #f0f6fc;
+}
+
+element-text {
+    background-color: transparent;
+    text-color: inherit;
+    font: "JetBrainsMono Nerd Font 12";
+    vertical-align: 0.5;
+}

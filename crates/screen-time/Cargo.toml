@@ -1,0 +1,36 @@
+[package]
+name = "screen-time"
+version = "0.5.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Local, per-user screen-time tracker with a static Rofi day timeline"
+publish = false
+
+[lib]
+name = "screen_time"
+path = "src/lib.rs"
+
+[[bin]]
+name = "screen-time"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap.workspace = true
+libc = "0.2"
+rofi-core = { path = "../rofi-core" }
+rusqlite = { version = "0.43", features = ["bundled"] }
+serde.workspace = true
+serde_json.workspace = true
+signal-hook = "0.3"
+toml.workspace = true
+zbus = { version = "5.19", features = ["blocking-api"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+session-count = []

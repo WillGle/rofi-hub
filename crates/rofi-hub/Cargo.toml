@@ -1,0 +1,23 @@
+[package]
+name = "rofi-hub"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A small Rofi launcher for screen-time and future sub-apps"
+
+[[bin]]
+name = "rofi-hub"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+rofi-core = { path = "../rofi-core" }
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

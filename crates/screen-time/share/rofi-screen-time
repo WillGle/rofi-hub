@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# screen-time Rofi launcher and script-mode shim.
+#
+# Direct invocation starts Rofi. Rofi itself re-invokes this script for every
+# script-mode step (ROFI_RETV is set), and that path only executes the renderer.
+set -u
+
+self=$(readlink -f -- "${BASH_SOURCE[0]}")
+dir=${self%/*}
+
+if [ ! -x "$dir/screen-time" ]; then
+    printf 'rofi-screen-time: missing %s\n' "$dir/screen-time" >&2
+    printf 'Reinstall screen-time or fix your launcher path.\n' >&2
+    exit 127
+fi
+
+if [ "${ROFI_RETV+x}" = x ]; then
+    exec "$dir/screen-time" render --format rofi
+fi
+
+if ! command -v rofi >/dev/null 2>&1; then
+    printf 'rofi-screen-time: rofi is required but was not found in PATH\n' >&2
+    printf 'Install Rofi 2.x, then run: screen-time doctor\n' >&2
+    exit 127
+fi
+
+# Rofi uses logical coordinates. Convert the focused Hyprland monitor's
+# physical geometry through its scale before generating the theme/layout.
+if [ -z "${SCREEN_TIME_SCREEN_WIDTH:-}" ] && command -v hyprctl >/dev/null 2>&1; then
+    monitor_geometry=$(hyprctl monitors -j 2>/dev/null | awk '
+        /[{]/ { depth++ }
+        /"width":[[:space:]]*/ {
+            value = $2; gsub(/,/, "", value); width = value
+        }
+        /"height":[[:space:]]*/ {
+            value = $2; gsub(/,/, "", value); height = value
+        }
+        /"scale":[[:space:]]*/ {
+            value = $2; gsub(/,/, "", value); scale = value
+        }
+        /"focused":[[:space:]]*true/ { focused = 1 }
+        /[}]/ {
+            depth--
+            if (depth == 0) {
+                if (width > 0 && height > 0 && scale > 0) {
+                    geometry = sprintf("%d %d", width / scale, height / scale)
+                    if (focused) {
+                        print geometry
+                        found = 1
+                        exit
+                    }
+                    if (!have_first) {
+                        first = geometry
+                        have_first = 1
+                    }
+                }
+                width = height = scale = ""
+                focused = 0
+            }
+        }
+        END {
+            if (!found && have_first) print first
+        }
+    ')
+    if [ -n "$monitor_geometry" ]; then
+        read -r monitor_width monitor_height <<<"$monitor_geometry"
+        export SCREEN_TIME_SCREEN_WIDTH="$monitor_width"
+        export SCREEN_TIME_SCREEN_HEIGHT="$monitor_height"
+    fi
+fi
+
+runtime_dir="${XDG_RUNTIME_DIR:-/tmp}"
+theme_dir="${runtime_dir}/screen-time"
+theme_file="${theme_dir}/rofi-theme.rasi"
+unset SCREEN_TIME_ROFI_THEME_REQUEST SCREEN_TIME_ROFI_REOPEN
+theme_request=$(mktemp "${TMPDIR:-/tmp}/screen-time-theme-request.XXXXXX" 2>/dev/null || true)
+if [ -n "$theme_request" ]; then
+    export SCREEN_TIME_ROFI_THEME_REQUEST="$theme_request"
+    trap 'rm -f -- "$theme_request"' EXIT
+fi
+
+run_popup() {
+    theme_args=()
+    if mkdir -p "$theme_dir" 2>/dev/null; then
+        theme_tmp=$(mktemp "${theme_dir}/rofi-theme.XXXXXX" 2>/dev/null || true)
+        if [ -n "$theme_tmp" ]; then
+            if "$dir/screen-time" render --format rofi-theme >"$theme_tmp" 2>/dev/null \
+                && [ -s "$theme_tmp" ]; then
+                chmod 600 "$theme_tmp"
+                mv -f -- "$theme_tmp" "$theme_file"
+                theme_args=(-theme "$theme_file")
+            else
+                rm -f -- "$theme_tmp"
+            fi
+        fi
+    fi
+    if [ "${#theme_args[@]}" -eq 0 ]; then
+        theme=${ROFI_THEME:-${SCREEN_TIME_THEME:-${XDG_DATA_HOME:-"$HOME/.local/share"}/screen-time/rofi/screen-time.rasi}}
+        if [ -r "$theme" ]; then
+            theme_args=(-theme "$theme")
+        fi
+    fi
+
+    rofi \
+        -show screen-time \
+        -modes "screen-time:$self" \
+        -pid "${ROFI_PIDFILE:-${XDG_RUNTIME_DIR:-/tmp}/rofi-screen-time.pid}" \
+        -selected-row 8 \
+        -normal-window \
+        -kb-move-char-back "Alt+Left" \
+        -kb-move-char-forward "Alt+Right" \
+        -kb-remove-char-back "Alt+BackSpace" \
+        -kb-custom-1 "Left" \
+        -kb-custom-2 "Right" \
+        -kb-custom-3 "t" \
+        -kb-custom-4 "r" \
+        -kb-custom-5 "BackSpace" \
+        -kb-custom-6 "T" \
+        -kb-custom-7 "R" \
+        -kb-custom-8 "Alt+1" \
+        -kb-custom-9 "Alt+2" \
+        -kb-custom-10 "Alt+3" \
+        -kb-custom-11 "Alt+4" \
+        -kb-custom-12 "Alt+Down" \
+        -kb-custom-13 "Alt+Up" \
+        "${theme_args[@]}"
+}
+
+while true; do
+    run_popup
+    status=$?
+    if [ -z "$theme_request" ] || [ ! -s "$theme_request" ]; then
+        exit "$status"
+    fi
+    # Rofi applies window size and colors when it creates a popup.
+    : > "$theme_request" || exit 1
+    export SCREEN_TIME_ROFI_REOPEN=1
+done

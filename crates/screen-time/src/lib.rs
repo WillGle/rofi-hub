@@ -1,0 +1,25 @@
+use anyhow::Result;
+
+pub mod backoff;
+pub mod capture;
+pub mod cli;
+pub mod config;
+pub mod daemon;
+pub mod db;
+pub mod doctor;
+pub mod idle;
+pub mod migrations;
+pub mod paths;
+pub mod render;
+pub mod sessions;
+pub mod sha256;
+pub mod sleep;
+pub mod snapshot;
+pub mod theme;
+pub mod timeutil;
+pub mod ui;
+pub mod view;
+
+pub fn run() -> Result<()> {
+    cli::run()
+}

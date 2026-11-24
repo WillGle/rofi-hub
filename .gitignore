@@ -1,0 +1,6 @@
+/target
+/result
+/.direnv
+/dist
+/state
+.DS_Store

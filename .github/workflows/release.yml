@@ -1,0 +1,143 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install shellcheck, minisign, and jq
+        run: sudo apt-get update && sudo apt-get install -y shellcheck minisign jq
+      - name: Format
+        run: cargo fmt --check --all
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Test session-count feature
+        run: cargo test --locked --package screen-time --features session-count --lib
+      - name: Clippy session-count feature
+        run: cargo clippy --locked --package screen-time --all-targets --features session-count -- -D warnings
+      - name: Evaluation charts
+        run: python3 crates/screen-time/scripts/render-evaluation-charts.py --check
+      - name: Shell scripts
+        run: shellcheck install.sh uninstall.sh scripts/package-release.sh scripts/sign-release.sh scripts/test-installer.sh crates/screen-time/share/rofi-screen-time crates/screen-time/scripts/restore-drill.sh crates/screen-time/scripts/benchmark-linux-sandbox.sh
+      - name: Installer integration and fault injection
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: scripts/test-installer.sh
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+            experimental: true
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental || false }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --release --locked --package rofi-hub --package screen-time
+      - name: Package
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n '/^\[workspace.package\]/,/^\[/p' Cargo.toml | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)"
+          stage="$(mktemp -d)"
+          trap 'rm -rf "$stage"' EXIT
+          mkdir -p "$stage/bin" "$stage/share/rofi-hub/providers" "$stage/share/rofi-hub/themes" \
+            "$stage/share/rofi" "$stage/share/screen-time" "$stage/systemd" dist
+          install -m 755 target/release/rofi-hub "$stage/bin/rofi-hub"
+          install -m 755 target/release/screen-time "$stage/bin/screen-time"
+          install -m 755 crates/screen-time/share/rofi-screen-time "$stage/bin/rofi-screen-time"
+          install -m 644 themes/hub.rasi "$stage/share/rofi-hub/themes/hub.rasi"
+          install -m 644 providers/screen-time.toml "$stage/share/rofi-hub/providers/screen-time.toml"
+          install -m 644 crates/screen-time/share/rofi/screen-time.rasi "$stage/share/rofi/screen-time.rasi"
+          install -m 644 crates/screen-time/share/screen-time/config.example.toml "$stage/share/screen-time/config.example.toml"
+          install -m 644 crates/screen-time/systemd/screen-time.service "$stage/systemd/screen-time.service"
+          printf '%s\n' "$version" >"$stage/VERSION"
+          install -m 644 LICENSE README.md CHANGELOG.md "$stage/"
+          asset="rofi-hub-${ARCH}-linux.tar.gz"
+          tar -czf "dist/$asset" -C "$stage" .
+          (cd dist && sha256sum "$asset" > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rofi-hub-${{ matrix.arch }}
+          path: |
+            dist/rofi-hub-${{ matrix.arch }}-linux.tar.gz
+            dist/SHA256SUMS
+          if-no-files-found: error
+
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Flake check
+        run: nix flake check
+      - name: Workflow lint
+        run: nix shell nixpkgs#actionlint -c actionlint
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [check, build, nix]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+      - name: Build release assets
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          mv dist/rofi-hub-*.tar.gz assets/
+          cp install.sh uninstall.sh minisign.pub assets/
+          cd assets
+          sha256sum rofi-hub-*.tar.gz install.sh uninstall.sh minisign.pub > SHA256SUMS
+          cat SHA256SUMS
+      - name: Sign release metadata
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$MINISIGN_SECRET_KEY" ] || { echo "MINISIGN_SECRET_KEY is not configured" >&2; exit 1; }
+          key="$RUNNER_TEMP/minisign.key"
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$key"
+          chmod 600 "$key"
+          MINISIGN_SECRET_KEY="$key" scripts/sign-release.sh assets
+      - name: Verify release assets
+        run: |
+          set -euo pipefail
+          minisign -Vm assets/SHA256SUMS -p minisign.pub
+          minisign -Vm assets/install.sh -p minisign.pub
+          (cd assets && sha256sum -c SHA256SUMS)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: assets/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,8 @@
+id = "screen-time"
+name = "Screen Time"
+description = "Daily app timelines, totals, and session details"
+category = "Productivity"
+icon = "preferences-system-time"
+keywords = ["time", "usage", "focus", "productivity", "screen"]
+exec = ["rofi-screen-time"]
+version = "0.5.0"
