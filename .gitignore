@@ -4,3 +4,5 @@
 /dist
 /state
 .DS_Store
+minisign.key
+*.minisign.key

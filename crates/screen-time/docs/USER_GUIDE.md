@@ -40,8 +40,8 @@ base=https://github.com/WillGle/rofi-hub/releases/latest/download
 curl -fsSLO https://raw.githubusercontent.com/WillGle/rofi-hub/main/minisign.pub
 curl -fsSLO "$base/install.sh"
 curl -fsSLO "$base/install.sh.minisig"
-# The pinned key id must be 4E5BF83E07DA94ED.
-grep -q 4E5BF83E07DA94ED minisign.pub
+# The pinned key id must be F1A59235D536DB40.
+grep -q F1A59235D536DB40 minisign.pub
 minisign -Vm install.sh -p minisign.pub
 less install.sh
 bash install.sh --app screen-time

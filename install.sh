@@ -56,7 +56,7 @@ HUB_ONLY_FLAG=0
 # Pinned release signing key(s). The private key is never stored in this
 # repository. Multiple entries provide an overlap window during rotation.
 TRUSTED_KEYS=(
-    "4E5BF83E07DA94ED:RWTtlNoHPvhbTl2HI9jlbVycB8SXCWHtmmXLN8WDApfKOMd/cA0+qnOi"
+    "F1A59235D536DB40:RWRA2zbVNZKl8W6zq5vsVNF5uCgXCf5xE9atrBnV+acekdAZ7z9MLH10"
 )
 
 # Test hooks: point the installer at an offline release fixture.

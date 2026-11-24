@@ -19,7 +19,7 @@ download and verify the release installer as your desktop user:
 base=https://github.com/WillGle/rofi-hub/releases/latest/download
 curl -fsSLO https://raw.githubusercontent.com/WillGle/rofi-hub/main/minisign.pub
 curl -fsSLO "$base/install.sh" "$base/install.sh.minisig"
-minisign -Vm install.sh -p minisign.pub   # key id 4E5BF83E07DA94ED
+minisign -Vm install.sh -p minisign.pub   # key id F1A59235D536DB40
 less install.sh
 bash install.sh --app screen-time
 ~/.local/bin/rofi-screen-time

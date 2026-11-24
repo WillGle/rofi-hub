@@ -57,7 +57,9 @@ compatibility check; `--allow-schema-downgrade` is a separate override.
 
 Releases are signed with [minisign](https://jedisct1.github.io/minisign/). The
 public key is pinned twice: in `minisign.pub` and in the installer. The current
-key id is `4E5BF83E07DA94ED`. Release assets include:
+key id is `F1A59235D536DB40`. The first `rofi-hub` release starts a new
+signing key because the retired `screen-time-rofi` key could not be transferred;
+verify the new fingerprint out of band before installing. Release assets include:
 
 - `rofi-hub-<arch>-linux.tar.gz`
 - `install.sh`, `uninstall.sh`, and `minisign.pub`
@@ -73,7 +75,7 @@ mode. A first install must be verified manually:
 
 ```bash
 minisign -Vm install.sh -p minisign.pub
-# Trusted key id: 4E5BF83E07DA94ED
+# Trusted key id: F1A59235D536DB40
 ```
 
 ### Key rotation and revocation
