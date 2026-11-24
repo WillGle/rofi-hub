@@ -34,7 +34,10 @@ impl TestEnv {
         let notify = bin.join("notify-send");
         fs::write(
             &notify,
-            "#!/bin/sh\nprintf '%s\\n' \"$*\" >>\"${NOTIFY_LOG:-/dev/null}\"\n",
+            format!(
+                "#!{}\nprintf '%s\\n' \"$*\" >>\"${{NOTIFY_LOG:-/dev/null}}\"\n",
+                shell_path().display()
+            ),
         )
         .unwrap();
         let mut perms = fs::metadata(&notify).unwrap().permissions();
@@ -90,6 +93,7 @@ impl TestEnv {
     }
 
     fn script(&self, name: &str, body: &str) -> PathBuf {
+        let body = body.replacen("#!/bin/sh", &format!("#!{}", shell_path().display()), 1);
         let path = self.root.path().join(name);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).unwrap();
@@ -100,6 +104,19 @@ impl TestEnv {
         fs::set_permissions(&path, perms).unwrap();
         path
     }
+}
+
+/// A shell from PATH. Nix build sandboxes do not provide `/bin/sh`.
+fn shell_path() -> PathBuf {
+    if let Some(path) = std::env::var_os("PATH") {
+        for dir in std::env::split_paths(&path) {
+            let candidate = dir.join("sh");
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from("/bin/sh")
 }
 
 fn stdout(output: &Output) -> String {
@@ -124,7 +141,7 @@ fn wait_for(path: &Path) -> String {
 #[test]
 fn list_prints_providers_and_json() {
     let env = TestEnv::new();
-    env.provider("alpha", "Alpha", &["/bin/sh"]);
+    env.provider("alpha", "Alpha", &[shell_path().to_str().unwrap()]);
 
     let output = env.run(&["list"]);
     assert!(output.status.success(), "{}", stderr(&output));
@@ -159,7 +176,7 @@ fn theme_choice_is_persisted_and_reported() {
 #[test]
 fn unknown_provider_and_theme_fail_cleanly() {
     let env = TestEnv::new();
-    env.provider("alpha", "Alpha", &["/bin/sh"]);
+    env.provider("alpha", "Alpha", &[shell_path().to_str().unwrap()]);
 
     let output = env.run(&["definitely-missing"]);
     assert!(!output.status.success());
@@ -204,7 +221,7 @@ fn selecting_a_provider_passes_its_environment_and_args() {
 #[test]
 fn doctor_reports_a_healthy_install() {
     let env = TestEnv::new();
-    env.provider("alpha", "Alpha", &["/bin/sh"]);
+    env.provider("alpha", "Alpha", &[shell_path().to_str().unwrap()]);
     let bin = env.root.path().join("bin");
     fs::create_dir_all(&bin).unwrap();
     env.script("bin/rofi", "#!/bin/sh\nprintf 'Version: 2.0.0\\n'\n");
@@ -231,7 +248,7 @@ fn doctor_reports_a_healthy_install() {
 #[test]
 fn doctor_honors_rofi_bin() {
     let env = TestEnv::new();
-    env.provider("alpha", "Alpha", &["/bin/sh"]);
+    env.provider("alpha", "Alpha", &[shell_path().to_str().unwrap()]);
     let rofi = env.script("fake-rofi", "#!/bin/sh\nprintf 'Version: 2.0.0\\n'\n");
 
     let output = env
