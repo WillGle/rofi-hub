@@ -90,9 +90,9 @@ pub fn expand_tilde(value: &str) -> PathBuf {
         return home_dir().unwrap_or_else(|| PathBuf::from(value));
     }
     if let Some(rest) = value.strip_prefix("~/") {
-        if let Some(home) = home_dir() {
-            return home.join(rest);
-        }
+        return home_dir()
+            .map(|home| home.join(rest))
+            .unwrap_or_else(|| PathBuf::from(value));
     }
     PathBuf::from(value)
 }
