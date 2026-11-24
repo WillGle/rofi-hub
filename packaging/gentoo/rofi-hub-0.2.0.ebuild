@@ -159,18 +159,23 @@ S="${WORKDIR}/rofi-hub-${PV}"
 LICENSE="MIT"
 SLOT="0"
 KEYWORDS="~amd64 ~arm64"
-IUSE=""
 
 # cliphist, wl-clipboard, Hyprland, and systemd are optional. Keep the package
 # installable without them; document them in metadata.xml instead of forcing
 # USE flags that may not exist in every overlay.
 RDEPEND="
-	rofi
-	bash
+	x11-misc/rofi
+	app-shells/bash
 "
-BDEPEND="virtual/rust"
+BDEPEND="dev-lang/rust"
 
-QA_FLAGS_IGNORED="usr/bin/rofi-hub usr/bin/rofi-calendar usr/bin/rofi-keybinds usr/bin/rofi-clipboard usr/bin/screen-time"
+QA_FLAGS_IGNORED="
+	usr/bin/rofi-hub
+	usr/bin/rofi-calendar
+	usr/bin/rofi-keybinds
+	usr/bin/rofi-clipboard
+	usr/bin/screen-time
+"
 
 src_compile() {
 	cargo_src_compile --workspace
