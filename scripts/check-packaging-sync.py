@@ -127,7 +127,7 @@ def main() -> int:
     arch_bin = read("packaging/arch/rofi-hub-bin/PKGBUILD")
     if "sha256sums_x86_64=('SKIP')" in arch_bin:
         warn("packaging/arch/rofi-hub-bin/PKGBUILD: replace SKIP checksums after publishing")
-    if "sha256sums=('e9d291ac" not in read("packaging/arch/PKGBUILD"):
+    if "sha256sums=('dea9c784" not in read("packaging/arch/PKGBUILD"):
         warn("packaging/arch/PKGBUILD: update the source checksum at release time")
 
     # MANIFEST is exactly the --dry-run output.

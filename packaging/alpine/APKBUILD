@@ -11,7 +11,7 @@ makedepends="cargo rust"
 checkdepends="tzdata"
 subpackages="$pkgname-doc"
 source="$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz"
-sha512sums="97a39877471ff4c2801874029669a32928361ac9bf0ee11a5bc2b9ef2420bb54b07032dc88e32f8326b23034e63753e37d24879c4de84525c44d607016c93930  rofi-hub-$pkgver.tar.gz"
+sha512sums="9a69eb6fec4107197d8d744ca7aca2f298c048e6096c94da60c8195bd1c687601ed454ef1a70b501590caf1c08e0d7e16b510bdf389d49890ee4a1dae94b3339  rofi-hub-$pkgver.tar.gz"
 builddir="$srcdir/rofi-hub-$pkgver"
 
 build() {

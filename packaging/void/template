@@ -14,7 +14,7 @@ maintainer="WillGle <willgle@users.noreply.github.com>"
 license="MIT"
 homepage="https://github.com/WillGle/rofi-hub"
 distfiles="https://github.com/WillGle/rofi-hub/releases/download/v${version}/rofi-hub-${version}-source.tar.gz"
-checksum=e9d291ac5dc1aed545d8c769aad07d9e3bd1d9a56686617d5cfc23b40d84a527
+checksum=dea9c784616d93b00e206f7a676a64b828f29a6bc30f27df395d0c695af5f617
 wrksrc="rofi-hub-${version}"
 
 do_check() {
