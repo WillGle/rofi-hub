@@ -5,4 +5,4 @@ category = "Productivity"
 icon = "x-office-calendar"
 keywords = ["date", "month", "calendar", "schedule"]
 exec = ["rofi-calendar"]
-version = "0.1.0"
+version = "0.2.0"

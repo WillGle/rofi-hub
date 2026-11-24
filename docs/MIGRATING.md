@@ -18,6 +18,12 @@ reports **0.5.0**. Hub tags version the whole bundle; app versions are
 independent. The old `screen-time-rofi` tags (through v0.4.4) are not ancestors
 of this repository's tags, so do not compare them as a single sequence.
 
+`rofi-hub` **v0.2.0** adds Calendar, Keyboard Shortcuts, and Clipboard History
+(0.2.0) next to Screen Time 0.5.0. Updates keep the recorded component
+selection; add the new apps with `install.sh --all` or
+`install.sh --app calendar --app keybinds --app clipboard`, or select them in
+Home Manager `services.rofi-hub.apps`.
+
 ## What moved
 
 | Before | After |

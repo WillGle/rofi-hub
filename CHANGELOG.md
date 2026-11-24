@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Add three built-in provider apps: `calendar` (month sheet with date search),
   `keybinds` (Hyprland shortcut reference with runnable `exec` rows), and
