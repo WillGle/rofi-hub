@@ -47,6 +47,31 @@ assert hub.is_file() and os.access(hub, os.X_OK), f"missing executable {hub}"
 assert (stage / "share/rofi-hub/themes/hub.rasi").is_file(), "missing hub theme"
 for name in ("LICENSE", "README.md", "CHANGELOG.md"):
     assert (stage / name).is_file(), f"missing {name}"
+for name in (
+    "docs/ARCHITECTURE.md",
+    "docs/MIGRATING.md",
+    "docs/PACKAGING.md",
+    "packaging/install-tree.sh",
+    "packaging/rofi-hub.desktop",
+    "packaging/rofi-hub.svg",
+    "packaging/rofi-hub.metainfo.xml",
+    "packaging/systemd/screen-time.service.in",
+    "packaging/openrc/screen-time",
+    "packaging/runit/screen-time/run",
+):
+    assert (stage / name).is_file(), f"missing {name}"
+assert os.access(stage / "packaging/install-tree.sh", os.X_OK), "install-tree.sh is not executable"
+for name in (
+    "rofi-hub.1",
+    "rofi-calendar.1",
+    "rofi-keybinds.1",
+    "rofi-clipboard.1",
+    "screen-time.1",
+    "rofi-screen-time.1",
+):
+    assert (stage / "packaging/man" / name).is_file(), f"missing man page {name}"
+for name in ("rofi-hub.bash", "_rofi-hub", "rofi-hub.fish", "screen-time.bash", "_screen-time", "screen-time.fish"):
+    assert (stage / "packaging/completions" / name).is_file(), f"missing completion {name}"
 
 bundle_providers = {}
 for path in sorted(providers_dir.glob("*.toml")):
@@ -121,3 +146,25 @@ if "screen-time" in bundle_providers:
 
 print(f"bundle ok: {len(bundle_providers)} providers ({', '.join(sorted(bundle_providers))})")
 PY
+
+# A release tarball must install itself through packaging/install-tree.sh. This
+# is the path used by rofi-hub-bin packages, separate from install.sh.
+INSTALL_ROOT="$WORK/install-root"
+DESTDIR="$INSTALL_ROOT" PREFIX=/usr "$WORK/packaging/install-tree.sh" --all
+find "$INSTALL_ROOT" -type f | sed "s|^${INSTALL_ROOT}||" | sort >"$WORK/installed-files"
+awk 'NF && $1 !~ /^#/ {print $2}' "$WORK/packaging/MANIFEST" | sort >"$WORK/manifest-files"
+diff -u "$WORK/manifest-files" "$WORK/installed-files" ||
+    { printf 'test-bundle.sh: release install tree differs from MANIFEST\n' >&2; exit 1; }
+ROFI_HUB_PROVIDER_DIR="$INSTALL_ROOT/usr/share/rofi-hub/providers" \
+    "$INSTALL_ROOT/usr/bin/rofi-hub" list --json >"$WORK/installed-list.json"
+python3 - "$WORK/installed-list.json" <<'PY'
+import json
+import sys
+
+listed = {item["id"]: item for item in json.load(open(sys.argv[1], encoding="utf-8"))}
+assert set(listed) == {"calendar", "clipboard", "keybinds", "screen-time"}, listed
+assert all(item["available"] for item in listed.values()), listed
+print("release install-tree ok:", ", ".join(sorted(listed)))
+PY
+"$INSTALL_ROOT/usr/bin/screen-time" --version >/dev/null
+printf 'test-bundle.sh: release install tree ok\n'

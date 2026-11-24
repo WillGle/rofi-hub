@@ -37,10 +37,19 @@ jobs:
         run: cargo clippy --locked --package screen-time --all-targets --features session-count -- -D warnings
       - name: App sync
         run: python3 scripts/check-app-sync.py
+      - name: Packaging sync
+        run: python3 scripts/check-packaging-sync.py
       - name: Evaluation charts
         run: python3 crates/screen-time/scripts/render-evaluation-charts.py --check
       - name: Shell scripts
-        run: shellcheck install.sh uninstall.sh scripts/*.sh crates/screen-time/scripts/*.sh crates/screen-time/share/rofi-screen-time
+        run: |
+          shellcheck install.sh uninstall.sh \
+            scripts/build-package-artifacts.sh scripts/package-release.sh scripts/sign-release.sh \
+            scripts/test-bundle.sh scripts/test-install-tree.sh scripts/test-installer.sh \
+            crates/screen-time/scripts/*.sh \
+            crates/screen-time/share/rofi-screen-time packaging/install-tree.sh \
+            packaging/openrc/screen-time packaging/runit/screen-time/run \
+            packaging/slackbuilds/rofi-hub.SlackBuild
 
   test:
     runs-on: ubuntu-latest
@@ -81,6 +90,116 @@ jobs:
           RUSTUP_TOOLCHAIN: stable
         run: scripts/test-installer.sh
 
+  install-tree:
+    name: install tree
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install packaging validators
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y systemd desktop-file-utils appstream zsh fish man-db gzip
+      - name: Build workspace
+        run: cargo build --release --locked --workspace
+      - name: Install tree, manifest, unit, desktop, AppStream
+        env:
+          SKIP_BUILD: "1"
+          REQUIRE_LINT: "1"
+        run: scripts/test-install-tree.sh
+      - name: Packaging sync
+        run: python3 scripts/check-packaging-sync.py
+
+  distro-build:
+    name: distro-build (${{ matrix.family }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:12
+            family: debian
+          - image: archlinux:base-devel
+            family: arch
+          - image: fedora:latest
+            family: fedora
+          - image: alpine:edge
+            family: alpine
+          - image: opensuse/tumbleweed
+            family: opensuse
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust and build dependencies
+        run: |
+          set -eux
+          case "${{ matrix.family }}" in
+            debian)
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                build-essential ca-certificates curl git pkg-config python3 \
+                systemd desktop-file-utils appstream zsh fish man-db gzip xz-utils
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+                sh -s -- -y --profile minimal --default-toolchain 1.89.0
+              echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+              ;;
+            arch)
+              pacman -Syu --noconfirm --needed \
+                base-devel rust cargo git python systemd desktop-file-utils \
+                appstream zsh fish man-db gzip namcap
+              ;;
+            fedora)
+              dnf install -y gcc gcc-c++ make cargo rust git python3 systemd \
+                desktop-file-utils appstream zsh fish man-db gzip xz rpm-build rpmlint
+              ;;
+            alpine)
+              apk add --no-cache build-base cargo rust git python3 bash \
+                desktop-file-utils zsh fish mandoc gzip abuild
+              ;;
+            opensuse)
+              zypper --non-interactive install -y gcc gcc-c++ make cargo rust git \
+                python3 systemd desktop-file-utils zsh fish man gzip xz rpm-build rpmlint
+              ;;
+          esac
+          cargo --version
+          rustc --version
+      - name: Build
+        run: cargo build --release --locked --workspace
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Stage install tree and runtime smoke
+        env:
+          SKIP_BUILD: "1"
+        run: scripts/test-install-tree.sh
+      - name: Package lint
+        run: |
+          set -eux
+          case "${{ matrix.family }}" in
+            debian)
+              dpkg-parsechangelog -l packaging/debian/changelog >/dev/null
+              ;;
+            arch)
+              namcap packaging/arch/PKGBUILD
+              ;;
+            fedora)
+              rpmlint packaging/fedora/rofi-hub.spec
+              ;;
+            alpine)
+              if command -v apkbuild-lint >/dev/null 2>&1; then
+                apkbuild-lint packaging/alpine/APKBUILD
+              else
+                abuild -n -P /tmp/abuild-rofi-hub
+              fi
+              ;;
+            opensuse)
+              rpmlint packaging/opensuse/rofi-hub.spec
+              ;;
+          esac
+
   bundle:
     name: bundle (${{ matrix.arch }})
     strategy:
@@ -93,12 +212,20 @@ jobs:
             arch: aarch64
             experimental: true
     runs-on: ${{ matrix.os }}
+    container: debian:12
     continue-on-error: ${{ matrix.experimental || false }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential ca-certificates curl git pkg-config python3 xz-utils
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Record glibc baseline
+        run: ldd --version | head -n1
       - name: Package release bundle
         env:
           ARCH: ${{ matrix.arch }}
@@ -114,6 +241,125 @@ jobs:
             dist/rofi-hub-${{ matrix.arch }}-linux.tar.gz
             dist/SHA256SUMS
           if-no-files-found: error
+
+  artifacts:
+    name: packages (.deb/.rpm/.apk)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install nfpm
+        run: |
+          curl -fsSL -o /tmp/nfpm.tar.gz \
+            https://github.com/goreleaser/nfpm/releases/download/v2.46.3/nfpm_2.46.3_linux_amd64.tar.gz
+          sudo tar -xzf /tmp/nfpm.tar.gz -C /usr/local/bin nfpm
+          nfpm --version
+      - name: Build workspace
+        run: cargo build --release --locked --workspace
+      - name: Build packages
+        env:
+          SKIP_BUILD: "1"
+        run: scripts/build-package-artifacts.sh
+      - name: Validate packages
+        run: scripts/test-package-artifacts.sh
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.apk
+            dist/SHA256SUMS.packages
+          if-no-files-found: error
+
+  release-smoke:
+    name: release-smoke (${{ matrix.family }})
+    needs: [artifacts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: debian:12
+            family: debian
+            artifact: deb
+          - image: fedora:latest
+            family: fedora
+            artifact: rpm
+          - image: opensuse/tumbleweed
+            family: opensuse
+            artifact: rpm
+          - image: alpine:edge
+            family: alpine
+            artifact: apk
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: /tmp/artifacts
+      - name: Install dependencies and package
+        run: |
+          set -eux
+          case "${{ matrix.family }}" in
+            debian)
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                rofi bash python3 systemd desktop-file-utils
+              dpkg -i /tmp/artifacts/*.deb
+              ;;
+            fedora)
+              dnf install -y rofi bash python3 systemd desktop-file-utils
+              dnf install -y /tmp/artifacts/*.rpm
+              ;;
+            opensuse)
+              zypper --non-interactive install -y rofi bash python3 systemd desktop-file-utils
+              zypper --non-interactive install -y --allow-unsigned-rpm /tmp/artifacts/*.rpm
+              ;;
+            alpine)
+              apk add --no-cache rofi bash python3
+              apk add --allow-untrusted /tmp/artifacts/*.apk
+              ;;
+          esac
+      - name: Runtime smoke
+        run: |
+          set -eux
+          rofi-hub --version
+          rofi-hub list --json > /tmp/providers.json
+          python3 - <<'PY'
+          import json
+          items = {item["id"]: item for item in json.load(open("/tmp/providers.json"))}
+          assert set(items) == {"calendar", "clipboard", "keybinds", "screen-time"}, items
+          assert all(item["available"] for item in items.values()), items
+          print("providers ok:", ", ".join(sorted(items)))
+          PY
+          screen-time --version
+          test -f /usr/share/rofi-hub/themes/hub.rasi
+          test -f /usr/share/rofi/screen-time.rasi
+          test -x /usr/bin/rofi-screen-time
+          if command -v systemd-analyze >/dev/null 2>&1; then
+            systemd-analyze verify /usr/lib/systemd/user/screen-time.service
+          fi
+      - name: Remove package
+        run: |
+          set -eux
+          case "${{ matrix.family }}" in
+            debian) apt-get remove -y rofi-hub ;;
+            fedora) dnf remove -y rofi-hub ;;
+            opensuse) zypper --non-interactive remove -y rofi-hub ;;
+            alpine) apk del rofi-hub ;;
+          esac
+          if command -v rofi-hub; then
+            echo "rofi-hub is still in PATH after removal" >&2
+            exit 1
+          fi
+          test ! -e /usr/share/rofi-hub
+          test ! -e /usr/share/rofi/screen-time.rasi
 
   nix:
     runs-on: ubuntu-latest
@@ -154,7 +400,17 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [lint, test, msrv, installer, bundle, nix]
+    needs:
+      - lint
+      - test
+      - msrv
+      - installer
+      - install-tree
+      - distro-build
+      - bundle
+      - artifacts
+      - release-smoke
+      - nix
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -171,9 +427,10 @@ jobs:
           set -euo pipefail
           mkdir -p assets
           mv dist/rofi-hub-*.tar.gz assets/
+          cp dist/*.deb dist/*.rpm dist/*.apk assets/
           cp install.sh uninstall.sh minisign.pub assets/
           cd assets
-          sha256sum rofi-hub-*.tar.gz install.sh uninstall.sh minisign.pub > SHA256SUMS
+          sha256sum ./rofi-hub-*.tar.gz ./*.deb ./*.rpm ./*.apk install.sh uninstall.sh minisign.pub > SHA256SUMS
           cat SHA256SUMS
       - name: Sign release metadata
         env:

@@ -209,6 +209,11 @@ fn snapshot_command_writes_a_verifiable_manifest() {
 
 #[test]
 fn snapshot_refuses_a_read_only_target_parent() {
+    // root bypasses directory permission bits; container CI runs as root.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipping read-only parent test as root");
+        return;
+    }
     let fixture = Fixture::new();
     let parent = fixture.dir.path().join("readonly");
     fs::create_dir_all(&parent).unwrap();
