@@ -192,16 +192,25 @@
         { pkgs }: {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              appstream
+              binutils
               cargo
               clippy
+              desktop-file-utils
+              dpkg
+              gzip
               jq
+              man-db
               minisign
+              nfpm
               python3
               rofi
+              rpm
               rustc
               rustfmt
               shellcheck
               util-linux
+              zsh
             ];
           };
         }
