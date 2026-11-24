@@ -8,6 +8,13 @@ Screen Time is now the first app in the `rofi-hub` workspace. The tracker code,
 database schema, Rofi timeline, and theme behavior are preserved. What changed
 is where the code lives and which installer owns updates.
 
+## Versions
+
+The first `rofi-hub` release is **v0.1.0**, while the bundled Screen Time crate
+reports **0.5.0**. Hub tags version the whole bundle; app versions are
+independent. The old `screen-time-rofi` tags (through v0.4.4) are not ancestors
+of this repository's tags, so do not compare them as a single sequence.
+
 ## What moved
 
 | Before | After |
