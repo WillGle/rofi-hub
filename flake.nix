@@ -45,7 +45,10 @@
           common = {
             inherit src;
             cargoLock.lockFile = ./Cargo.lock;
-            nativeBuildInputs = [ pkgs.makeWrapper ];
+            nativeBuildInputs = [
+              pkgs.makeWrapper
+              pkgs.tzdata
+            ];
             doCheck = true;
           };
 
@@ -76,7 +79,10 @@
               version = screenTimeVersion;
               cargoBuildFlags = [ "--package" "screen-time" ];
               cargoTestFlags = [ "--package" "screen-time" ];
-              preCheck = "export TZ=UTC";
+              preCheck = ''
+                export TZ=UTC
+                export TZDIR=${pkgs.tzdata}/share/zoneinfo
+              '';
               postInstall = ''
                 mkdir -p "$out/share/rofi" "$out/share/screen-time" \
                   "$out/share/rofi-hub/providers" "$out/systemd"
