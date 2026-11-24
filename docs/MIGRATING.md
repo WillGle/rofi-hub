@@ -1,5 +1,9 @@
 # Migrating from screen-time-rofi
 
+> **Retired:** `screen-time-rofi` is archived. Its code, issues, and old
+> releases remain readable, but no new code, issues, or releases are published
+> there. `rofi-hub` is the only active repository.
+
 Screen Time is now the first app in the `rofi-hub` workspace. The tracker code,
 database schema, Rofi timeline, and theme behavior are preserved. What changed
 is where the code lives and which installer owns updates.

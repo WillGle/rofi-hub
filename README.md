@@ -8,6 +8,10 @@ tracker with daily totals, timelines, and session details.
 One signed bundle contains the hub and every app. The installer can install the
 all-in-one hub, only selected apps, or only the launcher.
 
+> **Project status:** `screen-time-rofi` is retired and archived. This
+> repository is the canonical home for Screen Time and future Rofi apps. See
+> [migrating an existing install](docs/MIGRATING.md).
+
 [![Memory and fast-switch coverage across UI-capable Linux trackers](crates/screen-time/docs/charts/memory-coverage.svg)](crates/screen-time/docs/EVALUATION.md)
 
 ## Quick start
@@ -150,7 +154,7 @@ Rofi processes; each app owns its PID file.
 from it instead of hardcoding labels.
 
 See [architecture](docs/ARCHITECTURE.md) for the provider contract and update
-model, and [migration notes](docs/MIGRATING.md) if you used the standalone
+model, and [migration notes](docs/MIGRATING.md) if you used the retired
 `screen-time-rofi` repository.
 
 ## Development
