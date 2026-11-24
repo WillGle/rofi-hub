@@ -5,12 +5,15 @@ version=0.2.0
 revision=1
 build_style=cargo
 hostmakedepends="cargo rust gcc make pkg-config"
-depends="rofi bash"
+# Void's cargo build style links the system SQLite here; keep the headers and
+# runtime library explicit so the build does not depend on a transitive sqlite.
+makedepends="sqlite-devel"
+depends="rofi bash sqlite"
 short_desc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps"
 maintainer="WillGle <willgle@users.noreply.github.com>"
 license="MIT"
 homepage="https://github.com/WillGle/rofi-hub"
-distfiles="https://github.com/WillGle/rofi-hub/releases/download/v${version}/rofi-hub-${version}-source.tar.gz>rofi-hub-${version}.tar.gz"
+distfiles="https://github.com/WillGle/rofi-hub/releases/download/v${version}/rofi-hub-${version}-source.tar.gz"
 checksum=e9d291ac5dc1aed545d8c769aad07d9e3bd1d9a56686617d5cfc23b40d84a527
 wrksrc="rofi-hub-${version}"
 
@@ -21,6 +24,8 @@ do_check() {
 
 do_install() {
 	cd "${wrksrc}"
-	DESTDIR="${DESTDIR}" PREFIX=/usr TARGETDIR="${wrksrc}/target/release" \
+	target="${wrksrc}/target/${RUST_TARGET}/release"
+	[ -x "${target}/rofi-hub" ] || target="${wrksrc}/target/release"
+	DESTDIR="${DESTDIR}" PREFIX=/usr TARGETDIR="${target}" \
 		./packaging/install-tree.sh --all
 }
