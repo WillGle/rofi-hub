@@ -18,4 +18,4 @@
   7 ● Gimp                                    ██                              20m    5%  Leisure
   8 ● Zoom                                           █                        20m    5%     Comm
 
- ←/→ day   T today   R refresh   ↵ detail   esc close
+ ←/→ day   T today   R refresh   Enter detail   esc close

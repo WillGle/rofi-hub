@@ -3,9 +3,6 @@
 //! Precedence: `--theme`, `ROFI_HUB_THEME`, the last menu choice, `config.toml`,
 //! then `auto`.
 
-use std::fs;
-use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -114,7 +111,7 @@ pub fn resolve(cli: Option<&str>, config: &Config) -> Result<Choice> {
         None => (Mode::Auto, None),
     };
 
-    let mut theme = Theme::for_mode(mode);
+    let mut theme = Theme::resolve(mode);
     if let Some(font) = config.font_family() {
         theme.font_family = font.to_owned();
     }
@@ -124,7 +121,7 @@ pub fn resolve(cli: Option<&str>, config: &Config) -> Result<Choice> {
 
     let path = match &custom_path {
         Some(path) => Some(path.clone()),
-        None => rofi_core::theme::prepare(mode, &theme),
+        None => rofi_core::theme::prepare(mode, &theme, "hub"),
     };
 
     Ok(Choice {
@@ -137,8 +134,7 @@ pub fn resolve(cli: Option<&str>, config: &Config) -> Result<Choice> {
 }
 
 pub fn saved_mode() -> Option<Mode> {
-    let text = fs::read_to_string(paths::hub_theme_state_path()).ok()?;
-    text.trim().parse().ok()
+    rofi_core::theme::saved_mode()
 }
 
 /// Parse a mode name (not a path) for `rofi-hub theme set`.
@@ -151,23 +147,7 @@ pub fn parse_mode(value: &str) -> Result<Mode, String> {
 
 /// Persist the menu choice without touching `config.toml`.
 pub fn save_mode(mode: Mode) -> Result<()> {
-    let path = paths::hub_theme_state_path();
-    let dir = path
-        .parent()
-        .context("theme state path has no parent directory")?;
-    fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o700));
-
-    let temp = dir.join(format!(".theme.{}", std::process::id()));
-    {
-        let mut file =
-            fs::File::create(&temp).with_context(|| format!("cannot write {}", temp.display()))?;
-        let _ = file.set_permissions(fs::Permissions::from_mode(0o600));
-        writeln!(file, "{}", mode.as_str())?;
-        file.sync_all().ok();
-    }
-    fs::rename(&temp, &path).with_context(|| format!("cannot replace {}", path.display()))?;
-    Ok(())
+    rofi_core::theme::save_mode(mode).context("cannot save the global theme mode")
 }
 
 #[cfg(test)]

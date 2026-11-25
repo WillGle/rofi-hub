@@ -7,7 +7,7 @@ use std::io::Write;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{Item, Outcome, Rofi, app, escape_markup, which};
+use rofi_core::{Item, Outcome, Rofi, Theme, app, ui, which};
 
 fn main() -> ExitCode {
     match run() {
@@ -64,20 +64,51 @@ fn run() -> Result<()> {
     }
 
     let entries = parse_entries(&String::from_utf8_lossy(&output.stdout));
+    let theme = Theme::active();
+    let rofi = Rofi::find()?;
+    let mut options = app::dmenu_options("clipboard", "CLIPBOARD");
+    options.extra_args = vec![
+        "-mesg".to_owned(),
+        ui::header(
+            "CLIPBOARD",
+            &format!("{} items", entries.len()),
+            "cliphist history",
+            &theme,
+        ),
+    ];
+
     if entries.is_empty() {
-        eprintln!("rofi-clipboard: clipboard history is empty");
+        let items = vec![
+            Item::new("empty", ui::empty("Clipboard history is empty", &theme)).nonselectable(),
+            Item::new(
+                "hint",
+                ui::hint(&[("Enter", "copy"), ("esc", "close")], &theme),
+            )
+            .nonselectable(),
+        ];
+        let _ = rofi.dmenu(&items, &options)?;
         return Ok(());
     }
 
-    let items: Vec<Item> = entries
+    let mut items: Vec<Item> = entries
         .iter()
         .enumerate()
-        .map(|(index, entry)| Item::new(index.to_string(), escape_markup(&entry.preview)))
+        .map(|(index, entry)| {
+            Item::new(
+                index.to_string(),
+                ui::row(&format!("{:>3}", index + 1), &entry.preview, "", "", &theme),
+            )
+        })
         .collect();
-
-    let rofi = Rofi::find()?;
-    let options = app::dmenu_options("clipboard", "Clipboard");
+    items.push(
+        Item::new(
+            "hint",
+            ui::hint(&[("Enter", "copy"), ("esc", "close")], &theme),
+        )
+        .nonselectable(),
+    );
     let index = match rofi.dmenu(&items, &options)? {
+        Outcome::Selected(id) if id == "hint" => return Ok(()),
         Outcome::Selected(id) => id
             .parse::<usize>()
             .with_context(|| format!("rofi selected an unknown clipboard row: {id}"))?,

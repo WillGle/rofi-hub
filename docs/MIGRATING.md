@@ -24,6 +24,13 @@ selection; add the new apps with `install.sh --all` or
 `install.sh --app calendar --app keybinds --app clipboard`, or select them in
 Home Manager `services.rofi-hub.apps`.
 
+`rofi-hub` **v0.2.1** adds multi-distro packaging. The UI work that follows it
+makes Gruvbox Dark the default and unifies the palette/theme state across all
+native apps. `auto` no longer reads `~/.config/rofi/theme.rasi` implicitly; if
+you relied on that file, set `ROFI_THEME` explicitly or copy it into
+`~/.config/rofi-hub/`. Screen Time's old `theme-choice` file is read once for
+migration and then replaced by the shared `~/.config/rofi-hub/theme` state.
+
 ## What moved
 
 | Before | After |

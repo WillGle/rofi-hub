@@ -396,7 +396,7 @@ fn network_menu_lists_and_connects_to_wifi() {
         "bin/rofi",
         &format!(
             "#!/bin/sh\nn=0\n[ -f '{}' ] && n=$(cat '{}')\nn=$((n + 1))\nprintf '%s\\n' \"$n\" > '{}'\n\
-             case \"$n\" in 1) printf '0\\n' ;; 2) printf 'secret\\n' ;; *) exit 1 ;; esac\n",
+             case \"$n\" in 1) printf '1\\n' ;; 2) printf 'secret\\n' ;; *) exit 1 ;; esac\n",
             count.display(),
             count.display(),
             count.display()
@@ -416,6 +416,31 @@ fn network_menu_lists_and_connects_to_wifi() {
         calls.contains("device wifi connect Home:5G ifname wlan0 password secret"),
         "{calls}"
     );
+}
+
+#[test]
+fn theme_dump_uses_app_profiles() {
+    let env = TestEnv::new();
+    let hub = env
+        .command()
+        .args(["theme", "dump", "--app", "hub"])
+        .output()
+        .unwrap();
+    assert!(hub.status.success(), "{}", stderr(&hub));
+    let hub = stdout(&hub);
+    assert!(hub.contains("96ch"), "{hub}");
+    assert!(hub.contains("show-icons: false"), "{hub}");
+
+    let calendar = env
+        .command()
+        .args(["theme", "dump", "--app", "calendar"])
+        .output()
+        .unwrap();
+    assert!(calendar.status.success(), "{}", stderr(&calendar));
+    let calendar = stdout(&calendar);
+    assert!(calendar.contains("64ch"), "{calendar}");
+    assert!(calendar.contains("lines: 12;"), "{calendar}");
+    assert!(calendar.contains("show-icons: false"), "{calendar}");
 }
 
 #[test]

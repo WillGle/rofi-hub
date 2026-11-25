@@ -21,15 +21,15 @@ fn renders_the_month_sheet_and_accepts_free_text() {
     let args = env.args_log();
     assert!(args.contains("ARG:-dmenu"), "{args}");
     assert!(args.contains("ARG:-select"), "{args}");
-    assert!(args.contains("ARG:Hôm nay"), "{args}");
+    assert!(args.contains("ARG:Today"), "{args}");
     assert!(args.contains("ARG:-mesg"), "{args}");
     assert!(args.contains("ARG:-kb-custom-1"), "{args}");
     assert!(args.contains("ARG:Left"), "{args}");
     assert!(!args.contains("ARG:-no-custom"), "{args}");
 
     let stdin = env.stdin_log();
-    assert!(stdin.contains("Hôm nay"));
-    assert!(stdin.contains("◀"));
+    assert!(stdin.contains("Today"));
+    assert!(stdin.contains("◀ Prev"));
 }
 
 #[test]
@@ -45,7 +45,7 @@ fn typed_date_redraws_the_requested_month() {
 
     let args = env.args_log();
     assert_eq!(args.matches("INVOCATION").count(), 2, "{args}");
-    assert!(args.contains("Tháng 3 2026"), "{args}");
+    assert!(args.contains("March 2026"), "{args}");
     assert!(args.contains("underline=\"double\""), "{args}");
 }
 
@@ -62,5 +62,5 @@ fn invalid_date_is_reported_in_the_sheet() {
 
     let args = env.args_log();
     assert_eq!(args.matches("INVOCATION").count(), 2, "{args}");
-    assert!(args.contains("không nhận ra: not-a-date"), "{args}");
+    assert!(args.contains("Unknown date: not-a-date"), "{args}");
 }

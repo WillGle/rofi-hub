@@ -9,20 +9,19 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate, Weekday};
-use rofi_core::{Item, Outcome, Rofi, app, escape_markup, theme};
+use rofi_core::{Item, Level, Outcome, Rofi, Theme, app, escape_markup, ui};
 
-const GRID_WIDTH: usize = 20;
-const BTN_PREV: &str = "◀  Trước";
-const BTN_TODAY: &str = "Hôm nay";
-const BTN_NEXT: &str = "Sau  ▶";
-const WEEKDAYS_VI: [&str; 7] = [
-    "Thứ hai",
-    "Thứ ba",
-    "Thứ tư",
-    "Thứ năm",
-    "Thứ sáu",
-    "Thứ bảy",
-    "Chủ nhật",
+const BTN_PREV: &str = "◀ Prev";
+const BTN_TODAY: &str = "Today";
+const BTN_NEXT: &str = "Next ▶";
+const WEEKDAYS: [&str; 7] = [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 ];
 
 fn main() -> ExitCode {
@@ -74,19 +73,40 @@ fn run() -> Result<()> {
     let mut note: Option<String> = None;
 
     loop {
-        let palette = theme::active();
+        let palette = Theme::active();
         let items = vec![
             Item::new(BTN_PREV, BTN_PREV),
             Item::new(BTN_TODAY, BTN_TODAY),
             Item::new(BTN_NEXT, BTN_NEXT),
+            Item::new(
+                "hint",
+                ui::hint(
+                    &[
+                        ("\u{2190}/\u{2192}", "month"),
+                        ("Ctrl+t", "today"),
+                        ("esc", "close"),
+                    ],
+                    &palette,
+                ),
+            )
+            .nonselectable(),
         ];
 
+        let month = NaiveDate::from_ymd_opt(view.year, view.month, 1)
+            .expect("valid month")
+            .format("%B %Y")
+            .to_string();
+        let header = ui::header(
+            "CALENDAR",
+            &month,
+            &format!("today {}", today.format("%a %d %b %Y")),
+            &palette,
+        );
         let sheet = render_sheet(&view, today, &palette);
         let note_line = render_note(&view, note.as_deref(), &palette);
-        let hint = "<span size=\"x-small\" alpha=\"50%\">← → tháng · Ctrl+t hôm nay · Esc</span>";
-        let mesg = format!("{sheet}{note_line}\n{hint}");
+        let mesg = format!("{header}\n{sheet}{note_line}");
 
-        let mut options = app::dmenu_options("calendar", "Lịch");
+        let mut options = app::dmenu_options("calendar", "CALENDAR");
         options.allow_custom = true;
         options.extra_args = vec![
             "-matching".to_owned(),
@@ -99,6 +119,10 @@ fn run() -> Result<()> {
             "-kb-move-char-back".to_owned(),
             String::new(),
             "-kb-move-char-forward".to_owned(),
+            String::new(),
+            // Ctrl+t is `kb-transpose-chars` by default; free it so it can
+            // jump back to today without Rofi rejecting the custom binding.
+            "-kb-transpose-chars".to_owned(),
             String::new(),
             "-kb-custom-1".to_owned(),
             "Left".to_owned(),
@@ -123,6 +147,7 @@ fn run() -> Result<()> {
                 note = None;
             }
             Outcome::Custom(_) => return Ok(()),
+            Outcome::Selected(text) if text == "hint" => return Ok(()),
             Outcome::Selected(text) => match text.as_str() {
                 BTN_PREV => {
                     view.shift(-1);
@@ -223,24 +248,16 @@ fn days_in_month(year: i32, month: u32) -> u32 {
         .day()
 }
 
-fn render_sheet(view: &View, today: NaiveDate, palette: &theme::Theme) -> String {
+fn render_sheet(view: &View, today: NaiveDate, palette: &Theme) -> String {
     let first = NaiveDate::from_ymd_opt(view.year, view.month, 1)
         .expect("the view always holds a valid month");
     let offset = first.weekday().num_days_from_monday() as usize;
     let days = days_in_month(view.year, view.month) as usize;
     let rows = (offset + days).div_ceil(7);
 
-    let title = format!("Tháng {} {}", view.month, view.year);
-    let pad = GRID_WIDTH.saturating_sub(title.chars().count()) / 2;
-    let mut sheet = format!(
-        "{:pad$}<span foreground=\"{}\"><b>{}</b></span>\n",
-        "",
-        palette.accent,
-        title,
-        pad = pad
-    );
+    let mut sheet = String::new();
     sheet.push_str(&format!(
-        "<span foreground=\"{}\">T2 T3 T4 T5 T6 T7 CN</span>\n",
+        "<span foreground=\"{}\">Mo Tu We Th Fr Sa Su</span>\n",
         palette.muted
     ));
 
@@ -283,10 +300,14 @@ fn render_sheet(view: &View, today: NaiveDate, palette: &theme::Theme) -> String
     sheet
 }
 
-fn render_note(view: &View, note: Option<&str>, palette: &theme::Theme) -> String {
-    let text = if let Some(query) = note {
-        format!("không nhận ra: {query}")
-    } else if let Some(day) = view.focus {
+fn render_note(view: &View, note: Option<&str>, palette: &Theme) -> String {
+    if let Some(query) = note {
+        return format!(
+            "\n{}",
+            ui::status(&format!("Unknown date: {query}"), Level::Danger, palette)
+        );
+    }
+    let text = if let Some(day) = view.focus {
         let Some(date) = NaiveDate::from_ymd_opt(view.year, view.month, day) else {
             return String::new();
         };
@@ -309,7 +330,7 @@ fn render_note(view: &View, note: Option<&str>, palette: &theme::Theme) -> Strin
 }
 
 fn weekday_name(weekday: Weekday) -> &'static str {
-    WEEKDAYS_VI[weekday.num_days_from_monday() as usize]
+    WEEKDAYS[weekday.num_days_from_monday() as usize]
 }
 
 #[cfg(test)]
@@ -397,12 +418,12 @@ mod tests {
 
     #[test]
     fn sheet_has_twenty_column_grid_and_marks_today() {
-        let palette = theme::Theme::gruvbox();
+        let palette = Theme::gruvbox();
         let sheet = render_sheet(&view(), today(), &palette);
         let lines: Vec<&str> = sheet.lines().collect();
         assert_eq!(
-            lines[1],
-            "<span foreground=\"#d5c4a1\">T2 T3 T4 T5 T6 T7 CN</span>"
+            lines[0],
+            "<span foreground=\"#a89984\">Mo Tu We Th Fr Sa Su</span>"
         );
         assert!(sheet.contains("background=\"#fabd2f\""));
         assert!(sheet.contains("30"));
@@ -413,15 +434,16 @@ mod tests {
 
     #[test]
     fn focus_and_note_are_rendered() {
-        let palette = theme::Theme::nord();
+        let palette = Theme::nord();
         let focused = View {
             focus: Some(17),
             ..view()
         };
         assert!(render_sheet(&focused, today(), &palette).contains("underline=\"double\""));
         let note = render_note(&focused, None, &palette);
-        assert!(note.contains("Thứ ba, 17/11/2026"));
+        assert!(note.contains("Tuesday, 17/11/2026"));
         let error = render_note(&focused, Some("a < b"), &palette);
-        assert!(error.contains("không nhận ra: a &lt; b"));
+        assert!(error.contains("Unknown date: a &lt; b"));
+        assert!(error.contains(&palette.danger));
     }
 }

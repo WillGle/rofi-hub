@@ -43,7 +43,10 @@ fn theme_shortcuts_persist_and_alt4_restores_config() {
     fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
     assert_eq!(theme_background(&fixture), "background-color: #2e3440;");
 
-    // A hand-edited file with a trailing newline is still a valid choice.
+    // Migrate the legacy Screen Time choice once the shared global state is
+    // absent; after that the global state wins.
+    let global_path = fixture.config_home().join("rofi-hub").join("theme");
+    std::fs::remove_file(&global_path).unwrap();
     std::fs::write(&choice_path, "gruvbox\n").unwrap();
     assert_eq!(theme_background(&fixture), "background-color: #1d2021;");
 
@@ -57,7 +60,11 @@ fn theme_shortcuts_persist_and_alt4_restores_config() {
     );
     assert!(!choice_path.exists());
     assert_eq!(std::fs::read_to_string(&request_path).unwrap(), "reopen");
-    assert_eq!(theme_background(&fixture), "background-color: #fdf6e3;");
+    assert_eq!(
+        std::fs::read_to_string(&global_path).unwrap().trim(),
+        "auto"
+    );
+    assert_eq!(theme_background(&fixture), "background-color: #1d2021;");
     assert_eq!(
         std::fs::read_to_string(&config_path).unwrap(),
         config_before

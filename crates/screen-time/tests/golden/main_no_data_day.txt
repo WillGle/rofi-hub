@@ -11,4 +11,4 @@
  ▌ APP TIMELINE                                                             top 0 of 0 apps · 0m
  No activity recorded today                                                                     
 
- ←/→ day   T today   R refresh   ↵ detail   esc close
+ ←/→ day   T today   R refresh   Enter detail   esc close

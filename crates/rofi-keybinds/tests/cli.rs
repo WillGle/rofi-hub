@@ -43,21 +43,22 @@ fn lists_sections_and_runs_exec_bindings() {
     }
     assert!(ran.is_file(), "shortcut did not run");
     let args = env.args_log();
-    assert!(args.contains("ARG:⌨ Shortcuts"), "{args}");
+    assert!(args.contains("ARG:SHORTCUTS"), "{args}");
     assert!(args.contains("ARG:-no-custom"), "{args}");
     assert!(args.contains("ARG:-mesg"), "{args}");
 
     let stdin = env.stdin_log();
     for expected in [
-        "[Basic]",
+        "\u{258c} BASIC",
         "Super+Enter",
         "Super+Q",
-        "[Workspaces]",
+        "\u{258c} WORKSPACES",
         "Super+1..2",
         "Workspace 1..2",
     ] {
         assert!(stdin.contains(expected), "missing {expected} in {stdin}");
     }
+    assert!(!stdin.contains("[Basic]"), "{stdin}");
 }
 
 #[test]

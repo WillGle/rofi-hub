@@ -8,7 +8,7 @@
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{DmenuOptions, Item, Outcome, Rofi, escape_markup, paths, which};
+use rofi_core::{DmenuOptions, Item, Level, Outcome, Rofi, Theme, paths, ui, which};
 
 use crate::config::Config;
 use crate::hub::rofi_config;
@@ -42,13 +42,8 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
 
     loop {
         let state = wifi_state()?;
-        let (mut items, mut actions) = build_menu(&state, &choice)?;
-        if items.is_empty() {
-            items.push(Item::new("quit", "No NetworkManager devices found"));
-            actions.push(Action::Quit);
-        }
-
-        let mut options = DmenuOptions::new("Network");
+        let (items, actions) = build_menu(&state, &choice.theme);
+        let mut options = DmenuOptions::new("NETWORK");
         if !no_theme {
             options.theme = choice.path.clone();
         }
@@ -56,9 +51,32 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
         let runtime = paths::hub_runtime_dir();
         let _ = std::fs::create_dir_all(&runtime);
         options.pid = Some(runtime.join("rofi-network.pid"));
-        if !status.is_empty() {
-            options.extra_args = vec!["-mesg".to_owned(), status.clone()];
-        }
+        let hero = state.active_ssid.clone().unwrap_or_else(|| {
+            if state.enabled {
+                "Wi-Fi on".to_owned()
+            } else {
+                "Wi-Fi off".to_owned()
+            }
+        });
+        let meta = state
+            .iface
+            .clone()
+            .unwrap_or_else(|| "no wireless adapter".to_owned());
+        let status_line = if status.is_empty() {
+            String::new()
+        } else {
+            format!("\n{}", ui::status(&status, Level::Info, &choice.theme))
+        };
+        options.extra_args = vec![
+            "-selected-row".to_owned(),
+            "1".to_owned(),
+            "-mesg".to_owned(),
+            format!(
+                "{}{}",
+                ui::header("NETWORK", &hero, &meta, &choice.theme),
+                status_line
+            ),
+        ];
 
         let selected = match rofi.dmenu(&items, &options)? {
             Outcome::Selected(id) => id,
@@ -188,60 +206,88 @@ fn connect_ap(
     }
 }
 
-fn build_menu(state: &WifiState, choice: &Choice) -> Result<(Vec<Item>, Vec<Action>)> {
+fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
     let mut items = Vec::new();
     let mut actions = Vec::new();
-    let muted = &choice.theme.muted;
-
-    let mut push = |item: Item, action: Action| {
-        items.push(item);
-        actions.push(action);
-    };
 
     if state.enabled {
         if let Some(iface) = &state.iface {
             let access_points = access_points(iface);
+            push_section(
+                &mut items,
+                &mut actions,
+                "WI-FI",
+                &format!("{} networks", access_points.len()),
+                theme,
+            );
             if access_points.is_empty() {
-                push(
-                    Item::new(
-                        "empty",
-                        format!("<span foreground=\"{muted}\">No Wi-Fi networks visible</span>"),
-                    ),
+                push_row(
+                    &mut items,
+                    &mut actions,
+                    Item::new("empty", ui::empty("No Wi-Fi networks visible", theme))
+                        .nonselectable(),
                     Action::Rescan,
                 );
             }
             for ap in access_points {
                 let open = ap.security.is_empty() || ap.security == "--";
-                let lock = if open { "" } else { " 󰌾" };
-                let active = if ap.active { "● " } else { "  " };
-                let display = format!(
-                    "{active}<b>{}</b>{lock}  <span foreground=\"{muted}\">{}% · {}</span>",
-                    escape_markup(&ap.ssid),
-                    ap.signal,
-                    if open { "open" } else { "secured" }
-                );
-                let mut item = Item::new(ap.ssid.clone(), display);
-                if let Some(icon) = signal_icon(ap.signal) {
-                    item = item.icon(icon);
-                }
-                push(
-                    item,
+                let lock = if open { "" } else { "\u{f023}" };
+                let active = if ap.active { "\u{25cf}" } else { "" };
+                push_row(
+                    &mut items,
+                    &mut actions,
+                    Item::new(
+                        ap.ssid.clone(),
+                        ui::row_with_leading(
+                            signal_glyph(ap.signal),
+                            &theme.browser,
+                            &ap.ssid,
+                            &format!(
+                                "{}% \u{00b7} {}",
+                                ap.signal,
+                                if open { "open" } else { "secured" }
+                            ),
+                            if active.is_empty() { lock } else { active },
+                            theme,
+                        ),
+                    ),
                     Action::ConnectAp {
                         ssid: ap.ssid,
                         security: ap.security,
                     },
                 );
             }
-            push(Item::new("rescan", "󰑐  Scan for networks"), Action::Rescan);
-            push(
-                Item::new("hidden", "󰖫  Connect to hidden network"),
+            push_row(
+                &mut items,
+                &mut actions,
+                Item::new(
+                    "rescan",
+                    ui::row("\u{f021}", "Scan for networks", "", "", theme),
+                ),
+                Action::Rescan,
+            );
+            push_row(
+                &mut items,
+                &mut actions,
+                Item::new(
+                    "hidden",
+                    ui::row("\u{f023}", "Connect to hidden network", "", "", theme),
+                ),
                 Action::ConnectHidden,
             );
             if let Some(ssid) = &state.active_ssid {
-                push(
+                push_row(
+                    &mut items,
+                    &mut actions,
                     Item::new(
                         "disconnect",
-                        format!("󰤭  Disconnect from <b>{}</b>", escape_markup(ssid)),
+                        ui::row(
+                            "\u{f00d}",
+                            &format!("Disconnect from {ssid}"),
+                            "",
+                            "",
+                            theme,
+                        ),
                     ),
                     Action::DisconnectRole {
                         iface: iface.clone(),
@@ -249,28 +295,60 @@ fn build_menu(state: &WifiState, choice: &Choice) -> Result<(Vec<Item>, Vec<Acti
                     },
                 );
             }
-            push(Item::new("wifi-off", "󰖪  Turn Wi-Fi off"), Action::WifiOff);
-        } else {
-            push(
+            push_row(
+                &mut items,
+                &mut actions,
                 Item::new(
-                    "no-wifi",
-                    format!("<span foreground=\"{muted}\">No Wi-Fi adapter detected</span>"),
+                    "wifi-off",
+                    ui::row("\u{f00d}", "Turn Wi-Fi off", "", "", theme),
                 ),
+                Action::WifiOff,
+            );
+        } else {
+            push_section(&mut items, &mut actions, "WI-FI", "no adapter", theme);
+            push_row(
+                &mut items,
+                &mut actions,
+                Item::new("no-wifi", ui::empty("No Wi-Fi adapter detected", theme)),
                 Action::WifiOff,
             );
         }
     } else {
-        push(Item::new("wifi-on", "󰖩  Turn Wi-Fi on"), Action::WifiOn);
+        push_section(&mut items, &mut actions, "WI-FI", "disabled", theme);
+        push_row(
+            &mut items,
+            &mut actions,
+            Item::new(
+                "wifi-on",
+                ui::row("\u{f00c}", "Turn Wi-Fi on", "", "", theme),
+            ),
+            Action::WifiOn,
+        );
     }
 
-    for iface in ethernet_ifaces() {
+    let ethernet = ethernet_ifaces();
+    if !ethernet.is_empty() {
+        push_section(
+            &mut items,
+            &mut actions,
+            "ETHERNET",
+            &format!("{} interfaces", ethernet.len()),
+            theme,
+        );
+    }
+    for iface in ethernet {
         if iface.connected {
-            push(
+            push_row(
+                &mut items,
+                &mut actions,
                 Item::new(
                     format!("eth-down:{}", iface.name),
-                    format!(
-                        "󰈂  Disconnect Ethernet <b>{}</b>",
-                        escape_markup(&iface.name)
+                    ui::row(
+                        "\u{f00d}",
+                        &format!("Disconnect Ethernet {}", iface.name),
+                        &iface.state,
+                        "",
+                        theme,
                     ),
                 ),
                 Action::DisconnectRole {
@@ -279,13 +357,17 @@ fn build_menu(state: &WifiState, choice: &Choice) -> Result<(Vec<Item>, Vec<Acti
                 },
             );
         } else {
-            push(
+            push_row(
+                &mut items,
+                &mut actions,
                 Item::new(
                     format!("eth-up:{}", iface.name),
-                    format!(
-                        "󰈀  Connect Ethernet <b>{}</b> <span foreground=\"{muted}\">{}</span>",
-                        escape_markup(&iface.name),
-                        escape_markup(&iface.state)
+                    ui::row(
+                        "\u{f00c}",
+                        &format!("Connect Ethernet {}", iface.name),
+                        &iface.state,
+                        "",
+                        theme,
                     ),
                 ),
                 Action::ConnectEthernet(iface.name),
@@ -293,21 +375,69 @@ fn build_menu(state: &WifiState, choice: &Choice) -> Result<(Vec<Item>, Vec<Acti
         }
     }
 
-    for saved in saved_connections() {
-        push(
+    let saved = saved_connections();
+    if !saved.is_empty() {
+        push_section(
+            &mut items,
+            &mut actions,
+            "SAVED",
+            &format!("{} profiles", saved.len()),
+            theme,
+        );
+    }
+    for saved in saved {
+        push_row(
+            &mut items,
+            &mut actions,
             Item::new(
                 format!("saved:{}", saved.name),
-                format!(
-                    "󰆓  <b>{}</b> <span foreground=\"{muted}\">{}</span>",
-                    escape_markup(&saved.name),
-                    escape_markup(&saved.kind)
-                ),
+                ui::row("\u{f02e}", &saved.name, &saved.kind, "", theme),
             ),
             Action::Saved(saved.name),
         );
     }
 
-    Ok((items, actions))
+    if items.is_empty() {
+        push_row(
+            &mut items,
+            &mut actions,
+            Item::new("empty", ui::empty("No NetworkManager devices found", theme)),
+            Action::Quit,
+        );
+    }
+    push_row(
+        &mut items,
+        &mut actions,
+        Item::new(
+            "hint",
+            ui::hint(&[("Enter", "select"), ("esc", "close")], theme),
+        )
+        .nonselectable(),
+        Action::Quit,
+    );
+    (items, actions)
+}
+
+fn push_row(items: &mut Vec<Item>, actions: &mut Vec<Action>, item: Item, action: Action) {
+    items.push(item);
+    actions.push(action);
+}
+
+fn push_section(
+    items: &mut Vec<Item>,
+    actions: &mut Vec<Action>,
+    label: &str,
+    meta: &str,
+    theme: &Theme,
+) {
+    items.push(
+        Item::new(
+            format!("section-{}", label.to_ascii_lowercase()),
+            ui::section(label, meta, 90, theme),
+        )
+        .nonselectable(),
+    );
+    actions.push(Action::Quit);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -451,13 +581,13 @@ fn split_fields(line: &str, limit: usize) -> Vec<String> {
     fields
 }
 
-fn signal_icon(signal: u8) -> Option<&'static str> {
+fn signal_glyph(signal: u8) -> &'static str {
     match signal {
-        80..=100 => Some("network-wireless-signal-excellent"),
-        60..=79 => Some("network-wireless-signal-good"),
-        40..=59 => Some("network-wireless-signal-ok"),
-        20..=39 => Some("network-wireless-signal-weak"),
-        _ => Some("network-wireless-signal-none"),
+        80..=100 => "\u{2588}",
+        60..=79 => "\u{2586}",
+        40..=59 => "\u{2584}",
+        20..=39 => "\u{2582}",
+        _ => "\u{2581}",
     }
 }
 
@@ -542,8 +672,8 @@ mod tests {
     }
 
     #[test]
-    fn signal_icons_cover_the_range() {
-        assert_eq!(signal_icon(100), Some("network-wireless-signal-excellent"));
-        assert_eq!(signal_icon(0), Some("network-wireless-signal-none"));
+    fn signal_glyphs_cover_the_range() {
+        assert_eq!(signal_glyph(100), "\u{2588}");
+        assert_eq!(signal_glyph(0), "\u{2581}");
     }
 }

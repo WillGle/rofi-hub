@@ -9,7 +9,7 @@ use std::fs;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{Item, Outcome, Rofi, app, escape_markup, paths, theme};
+use rofi_core::{Item, Outcome, Rofi, Theme, app, paths, ui};
 
 fn main() -> ExitCode {
     match run() {
@@ -62,21 +62,25 @@ fn run() -> Result<()> {
         bail!("no bindings found in {}", config.display());
     }
 
-    let accent = accent_color();
-    let items: Vec<Item> = bindings
-        .iter()
-        .enumerate()
-        .map(|(index, binding)| Item::new(index.to_string(), render_row(binding, &accent)))
-        .collect();
+    let theme = Theme::active();
+    let items = build_items(&bindings, &theme);
 
     let rofi = Rofi::find()?;
-    let mut options = app::dmenu_options("keybinds", "⌨ Shortcuts");
+    let mut options = app::dmenu_options("keybinds", "SHORTCUTS");
     options.extra_args = vec![
+        "-selected-row".to_owned(),
+        "1".to_owned(),
         "-mesg".to_owned(),
-        "Enter runs supported app shortcuts · other rows are reference only".to_owned(),
+        ui::header(
+            "SHORTCUTS",
+            &format!("{} bindings", bindings.len()),
+            "hyprland.conf",
+            &theme,
+        ),
     ];
 
     match rofi.dmenu(&items, &options)? {
+        Outcome::Selected(id) if id == "hint" => Ok(()),
         Outcome::Selected(id) => {
             let index = id
                 .parse::<usize>()
@@ -388,80 +392,38 @@ fn exec_description(command: &str) -> String {
     }
 }
 
-fn render_row(binding: &Binding, accent: &str) -> String {
-    let marker = if binding.command.is_some() {
-        format!("<span foreground=\"{accent}\">▶</span>")
-    } else {
-        "<span alpha=\"45%\">•</span>".to_owned()
-    };
-    let combo = format!("{:<13}", binding.combo);
-    format!(
-        "{marker} <span foreground=\"{accent}\">[{}]</span> <b>{}</b>  {}",
-        escape_markup(&binding.section),
-        escape_markup(&combo),
-        escape_markup(&binding.description)
-    )
-}
-
-fn accent_color() -> String {
-    let static_env = paths::config_home().join("theme/static.env");
-    let variables = fs::read_to_string(static_env)
-        .ok()
-        .map(|text| parse_env(&text))
-        .unwrap_or_default();
-
-    if let Some(accent) = variables.get("THEME_STATIC_ACCENT")
-        && is_hex_color(accent)
-    {
-        return accent.clone();
-    }
-
-    let generated = variables
-        .get("THEME_GENERATED_DIR")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| paths::config_home().join("theme/generated"));
-    let palette = generated.join("palette.json");
-    if let Ok(text) = fs::read_to_string(palette)
-        && let Some(accent) = palette_accent(&text)
-    {
-        return accent;
-    }
-
-    theme::active().accent
-}
-
-fn parse_env(text: &str) -> HashMap<String, String> {
-    let mut variables = HashMap::new();
-    for line in text.lines() {
-        let line = line.trim();
-        let Some((name, value)) = line.split_once('=') else {
-            continue;
-        };
-        let name = name.trim();
-        if !name.starts_with("THEME_") {
-            continue;
+fn build_items(bindings: &[Binding], theme: &Theme) -> Vec<Item> {
+    let mut items = Vec::with_capacity(bindings.len() + 4);
+    let mut section = "";
+    for (index, binding) in bindings.iter().enumerate() {
+        if binding.section != section {
+            section = &binding.section;
+            items.push(
+                Item::new(
+                    format!("section-{index}"),
+                    ui::section(section, "", 110, theme),
+                )
+                .nonselectable(),
+            );
         }
-        let value = value.trim().trim_matches(['"', '\'']);
-        variables.insert(name.to_owned(), value.to_owned());
+        let marker = if binding.command.is_some() {
+            "\u{25b6}"
+        } else {
+            "\u{2022}"
+        };
+        items.push(Item::new(
+            index.to_string(),
+            ui::row(marker, &binding.combo, &binding.description, "", theme),
+        ));
     }
-    variables
-}
-
-fn palette_accent(text: &str) -> Option<String> {
-    let value: serde_json::Value = serde_json::from_str(text).ok()?;
-    let accent = value
-        .get("colors")?
-        .get("primary")?
-        .get("default")?
-        .get("color")?
-        .as_str()?;
-    is_hex_color(accent).then(|| accent.to_owned())
-}
-
-fn is_hex_color(value: &str) -> bool {
-    value.len() == 7
-        && value.starts_with('#')
-        && value[1..].chars().all(|ch| ch.is_ascii_hexdigit())
+    items.push(
+        Item::new(
+            "hint",
+            ui::hint(&[("Enter", "run"), ("esc", "close")], theme),
+        )
+        .nonselectable(),
+    );
+    items
 }
 
 fn run_command(command: &str) -> Result<()> {
@@ -562,11 +524,20 @@ bind = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
     }
 
     #[test]
-    fn reads_palette_accent() {
-        let palette = r##"{"colors":{"primary":{"default":{"color":"#abcdef"}}}}"##;
-        assert_eq!(palette_accent(palette), Some("#abcdef".to_owned()));
-        assert_eq!(palette_accent("{}"), None);
-        assert!(!is_hex_color("#12345"));
-        assert!(is_hex_color("#abcdef"));
+    fn menu_has_section_headers_and_clean_rows() {
+        let bindings = parse_config(SAMPLE);
+        let items = build_items(&bindings, &Theme::gruvbox());
+        let section_rows: Vec<_> = items
+            .iter()
+            .filter(|item| item.display.contains("\u{258c}"))
+            .collect();
+        assert!(!section_rows.is_empty());
+        assert!(section_rows.iter().all(|item| item.nonselectable));
+        assert!(
+            items
+                .iter()
+                .any(|item| item.display.contains("Super+Enter"))
+        );
+        assert!(!items.iter().any(|item| item.display.contains("[Basic]")));
     }
 }

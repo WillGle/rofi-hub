@@ -4,13 +4,14 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 use rofi_core::manifest::ManifestSet;
-use rofi_core::{DmenuOptions, Item, Mode, Outcome, ProviderManifest, Rofi, Theme, escape_markup};
+use rofi_core::{Category, DmenuOptions, Item, Mode, Outcome, ProviderManifest, Rofi, Theme, ui};
 use rofi_core::{notify, paths, which};
 use serde_json::json;
 
 use crate::cli::{Cli, Command as CliCommand, ThemeCommand};
 use crate::config::Config;
 use crate::theme::{self, Choice};
+use rofi_core::ChromeProfile;
 
 /// Mirrors screen-time: Alt+1..3 pick a palette, Alt+4 restores auto.
 const THEME_BINDINGS: [(Mode, &str); 4] = [
@@ -189,15 +190,42 @@ fn open(
     let providers = manifests.providers();
 
     loop {
-        let items: Vec<Item> = providers
-            .iter()
-            .map(|provider| provider_item(provider, &choice.theme))
-            .collect();
-        let mut options = DmenuOptions::new(format!("{} - {}", config.prompt(), choice.label()));
+        let mut items = hub_items(providers, &choice.theme);
+        items.push(
+            Item::new(
+                "hint",
+                ui::hint(
+                    &[
+                        ("\u{2191}/\u{2193}", "select"),
+                        ("Enter", "open"),
+                        ("Alt+1\u{2013}4", "theme"),
+                        ("esc", "close"),
+                    ],
+                    &choice.theme,
+                ),
+            )
+            .nonselectable(),
+        );
+        let mut options = DmenuOptions::new(config.prompt());
         if !no_theme {
             options.theme = choice.path.clone();
         }
         options.config = rofi_config();
+        options.extra_args = vec![
+            "-selected-row".to_owned(),
+            "1".to_owned(),
+            "-mesg".to_owned(),
+            format!(
+                "{}\n{}",
+                ui::header(
+                    "ROFI HUB",
+                    &format!("{} apps", providers.len()),
+                    &choice.label(),
+                    &choice.theme
+                ),
+                String::new()
+            ),
+        ];
         let runtime = paths::hub_runtime_dir();
         let _ = std::fs::create_dir_all(&runtime);
         options.pid = Some(runtime.join("rofi.pid"));
@@ -207,6 +235,7 @@ fn open(
         }
 
         match rofi.dmenu(&items, &options)? {
+            Outcome::Selected(id) if id == "hint" => return Ok(()),
             Outcome::Selected(id) => {
                 let provider = providers
                     .iter()
@@ -225,26 +254,67 @@ fn open(
     }
 }
 
+fn hub_items(providers: &[ProviderManifest], theme: &Theme) -> Vec<Item> {
+    let mut groups: Vec<(String, Vec<&ProviderManifest>)> = Vec::new();
+    for provider in providers {
+        let category = provider
+            .category
+            .clone()
+            .unwrap_or_else(|| "Other".to_owned());
+        if let Some(group) = groups.iter_mut().find(|(name, _)| *name == category) {
+            group.1.push(provider);
+        } else {
+            groups.push((category, vec![provider]));
+        }
+    }
+
+    groups.sort_by_key(
+        |(category, _)| match category.to_ascii_lowercase().as_str() {
+            "productivity" => 0,
+            "utilities" => 1,
+            "system" => 2,
+            _ => 3,
+        },
+    );
+    let mut items = Vec::with_capacity(providers.len() + groups.len());
+    for (category, providers) in groups {
+        let label = category.to_ascii_uppercase();
+        items.push(
+            Item::new(
+                format!("section-{}", label.to_ascii_lowercase()),
+                ui::section(&label, &providers.len().to_string(), 96, theme),
+            )
+            .nonselectable(),
+        );
+        for provider in providers {
+            items.push(provider_item(provider, theme));
+        }
+    }
+    items
+}
+
 fn provider_item(provider: &ProviderManifest, theme: &Theme) -> Item {
     let available = exec_available(&provider.exec);
     let mut description = provider.description.clone().unwrap_or_default();
     if !available {
         description = format!("not found: {}", provider.exec[0]);
     }
-
-    let mut display = format!("<b>{}</b>", escape_markup(&provider.name));
-    if !description.is_empty() {
-        display.push_str(&format!(
-            "  <span foreground=\"{}\">{}</span>",
-            theme.muted,
-            escape_markup(&description)
-        ));
-    }
-
-    let mut item = Item::new(&provider.id, display);
-    if let Some(icon) = &provider.icon {
-        item = item.icon(icon.clone());
-    }
+    let category = provider
+        .category
+        .as_deref()
+        .map(Category::from_label)
+        .unwrap_or(Category::Other);
+    let mut item = Item::new(
+        &provider.id,
+        ui::row_with_leading(
+            "\u{25cf}",
+            category.color(theme),
+            &provider.name,
+            &description,
+            provider.category.as_deref().unwrap_or(category.label()),
+            theme,
+        ),
+    );
     if let Some(category) = &provider.category {
         item = item.meta(category.clone());
     }
@@ -411,9 +481,9 @@ fn theme_command(
             println!("\n* = saved choice; set with `rofi-hub theme set MODE`");
             Ok(())
         }
-        ThemeCommand::Dump => {
+        ThemeCommand::Dump { app } => {
             let choice = theme::resolve(theme_override, config)?;
-            print!("{}", choice.theme.rasi());
+            print!("{}", choice.theme.rasi_with(ChromeProfile::for_app(&app)));
             Ok(())
         }
     }
@@ -569,16 +639,36 @@ mod tests {
     }
 
     #[test]
-    fn rows_escape_markup_and_carry_icons() {
-        let item = provider_item(
-            &manifest(vec!["/bin/sh"], Some("preferences-system-time")),
-            &Theme::builtin(),
-        );
+    fn rows_escape_markup_and_show_categories() {
+        let item = provider_item(&manifest(vec!["/bin/sh"], None), &Theme::builtin());
         assert_eq!(item.id, "screen-time");
         assert!(item.display.contains("Screen &amp; Time"));
         assert!(item.display.contains("Daily &lt;totals&gt;"));
-        assert_eq!(item.icon.as_deref(), Some("preferences-system-time"));
+        assert!(item.display.contains("Productivity"));
+        assert!(item.display.contains("\u{25cf}"));
         assert!(!item.urgent);
+    }
+
+    #[test]
+    fn hub_items_group_by_category() {
+        let providers = vec![
+            manifest(vec!["/bin/sh"], None),
+            ProviderManifest {
+                id: "clipboard".to_owned(),
+                name: "Clipboard".to_owned(),
+                description: Some("History".to_owned()),
+                category: Some("Utilities".to_owned()),
+                icon: None,
+                keywords: Vec::new(),
+                exec: vec!["/bin/sh".to_owned()],
+                version: Some("1.0.0".to_owned()),
+                path: None,
+            },
+        ];
+        let items = hub_items(&providers, &Theme::gruvbox());
+        assert!(items[0].nonselectable);
+        assert!(items[0].display.contains("PRODUCTIVITY"));
+        assert!(items.iter().any(|item| item.display.contains("UTILITIES")));
     }
 
     #[test]

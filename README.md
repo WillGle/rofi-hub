@@ -16,6 +16,23 @@ all-in-one hub, only selected apps, or only the launcher.
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/rofi-hub.svg)](https://repology.org/project/rofi-hub/versions)
 
+## UI
+
+Every native app shares one Gruvbox Dark design language: the same palette,
+header/section/row grammar, selection strip, and footer hints. The screenshots
+below are real Rofi captures (not mockups).
+
+| Hub | Screen Time | Calendar |
+|---|---|---|
+| <img src="docs/screenshots/ui/hub-gruvbox.png" width="360" alt="Hub in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-gruvbox.png" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-gruvbox.png" width="360" alt="Calendar in Gruvbox Dark"> |
+
+| Clipboard | Keybinds | Network |
+|---|---|---|
+| <img src="docs/screenshots/ui/clipboard-gruvbox.png" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png" width="360" alt="Network in Gruvbox Dark"> |
+
+[Full 6 app × 4 mode screenshot matrix](docs/screenshots/ui/README.md) ·
+[UI style guide](docs/UI_STYLE.md) · `rofi-hub theme dump --app <app>`
+
 ## Quick start
 
 On Linux with Hyprland, Rofi 2.x, minisign, and a systemd user session, download
@@ -120,10 +137,10 @@ files, and per-distro commands.
 
 ## Use
 
-All Rofi apps share Screen Time's flat chrome: 20px window padding, the same
-palette roles, and a 2px accent strip on the active row. Direct launches use
-the installed `rofi-hub/themes/hub.rasi`, so the look stays consistent without
-starting the hub first.
+Every native app shares one design language: Gruvbox Dark by default, 20px
+window padding, the same palette roles, and a 2px accent strip on the active
+row. Direct launches generate the same profile-aware theme, so the look stays
+consistent without starting the hub first. See [UI style](docs/UI_STYLE.md).
 
 ### Hub
 
@@ -134,6 +151,8 @@ starting the hub first.
 - `rofi-hub --theme nord` overrides the theme for one run.
 - `rofi-hub theme list`, `rofi-hub theme set nord`, and `rofi-hub theme show`
   manage the saved theme from a terminal.
+- `rofi-hub theme dump --app hub` (or `screen-time`, `calendar`, `clipboard`,
+  `keybinds`, `network`) prints the generated `.rasi` for that profile.
 - `rofi-hub screen-time` opens one app directly.
 
 The old `rofi app manager` command surface is kept as aliases in

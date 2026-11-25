@@ -12,4 +12,4 @@
   1 ● Code                                                                     0m   50%     Work
   2 ● 日本語🎨長いアプリケーション名…                                                         0m   50%  Unknown
 
- ←/→ day   T today   R refresh   ↵ detail   esc close
+ ←/→ day   T today   R refresh   Enter detail   esc close

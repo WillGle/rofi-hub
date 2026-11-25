@@ -149,8 +149,16 @@ fn read_theme_choice(paths: &Paths) -> Option<String> {
 fn write_theme_choice(paths: &Paths, choice: Option<&str>) -> Result<()> {
     let path = theme_choice_path(paths);
     if let Some(choice) = choice {
-        write_atomic(&path, choice.as_bytes())
+        // Keep the legacy file for old Screen Time builds, but the shared
+        // rofi-hub state is authoritative for every native app.
+        write_atomic(&path, choice.as_bytes())?;
+        if let Ok(mode) = choice.parse::<rofi_core::Mode>() {
+            rofi_core::theme::save_mode(mode).context("cannot save the global theme mode")?;
+        }
+        Ok(())
     } else {
+        rofi_core::theme::save_mode(rofi_core::Mode::Auto)
+            .context("cannot save the global theme mode")?;
         match fs::remove_file(&path) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

@@ -9,6 +9,8 @@ description = "Shared building blocks for the Rofi Hub provider ecosystem"
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
+unicode-width = "0.2"
 tempfile = { version = "3", optional = true }
 thiserror.workspace = true
 toml.workspace = true

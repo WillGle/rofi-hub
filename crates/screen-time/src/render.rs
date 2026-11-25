@@ -3,6 +3,7 @@ use crate::sessions::{display_label, display_name};
 use crate::theme::Theme;
 use crate::timeutil::{self, SLOT_COUNT};
 use crate::view::{APP_PAGE_SIZE, AppRow, DayView, DetailView, OtherRow, TOP_APPS};
+use rofi_core::Category;
 
 const NAME_WIDTH: usize = 16;
 const PREFIX_WIDTH: usize = 24;
@@ -160,7 +161,7 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
         .map(|(start, end)| timeutil::format_span(start, end))
         .unwrap_or_else(|| "no peak".to_owned());
     let summary = if let Some(top) = view.rows.first() {
-        let category = AppCategory::from_app(&top.name);
+        let category = category_for_app(&top.name);
         let dot = role_span("●", category.color(theme), mode);
         let top_label = display_label(&top.name);
         let name = styled_span(
@@ -312,11 +313,11 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
             " {}",
             role_span(
                 if mode == OutputMode::Rofi && paginated {
-                    "←/→ day   Alt+↓/↑ page   T today   R refresh   ↵ detail   esc close   Alt+1–4 theme"
+                    "←/→ day   Alt+↓/↑ page   T today   R refresh   Enter detail   esc close   Alt+1–4 theme"
                 } else if mode == OutputMode::Rofi {
-                    "←/→ day   T today   R refresh   ↵ detail   esc close   Alt+1–4 theme"
+                    "←/→ day   T today   R refresh   Enter detail   esc close   Alt+1–4 theme"
                 } else {
-                    "←/→ day   T today   R refresh   ↵ detail   esc close"
+                    "←/→ day   T today   R refresh   Enter detail   esc close"
                 },
                 &theme.muted,
                 mode,
@@ -328,104 +329,81 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
     out
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AppCategory {
-    Browser,
-    Work,
-    Communication,
-    Entertainment,
-    System,
-    Unknown,
+fn category_for_app(name: &str) -> Category {
+    let name = name.to_ascii_lowercase();
+    let matches = |apps: &[&str]| {
+        apps.iter().any(|app| {
+            name == *app
+                || name
+                    .split(|c: char| !c.is_ascii_alphanumeric())
+                    .any(|part| part == *app)
+        })
+    };
+    if matches(&[
+        "brave",
+        "firefox",
+        "chrome",
+        "chromium",
+        "librewolf",
+        "floorp",
+        "zen browser",
+    ]) {
+        Category::Browser
+    } else if matches(&[
+        "signal",
+        "slack",
+        "discord",
+        "zoom",
+        "teams",
+        "telegram",
+        "thunderbird",
+    ]) {
+        Category::Communication
+    } else if matches(&[
+        "steam", "cs2", "music", "spotify", "vlc", "mpv", "gimp", "game",
+    ]) {
+        Category::Entertainment
+    } else if matches(&[
+        "code",
+        "vscode",
+        "zed",
+        "foot",
+        "terminal",
+        "kitty",
+        "alacritty",
+        "wezterm",
+        "neovim",
+        "libreoffice",
+        "zotero",
+    ]) {
+        Category::Work
+    } else if matches(&[
+        "files",
+        "nautilus",
+        "portal",
+        "xdg",
+        "dialog",
+        "zenity",
+        "settings",
+        "blueman",
+        "bluetooth",
+        "system monitor",
+        "task manager",
+    ]) {
+        Category::System
+    } else {
+        Category::Other
+    }
 }
 
-impl AppCategory {
-    fn from_app(name: &str) -> Self {
-        let name = name.to_ascii_lowercase();
-        let matches = |apps: &[&str]| {
-            apps.iter().any(|app| {
-                name == *app
-                    || name
-                        .split(|c: char| !c.is_ascii_alphanumeric())
-                        .any(|part| part == *app)
-            })
-        };
-        if matches(&[
-            "brave",
-            "firefox",
-            "chrome",
-            "chromium",
-            "librewolf",
-            "floorp",
-            "zen browser",
-        ]) {
-            Self::Browser
-        } else if matches(&[
-            "signal",
-            "slack",
-            "discord",
-            "zoom",
-            "teams",
-            "telegram",
-            "thunderbird",
-        ]) {
-            Self::Communication
-        } else if matches(&[
-            "steam", "cs2", "music", "spotify", "vlc", "mpv", "gimp", "game",
-        ]) {
-            Self::Entertainment
-        } else if matches(&[
-            "code",
-            "vscode",
-            "zed",
-            "foot",
-            "terminal",
-            "kitty",
-            "alacritty",
-            "wezterm",
-            "neovim",
-            "libreoffice",
-            "zotero",
-        ]) {
-            Self::Work
-        } else if matches(&[
-            "files",
-            "nautilus",
-            "portal",
-            "xdg",
-            "dialog",
-            "zenity",
-            "settings",
-            "blueman",
-            "bluetooth",
-            "system monitor",
-            "task manager",
-        ]) {
-            Self::System
-        } else {
-            Self::Unknown
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            Self::Browser => "Browser",
-            Self::Work => "Work",
-            Self::Communication => "Comm",
-            Self::Entertainment => "Leisure",
-            Self::System => "System",
-            Self::Unknown => "Unknown",
-        }
-    }
-
-    fn color(self, theme: &Theme) -> &str {
-        match self {
-            Self::Browser => &theme.browser,
-            Self::Work => &theme.work,
-            Self::Communication => &theme.communication,
-            Self::Entertainment => &theme.entertainment,
-            Self::System => &theme.muted,
-            Self::Unknown => &theme.other,
-        }
+fn category_label(category: Category) -> &'static str {
+    match category {
+        Category::Browser => "Browser",
+        Category::Work => "Work",
+        Category::Communication => "Comm",
+        Category::Entertainment => "Leisure",
+        Category::System => "System",
+        Category::Other => "Unknown",
     }
 }
 
@@ -470,7 +448,7 @@ fn day_strip(
             .iter()
             .take(layout.top_apps())
             .find(|row| row.slots.get(slot).copied().unwrap_or(false))
-            .map(|row| AppCategory::from_app(&row.name));
+            .map(|row| category_for_app(&row.name));
         let (glyph, color) = if let Some(category) = category {
             ("█", category.color(theme))
         } else if other
@@ -531,7 +509,7 @@ fn app_line(
     layout: &Layout,
     mode: OutputMode,
 ) -> String {
-    let category = AppCategory::from_app(&row.name);
+    let category = category_for_app(&row.name);
     let color = category.color(theme);
     let rank = role_span(&format!("{rank:>2}"), &theme.muted, mode);
     let dot = role_span("●", color, mode);
@@ -560,7 +538,7 @@ fn app_line(
         String::new()
     };
     let share = role_span(&format!("{share:>3}%"), &theme.muted, mode);
-    let category_label = role_span(&format!("{:>7}", category.label()), color, mode);
+    let category_label = role_span(&format!("{:>7}", category_label(category)), color, mode);
     format!(" {rank} {dot} {name}  {spark}  {duration}{sessions}  {share}  {category_label}")
 }
 
@@ -623,7 +601,7 @@ pub(crate) fn render_detail_with_theme(
 ) -> String {
     let layout = Layout::from_theme(theme);
     let width = layout.screen_width();
-    let category = AppCategory::from_app(&view.app);
+    let category = category_for_app(&view.app);
     let color = category.color(theme);
     let label = display_label(&view.app);
     let app = display_name(&label, if layout.cell_width == 1 { 16 } else { 24 });
@@ -632,7 +610,7 @@ pub(crate) fn render_detail_with_theme(
     let total = timeutil::format_duration(view.total_seconds);
     let share = format!("{}% of active time", view.share_percent);
     let date = timeutil::format_date_label(view.date, view.today);
-    let subtitle = format!("{} · {share} · {date}", category.label());
+    let subtitle = format!("{} · {share} · {date}", category_label(category));
 
     let mut body = String::new();
     let stats = format!(
@@ -897,29 +875,7 @@ fn section_header(
 /// Display width for our small Pango markup subset. Tags add no columns and
 /// entities such as `&amp;` count as one character.
 fn visible_len(value: &str) -> usize {
-    let mut count = 0usize;
-    let mut chars = value.chars().peekable();
-    while let Some(character) = chars.next() {
-        match character {
-            '<' => {
-                for next in chars.by_ref() {
-                    if next == '>' {
-                        break;
-                    }
-                }
-            }
-            '&' => {
-                for next in chars.by_ref() {
-                    if next == ';' {
-                        break;
-                    }
-                }
-                count += 1;
-            }
-            _ => count += 1,
-        }
-    }
-    count
+    rofi_core::ui::display_width(value)
 }
 
 fn ruler(width: usize) -> String {
@@ -1192,23 +1148,20 @@ mod tests {
 
     #[test]
     fn app_categories_cover_common_fixture_apps() {
-        assert_eq!(AppCategory::from_app("Firefox"), AppCategory::Browser);
-        assert_eq!(AppCategory::from_app("Code"), AppCategory::Work);
-        assert_eq!(AppCategory::from_app("Slack"), AppCategory::Communication);
-        assert_eq!(AppCategory::from_app("Zoom"), AppCategory::Communication);
-        assert_eq!(AppCategory::from_app("Music"), AppCategory::Entertainment);
-        assert_eq!(AppCategory::from_app("Gimp"), AppCategory::Entertainment);
-        assert_eq!(AppCategory::from_app("Files"), AppCategory::System);
-        assert_eq!(AppCategory::from_app("Portal"), AppCategory::System);
-        assert_eq!(AppCategory::from_app("System Dialog"), AppCategory::System);
-        assert_eq!(AppCategory::from_app("Signal"), AppCategory::Communication);
-        assert_eq!(AppCategory::from_app("CS2"), AppCategory::Entertainment);
-        assert_eq!(AppCategory::from_app("Football"), AppCategory::Unknown);
-        assert_eq!(
-            AppCategory::from_app("org.mozilla.firefox"),
-            AppCategory::Browser
-        );
-        assert_eq!(AppCategory::from_app("Notes"), AppCategory::Unknown);
+        assert_eq!(category_for_app("Firefox"), Category::Browser);
+        assert_eq!(category_for_app("Code"), Category::Work);
+        assert_eq!(category_for_app("Slack"), Category::Communication);
+        assert_eq!(category_for_app("Zoom"), Category::Communication);
+        assert_eq!(category_for_app("Music"), Category::Entertainment);
+        assert_eq!(category_for_app("Gimp"), Category::Entertainment);
+        assert_eq!(category_for_app("Files"), Category::System);
+        assert_eq!(category_for_app("Portal"), Category::System);
+        assert_eq!(category_for_app("System Dialog"), Category::System);
+        assert_eq!(category_for_app("Signal"), Category::Communication);
+        assert_eq!(category_for_app("CS2"), Category::Entertainment);
+        assert_eq!(category_for_app("Football"), Category::Other);
+        assert_eq!(category_for_app("org.mozilla.firefox"), Category::Browser);
+        assert_eq!(category_for_app("Notes"), Category::Other);
     }
 
     #[test]

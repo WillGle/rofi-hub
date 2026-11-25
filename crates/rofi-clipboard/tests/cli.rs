@@ -40,7 +40,7 @@ esac
     );
 
     let args = env.args_log();
-    assert!(args.contains("ARG:Clipboard"), "{args}");
+    assert!(args.contains("ARG:CLIPBOARD"), "{args}");
     assert!(args.contains("ARG:-no-custom"), "{args}");
     let stdin = env.stdin_log();
     assert!(stdin.contains("one"));
@@ -48,19 +48,21 @@ esac
 }
 
 #[test]
-fn empty_history_exits_without_opening_rofi() {
+fn empty_history_shows_an_empty_state() {
     let env = TestEnv::new();
     env.script("cliphist", "case \"$1\" in list) : ;; esac\n");
     env.script("wl-copy", "cat >/dev/null\n");
 
     let output = env.run(BIN, &[]);
     assert!(output.status.success());
+    let args = env.args_log();
+    assert!(args.contains("ARG:-mesg"), "{args}");
+    assert!(args.contains("ARG:-mesg"), "{args}");
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains("clipboard history is empty"),
+        env.stdin_log().contains("Clipboard history is empty"),
         "{}",
-        String::from_utf8_lossy(&output.stderr)
+        env.stdin_log()
     );
-    assert!(env.args_log().is_empty());
 }
 
 #[test]

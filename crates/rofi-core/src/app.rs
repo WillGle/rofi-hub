@@ -58,8 +58,8 @@ pub fn theme_path(app: &str) -> Option<PathBuf> {
     // ROFI_THEME, the user's rofi/theme.rasi, and the packaged
     // rofi-hub/themes/hub.rasi before generating a runtime copy.
     let mode = crate::theme::active_mode();
-    let palette = crate::Theme::for_mode(mode);
-    crate::theme::prepare(mode, &palette)
+    let palette = crate::Theme::resolve(mode);
+    crate::theme::prepare(mode, &palette, app)
 }
 
 /// A private PID file under the hub runtime directory. The directory is

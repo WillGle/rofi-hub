@@ -106,5 +106,9 @@ pub enum ThemeCommand {
     /// List the built-in modes.
     List,
     /// Print the generated Rofi theme for the effective mode.
-    Dump,
+    Dump {
+        /// Native app profile: hub, screen-time, calendar, clipboard, keybinds, network.
+        #[arg(long, default_value = "hub")]
+        app: String,
+    },
 }

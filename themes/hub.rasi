@@ -2,7 +2,7 @@
    its runtime copy on every launch. */
 configuration {
     font: "JetBrainsMono Nerd Font 12";
-    show-icons: true;
+    show-icons: false;
     disable-history: true;
     hover-select: false;
     cycle: true;
@@ -11,15 +11,15 @@ configuration {
 
 * {
     font: "JetBrainsMono Nerd Font 12";
-    background-color: #0d1117;
-    text-color: #f0f6fc;
-    border-color: #161b22;
-    selected-normal-background: #161b22;
-    selected-normal-foreground: #f0f6fc;
-    normal-background: #0d1117;
-    normal-foreground: #f0f6fc;
-    foreground: #f0f6fc;
-    background: #0d1117;
+    background-color: #1d2021;
+    text-color: #fbf1c7;
+    border-color: #282828;
+    selected-normal-background: #282828;
+    selected-normal-foreground: #fbf1c7;
+    normal-background: #1d2021;
+    normal-foreground: #fbf1c7;
+    foreground: #fbf1c7;
+    background: #1d2021;
     spacing: 0;
     margin: 0;
     padding: 0;
@@ -33,12 +33,12 @@ window {
     anchor: center;
     border: 0;
     padding: 20px;
-    background-color: #0d1117;
+    background-color: #1d2021;
 }
 
 mainbox {
-    background-color: #0d1117;
-    children: [ inputbar, listview ];
+    background-color: #1d2021;
+    children: [ inputbar, message, listview ];
     spacing: 8px;
     padding: 0;
 }
@@ -46,8 +46,8 @@ mainbox {
 /* Screen Time draws its header with message/textbox. The dmenu apps keep an
    input bar for filtering, but style it as the same flat header surface. */
 inputbar {
-    background-color: #0d1117;
-    text-color: #f0f6fc;
+    background-color: #1d2021;
+    text-color: #fbf1c7;
     padding: 0px 5px;
     border: 0;
     children: [ prompt, entry ];
@@ -57,26 +57,26 @@ inputbar {
 /* Screen Time styles its header through message/textbox. Keep the same flat
    surface for dmenu messages such as the calendar sheet. */
 message, textbox {
-    background-color: #0d1117;
-    text-color: #f0f6fc;
+    background-color: #1d2021;
+    text-color: #fbf1c7;
     padding: 0px 5px;
     border: 0;
 }
 
 prompt {
     background-color: transparent;
-    text-color: #8b949e;
+    text-color: #a89984;
 }
 
 entry {
     background-color: transparent;
-    text-color: #f0f6fc;
+    text-color: #fbf1c7;
     placeholder: "Type to filter";
-    placeholder-color: #8b949e;
+    placeholder-color: #a89984;
 }
 
 listview {
-    background-color: #0d1117;
+    background-color: #1d2021;
     columns: 1;
     lines: 20;
     spacing: 0;
@@ -88,27 +88,27 @@ listview {
 
 /* Screen Time uses a flat row plus a 2px accent strip for the active row. */
 element normal.active, element alternate.active, element selected.active {
-    background-color: #161b22;
+    background-color: #282828;
     border: 0;
     border-radius: 0;
 }
 
 element selected.active {
     border: 0px 0px 0px 2px;
-    border-color: #58a6ff;
+    border-color: #fabd2f;
 }
 
 element {
     children: [ element-icon, element-text ];
     padding: 3px 10px;
-    background-color: #0d1117;
-    text-color: #f0f6fc;
+    background-color: #1d2021;
+    text-color: #fbf1c7;
     spacing: 8px;
 }
 
 element selected {
-    background-color: #161b22;
-    text-color: #f0f6fc;
+    background-color: #282828;
+    text-color: #fbf1c7;
 }
 
 element-icon {

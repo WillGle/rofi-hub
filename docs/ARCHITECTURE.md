@@ -75,18 +75,23 @@ Theme modes are `auto`, `nord`, `solarized`, and `gruvbox`. Resolution order:
 4. `~/.config/rofi-hub/config.toml` `[theme] mode`
 5. `auto`
 
-`auto` uses `ROFI_THEME` or `~/.config/rofi/theme.rasi` when present. Otherwise
-the installed `share/rofi-hub/themes/hub.rasi` is used; when that file is
-absent (a source checkout), the hub generates a complete theme in
-`$XDG_RUNTIME_DIR/rofi-hub/theme.rasi` (falling back to the state directory).
+`auto` resolves `matugen palette > static.env > Gruvbox Dark`; it no longer
+reads an implicit `~/.config/rofi/theme.rasi`. `ROFI_THEME` and an explicit
+`--theme /path.rasi` remain escape hatches. The generator writes a profile
+theme to `$XDG_RUNTIME_DIR/rofi-hub/theme.rasi` (falling back to the state
+directory); the installed `share/rofi-hub/themes/hub.rasi` and Screen Time
+fallback are checked against the same generator.
+
 Direct launches of `rofi-calendar`, `rofi-keybinds`, and `rofi-clipboard` use
-the same fallback and the saved mode, so every app shares Screen Time's flat
-chrome: 20px window padding, 20 rows, the same palette roles, and a 2px accent
-strip on the active row.
+the saved mode and a `ChromeProfile` for their width/lines. Every native app
+shares `rofi_core::Theme` and `rofi_core::ui`: 20px window padding, the same
+palette roles, section/row grammar, and a 2px accent strip on the active row.
+See `docs/UI_STYLE.md`.
 
 Menu shortcuts mirror Screen Time: `Alt+1` Nord, `Alt+2` Solarized Light,
-`Alt+3` Gruvbox Dark, `Alt+4` Auto. A shortcut writes the separate `theme`
-file, so `config.toml` is never rewritten by the UI.
+`Alt+3` Gruvbox Dark, `Alt+4` Auto. A shortcut writes the shared
+`~/.config/rofi-hub/theme` file, so `config.toml` is never rewritten by the UI
+and every native app picks up the change.
 
 ## App sync
 
