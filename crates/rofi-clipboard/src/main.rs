@@ -96,6 +96,9 @@ fn normalize_preview(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     let mut last_space = false;
     for ch in value.chars() {
+        if is_invisible_format(ch) {
+            continue;
+        }
         let ch = if ch.is_control() { ' ' } else { ch };
         if ch == ' ' {
             if last_space {
@@ -108,6 +111,19 @@ fn normalize_preview(value: &str) -> String {
         out.push(ch);
     }
     out.trim().to_owned()
+}
+
+fn is_invisible_format(ch: char) -> bool {
+    matches!(
+        ch,
+        '\u{200b}'
+            | '\u{200c}'
+            | '\u{200d}'
+            | '\u{2060}'
+            | '\u{feff}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2066}'..='\u{2069}'
+    )
 }
 
 fn classify(preview: &str) -> (Kind, String, String) {
@@ -320,7 +336,7 @@ fn empty_options(theme: &Theme) -> DmenuOptions {
 
 fn delete_header(theme: &Theme) -> String {
     format!(
-        "{}\n{}",
+        "{}\n{}\n",
         ui::header(
             "DELETE ENTRY",
             "Select an item",
@@ -333,14 +349,14 @@ fn delete_header(theme: &Theme) -> String {
 
 fn confirm_header(theme: &Theme) -> String {
     format!(
-        "{}\n{}",
+        "{}\n{}\n",
         ui::header(
             "CLEAR HISTORY",
             "Remove all items?",
             "This cannot be undone",
             theme
         ),
-        ui::toolbar(&[("\u{23ce}", "Clear"), ("esc", "Cancel")], theme),
+        ui::toolbar(&[("\u{23ce}", "Select"), ("esc", "Cancel")], theme),
     )
 }
 
@@ -362,7 +378,12 @@ fn delete_options(theme: &Theme) -> DmenuOptions {
 
 fn confirm_options(theme: &Theme) -> DmenuOptions {
     let mut options = app::dmenu_options("clipboard-confirm", "CLEAR HISTORY");
-    options.extra_args = vec!["-mesg".to_owned(), confirm_header(theme)];
+    options.extra_args = vec![
+        "-mesg".to_owned(),
+        confirm_header(theme),
+        "-theme-str".to_owned(),
+        "inputbar { enabled: false; }".to_owned(),
+    ];
     options
 }
 
@@ -553,6 +574,13 @@ mod tests {
         assert_eq!(entries[1].raw, "456\t");
         assert_eq!(entries[1].title, "(empty)");
         assert_eq!(entries[1].detail, "empty");
+    }
+
+    #[test]
+    fn strips_zero_width_formatting_from_urls() {
+        let entries = parse_entries("1\th\u{200b}t\u{200b}t\u{200b}p\u{200b}s://example.com\n");
+        assert_eq!(entries[0].title, "https://example.com");
+        assert_eq!(entries[0].kind, Kind::Link);
     }
 
     #[test]
