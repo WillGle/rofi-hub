@@ -49,8 +49,9 @@ pub fn run(cli: Cli) -> Result<()> {
             "drun",
             &["-p".to_owned(), "Apps".to_owned()],
             config.launcher_columns(),
+            config.launcher_lines(),
         ),
-        Some(CliCommand::Window) => show_mode(theme, no_theme, &config, "window", &[], None),
+        Some(CliCommand::Window) => show_mode(theme, no_theme, &config, "window", &[], None, None),
         Some(CliCommand::Calc) => show_calc(theme, no_theme, &config),
         Some(CliCommand::Emoji) => show_mode(
             theme,
@@ -58,6 +59,7 @@ pub fn run(cli: Cli) -> Result<()> {
             &config,
             "emoji",
             &["-modi".to_owned(), "emoji".to_owned()],
+            None,
             None,
         ),
         Some(CliCommand::Power) => show_power(theme, no_theme, &config),
@@ -67,7 +69,7 @@ pub fn run(cli: Cli) -> Result<()> {
         Some(CliCommand::Keybinds) => open_provider(theme, no_theme, &config, "keybinds"),
         Some(CliCommand::ScreenTime) => open_provider(theme, no_theme, &config, "screen-time"),
         Some(CliCommand::Show { mode, args }) => {
-            show_mode(theme, no_theme, &config, &mode, &args, None)
+            show_mode(theme, no_theme, &config, &mode, &args, None, None)
         }
         None => open(theme, no_theme, &config, provider),
     }
@@ -89,6 +91,7 @@ fn show_mode(
     mode: &str,
     extra: &[String],
     columns: Option<u32>,
+    lines: Option<u32>,
 ) -> Result<()> {
     let choice = theme::resolve(theme_override, config)?;
     let rofi = Rofi::find()?;
@@ -100,10 +103,16 @@ fn show_mode(
     if !no_theme && let Some(path) = &choice.path {
         command.arg("-theme").arg(path);
     }
-    if let Some(columns) = columns {
-        command
-            .arg("-theme-str")
-            .arg(format!("listview {{ columns: {columns}; }}"));
+    if columns.is_some() || lines.is_some() {
+        let mut rules = String::from("listview {");
+        if let Some(columns) = columns {
+            rules.push_str(&format!(" columns: {columns};"));
+        }
+        if let Some(lines) = lines {
+            rules.push_str(&format!(" lines: {lines};"));
+        }
+        rules.push_str(" }");
+        command.arg("-theme-str").arg(rules);
     }
     command.args(extra);
     command
@@ -132,7 +141,7 @@ fn show_calc(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()>
         extra.push("-calc-command".to_owned());
         extra.push("echo -n '{result}' | wl-copy".to_owned());
     }
-    show_mode(theme, no_theme, config, "calc", &extra, None)
+    show_mode(theme, no_theme, config, "calc", &extra, None, None)
 }
 
 fn show_power(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()> {
@@ -145,6 +154,7 @@ fn show_power(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()
         config,
         "power-menu",
         &["-modi".to_owned(), format!("power-menu:{}", menu.display())],
+        None,
         None,
     )
 }

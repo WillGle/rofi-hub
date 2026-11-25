@@ -210,11 +210,12 @@ Optional `~/.config/rofi-hub/config.toml`; start from
 
 [launcher]
 columns = 3 # 1..6; only `rofi-hub launcher` (drun)
+lines = 10  # 1..40
 ```
 
-Text-heavy apps stay single-column. `launcher.columns` is applied as a per-run
-Rofi theme override, so it does not change Clipboard, Network, Calendar, or
-Screen Time.
+Text-heavy apps stay single-column. `launcher.columns` and `launcher.lines`
+are applied as per-run Rofi theme overrides, so they do not change Clipboard,
+Network, Calendar, or Screen Time.
 
 ### Calendar
 

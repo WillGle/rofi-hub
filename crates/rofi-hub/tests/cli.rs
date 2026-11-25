@@ -521,7 +521,10 @@ fn launcher_columns_are_applied_from_config() {
     let env = TestEnv::new();
     let log = env.root.path().join("rofi-args");
     let rofi = fake_rofi(&env, &log);
-    env.write_config("rofi-hub/config.toml", "[launcher]\ncolumns = 3\n");
+    env.write_config(
+        "rofi-hub/config.toml",
+        "[launcher]\ncolumns = 3\nlines = 10\n",
+    );
 
     let output = env
         .command()
@@ -532,7 +535,10 @@ fn launcher_columns_are_applied_from_config() {
     assert!(output.status.success(), "{}", stderr(&output));
     let args = fs::read_to_string(&log).unwrap();
     assert!(args.contains("-theme-str"), "{args}");
-    assert!(args.contains("listview { columns: 3; }"), "{args}");
+    assert!(
+        args.contains("listview { columns: 3; lines: 10; }"),
+        "{args}"
+    );
 }
 
 #[test]
