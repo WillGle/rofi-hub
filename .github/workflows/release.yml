@@ -44,7 +44,7 @@ jobs:
       - name: Shell scripts
         run: |
           shellcheck install.sh uninstall.sh \
-            scripts/build-package-artifacts.sh scripts/package-release.sh scripts/sign-release.sh \
+            scripts/build-package-artifacts.sh scripts/package-release.sh scripts/package-source.sh scripts/sign-release.sh \
             scripts/test-bundle.sh scripts/test-install-tree.sh scripts/test-installer.sh \
             crates/screen-time/scripts/*.sh \
             crates/screen-time/share/rofi-screen-time packaging/install-tree.sh \
@@ -109,7 +109,7 @@ jobs:
       - name: Install packaging validators
         run: |
           sudo apt-get update
-          sudo apt-get install -y systemd desktop-file-utils appstream zsh fish man-db gzip
+          sudo apt-get install -y systemd desktop-file-utils appstream zsh fish man-db gzip rofi
       - name: Build workspace
         run: cargo build --release --locked --workspace
       - name: Install tree, manifest, unit, desktop, AppStream
@@ -176,6 +176,8 @@ jobs:
             family: opensuse
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.family == 'debian'
       - name: Install Rust and build dependencies
         run: |
           set -eux
@@ -185,9 +187,6 @@ jobs:
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                 build-essential ca-certificates curl git pkg-config python3 \
                 systemd desktop-file-utils appstream zsh fish man-db gzip xz-utils
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
-                sh -s -- -y --profile minimal --default-toolchain 1.89.0
-              echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
               ;;
             arch)
               pacman -Syu --noconfirm --needed \
@@ -200,7 +199,7 @@ jobs:
               ;;
             alpine)
               apk add --no-cache build-base cargo rust git python3 bash \
-                desktop-file-utils zsh fish mandoc gzip abuild
+                desktop-file-utils zsh fish mandoc gzip abuild tzdata
               ;;
             opensuse)
               zypper --non-interactive install -y gcc gcc-c++ make cargo rust git \
