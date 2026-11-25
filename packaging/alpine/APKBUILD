@@ -11,7 +11,7 @@ depends="rofi bash"
 makedepends="cargo rust"
 checkdepends="tzdata"
 source="$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz"
-sha512sums="6f87688d3fc8f1881b4a03cd6f72a34f0abbad7703a242be2f2c906031a46674387178683472f9ded1afb6bd653d7d2842d34adfdfe1ea915e2c2a4ec9f1d477  rofi-hub-$pkgver.tar.gz"
+sha512sums="360d0ab59d17f4dac1c1f667651d91979788dcfe2e24abc93c2443f8ddfb751be8823cb79b1ae3fdd0cbe01a1a7ce42bb1e52d776b3598d3fd5beef2f57cef53  rofi-hub-$pkgver.tar.gz"
 
 build() {
 	cargo build --release --locked --workspace

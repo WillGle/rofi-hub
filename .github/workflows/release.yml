@@ -197,7 +197,7 @@ jobs:
               ;;
             alpine)
               apk add --no-cache build-base cargo rust git python3 bash \
-                desktop-file-utils zsh fish mandoc gzip abuild tzdata
+                desktop-file-utils zsh fish man-db gzip abuild tzdata
               ;;
             opensuse)
               zypper --non-interactive install -y gcc gcc-c++ make cargo rust git \

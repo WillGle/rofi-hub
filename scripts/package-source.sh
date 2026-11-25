@@ -23,7 +23,7 @@ tmp="$DIST/.$NAME-source.tar.gz.$$"
 files="$DIST/.$NAME-source.files.$$"
 trap 'rm -f -- "$tmp" "$files"' EXIT INT TERM
 
-git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+git -c safe.directory="*" -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
     printf 'package-source: must run from a git checkout\n' >&2
     exit 1
 }
@@ -32,7 +32,7 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
 # notes never change the release asset. packaging/ install assets are included;
 # distro recipe directories are excluded because their checksums describe this
 # archive, which would otherwise be self-referential.
-git ls-files \
+git -c safe.directory="*" -C "$ROOT" ls-files \
     | LC_ALL=C sort \
     | grep -vE '^packaging/(arch|alpine|gentoo|void|slackbuilds|fedora|opensuse|alt|debian)/' \
     | sed 's,^,./,' >"$files"
