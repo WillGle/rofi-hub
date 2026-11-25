@@ -21,9 +21,8 @@ conflicts=('rofi-hub' 'rofi-hub-git')
 options=('!strip' '!debug')
 source_x86_64=("rofi-hub-$pkgver-x86_64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-x86_64-linux.tar.gz")
 source_aarch64=("rofi-hub-$pkgver-aarch64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-aarch64-linux.tar.gz")
-# Replace SKIP with `updpkgsums` output after publishing the release assets.
-sha256sums_x86_64=('SKIP')
-sha256sums_aarch64=('SKIP')
+sha256sums_x86_64=('0c93a7c2b842ad745055004061396a69a2b1ad054a16b24264adfb60fd1da2a4')
+sha256sums_aarch64=('b883f4679241caf2b6c07bfea56d9325a5317c41aaad1662bfa40c7b0e96772c')
 
 package() {
   cd "$srcdir"
