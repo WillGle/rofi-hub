@@ -11,7 +11,7 @@ Vcs-Browser: https://github.com/WillGle/rofi-hub
 
 Package: rofi-hub
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, rofi, bash
+Depends: ${shlibs:Depends}, ${misc:Depends}, rofi
 Recommends: cliphist, wl-clipboard, systemd
 Suggests: hyprland
 Description: Rofi launcher with screen-time, calendar, keybinds, and clipboard apps
