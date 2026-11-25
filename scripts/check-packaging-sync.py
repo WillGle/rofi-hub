@@ -252,7 +252,7 @@ def main() -> int:
         fail(".github/workflows/release.yml: missing release job")
     else:
         release_job = workflow.split(marker, 1)[1]
-        for job in ("artifacts", "apk-package", "release-smoke"):
+        for job in ("distro-build", "artifacts", "apk-package", "release-smoke"):
             if job not in release_job:
                 fail(f".github/workflows/release.yml: release does not gate on {job}")
         for asset in ("*.deb", "*.rpm", "*.apk"):

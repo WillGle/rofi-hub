@@ -23,7 +23,7 @@ conflicts=('rofi-hub-bin' 'rofi-hub-git')
 # rustc's lld link step cannot consume. Rust still uses its thin LTO profile.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz")
-sha256sums=('545597dbf7096fe7d05fb01cd07d82d12096bd6341e8a820fa0c8b51df9ae4af')
+sha256sums=('3888974732151767b4cb497d7e3976a5935c3205b0752f372ac97af576b54491')
 
 build() {
   cd "$pkgname-$pkgver"

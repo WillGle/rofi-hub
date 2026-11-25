@@ -204,7 +204,8 @@ jobs:
               ;;
             opensuse)
               zypper --non-interactive install -y gcc gcc-c++ make cargo rust git \
-                python3 systemd desktop-file-utils zsh fish man gzip xz rpm-build rpmlint
+                python3 systemd desktop-file-utils zsh fish man gzip xz rpm-build rpmlint \
+                diffutils findutils gawk
               ;;
           esac
           cargo --version
@@ -500,6 +501,7 @@ jobs:
       - install-tree
       - bundle
       - nix
+      - distro-build
       - artifacts
       - apk-package
       - release-smoke
