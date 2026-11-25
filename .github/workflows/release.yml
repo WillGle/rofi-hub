@@ -350,6 +350,12 @@ jobs:
           su builder -c 'abuild-keygen -a -n'
           cp /home/builder/.config/abuild/*.rsa.pub /etc/apk/keys/
           chmod 644 /etc/apk/keys/*.rsa.pub
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            # Development builds are allowed to be ahead of the last release;
+            # refresh the local checksum. A tag keeps the committed checksum
+            # so a release still fails if the source asset drifted.
+            su builder -c "cd '$PWD/packaging/alpine' && SRCDEST=/tmp/srcdest abuild checksum"
+          fi
           su builder -c "cd '$PWD/packaging/alpine' && abuild -r -d -s /tmp/srcdest"
           find /home/builder/.local/share/abuild -name "rofi-hub-$VERSION-r*.apk" -exec cp {} "dist/rofi-hub-$VERSION-r0.apk" \;
           test -f "dist/rofi-hub-$VERSION-r0.apk"
