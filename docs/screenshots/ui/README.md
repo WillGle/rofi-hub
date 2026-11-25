@@ -13,7 +13,7 @@ The README shows the Gruvbox row. Every app also has `nord`, `solarized`, and
 | Calendar | [![Calendar Gruvbox](calendar-gruvbox.png)](calendar-gruvbox.png) | [![Calendar Nord](calendar-nord.png)](calendar-nord.png) | [![Calendar Solarized](calendar-solarized.png)](calendar-solarized.png) | [![Calendar Auto](calendar-auto.png)](calendar-auto.png) |
 | Clipboard | [![Clipboard Gruvbox](clipboard-gruvbox.png)](clipboard-gruvbox.png) | [![Clipboard Nord](clipboard-nord.png)](clipboard-nord.png) | [![Clipboard Solarized](clipboard-solarized.png)](clipboard-solarized.png) | [![Clipboard Auto](clipboard-auto.png)](clipboard-auto.png) |
 | Keybinds | [![Keybinds Gruvbox](keybinds-gruvbox.png)](keybinds-gruvbox.png) | [![Keybinds Nord](keybinds-nord.png)](keybinds-nord.png) | [![Keybinds Solarized](keybinds-solarized.png)](keybinds-solarized.png) | [![Keybinds Auto](keybinds-auto.png)](keybinds-auto.png) |
-| Network | [![Network Gruvbox](network-gruvbox.png)](network-gruvbox.png) | [![Network Nord](network-nord.png)](network-nord.png) | [![Network Solarized](network-solarized.png)](network-solarized.png) | [![Network Auto](network-auto.png)](network-auto.png) |
+| Network | [![Network Gruvbox](network-gruvbox.png?v=2)](network-gruvbox.png) | [![Network Nord](network-nord.png?v=2)](network-nord.png) | [![Network Solarized](network-solarized.png?v=2)](network-solarized.png) | [![Network Auto](network-auto.png?v=2)](network-auto.png) |
 
 The `auto` column falls back to Gruvbox when no matugen palette or
 `static.env` is present. See [UI style](../../UI_STYLE.md) for the palette,
@@ -28,13 +28,17 @@ generation environment needs an X11-capable Rofi, `Xvfb`, and ImageMagick:
 cargo build --release --locked --workspace
 DESTDIR=/tmp/ui-stage PREFIX=/usr packaging/install-tree.sh --all
 Xvfb :99 -screen 0 1280x800x24 &
-DISPLAY=:99 HOME=/tmp/ui-home XDG_CONFIG_HOME=/tmp/ui-config \
+env -u WAYLAND_DISPLAY -u HYPRLAND_INSTANCE_SIGNATURE -u XDG_SESSION_TYPE \
+  DISPLAY=:99 HOME=/tmp/ui-home XDG_CONFIG_HOME=/tmp/ui-config \
   XDG_DATA_HOME=/tmp/ui-data XDG_RUNTIME_DIR=/tmp/ui-run \
-  ROFI_HUB_THEME=gruvbox PATH=/tmp/ui-stage/usr/bin:$PATH \
+  ROFI_HUB_THEME=gruvbox \
+  PATH="$PWD/docs/screenshots/ui/fixtures:/tmp/ui-stage/usr/bin:$PATH" \
   rofi-hub &
 DISPLAY=:99 import -window root docs/screenshots/ui/hub-gruvbox.png
 ```
 
 Set `ROFI_HUB_THEME` to `nord`, `solarized`, `gruvbox`, or unset it for `auto`.
 Fake `cliphist`, `wl-copy`, `nmcli`, and a small `hyprland.conf` provide
-deterministic data for the non-hub apps.
+deterministic data for the non-hub apps. Network captures use
+`fixtures/nmcli`: example SSIDs, TEST-NET-1 IPv4 (`192.0.2.0/24`), and the
+locally administered MAC `02:00:00:00:00:01`.
