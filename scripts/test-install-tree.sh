@@ -288,8 +288,8 @@ for app in hub calendar keybinds clipboard; do
     theme="$(awk 'prev == "-theme" {print; exit} {prev=$0}' "$args")"
     [ "$theme" = "$FULL${PREFIX}/share/rofi-hub/themes/hub.rasi" ] ||
         fail "$app did not use the installed shared theme (got '${theme}')"
-    grep -q 'padding: 20px;' "$theme" || fail "$app theme lacks Screen Time padding"
-    grep -q 'border: 0px 0px 0px 2px;' "$theme" ||
+    grep -q 'padding: 12px;' "$theme" || fail "$app theme lacks the zoned window inset"
+    grep -q 'border: 0px 0px 1px 2px;' "$theme" ||
         fail "$app theme lacks the Screen Time accent selection bar"
 done
 pass "hub, calendar, keybinds, and clipboard share the installed Screen Time-style chrome"
