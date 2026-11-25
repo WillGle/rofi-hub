@@ -170,7 +170,7 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
               wrapProgram "$out/bin/rofi-hub" \
-                --prefix PATH : "${rofiApps}/bin:${screenTime}/bin" \
+                --prefix PATH : "${rofiApps}/bin:${screenTime}/bin:${pkgs.rofi}/bin" \
                 --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers:${screenTime}/share/rofi-hub/providers"
             '';
             meta = rofiHub.meta // {
@@ -275,7 +275,7 @@
           };
 
           config = lib.mkIf cfg.enable {
-            home.packages = [ package ];
+            home.packages = [ package pkgs.rofi ];
 
             home.sessionVariables = lib.mkIf (cfg.providerDirs != [ ]) {
               ROFI_HUB_PROVIDER_DIR = lib.concatStringsSep ":" cfg.providerDirs;
@@ -377,7 +377,7 @@
           };
 
           config = lib.mkIf cfg.enable {
-            environment.systemPackages = [ cfg.package ];
+            environment.systemPackages = [ cfg.package pkgs.rofi ];
 
             systemd.user.services.screen-time = {
               enable = true;
