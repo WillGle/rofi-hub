@@ -14,7 +14,9 @@ VERSION="${VERSION:-$(sed -n '/^\[workspace.package\]/,/^\[/p' Cargo.toml | sed 
 DIST="${DIST:-$ROOT/dist}"
 NAME="rofi-hub-$VERSION"
 ASSET="$DIST/$NAME-source.tar.gz"
-EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || date +%s)}"
+# A fixed epoch makes the source asset reproducible at any commit, so a
+# checksum refresh commit does not invalidate the hashes in the recipes.
+EPOCH="${SOURCE_DATE_EPOCH:-0}"
 
 mkdir -p "$DIST"
 tmp="$DIST/.$NAME-source.tar.gz.$$"
@@ -27,7 +29,7 @@ trap 'rm -f -- "$tmp"' EXIT INT TERM
 tar --sort=name --mtime="@$EPOCH" --owner=0 --group=0 --numeric-owner \
     --exclude='./target' --exclude='./dist' --exclude='./result' \
     --exclude='./.git' --exclude='./.direnv' --exclude='./state' \
-    --exclude='./goal.md' \
+    --exclude='./goal*.md' \
     --exclude='./packaging/arch' --exclude='./packaging/alpine' \
     --exclude='./packaging/gentoo' --exclude='./packaging/void' \
     --exclude='./packaging/slackbuilds' --exclude='./packaging/fedora' \

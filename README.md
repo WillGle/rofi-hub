@@ -104,7 +104,8 @@ files, and per-distro commands.
 | Target | Version | Status |
 |---|---|---|
 | Arch/AUR (`rofi-hub`, `-bin`) | 0.2.0 | ✅ validated; AUR push pending |
-| Debian/Ubuntu `.deb` | 0.2.0 | ✅ metadata validated |
+| Arch/AUR `-git` | 0.2.0 | ✅ validated; AUR push pending |
+| Debian/Ubuntu `.deb` | 0.2.0 | ✅ rebuilt in Debian 12; install/remove clean |
 | Debian official | 0.2.0 | ✅ `dpkg-buildpackage`/`lintian` |
 | Fedora `.spec` | 0.2.0 | ✅ validated (`rpmbuild`/`dnf`) |
 | Alpine `APKBUILD` | 0.2.0 | ✅ validated (`abuild`/`apk`) |
@@ -113,6 +114,7 @@ files, and per-distro commands.
 | Void | 0.2.0 | ✅ validated (`xbps-src`/`xbps-install`) |
 | ALT Sisyphus | 0.2.0 | ✅ validated (`rpmbuild`/`rpm`) |
 | SlackBuilds | 0.2.0 | ✅ validated (`SlackBuild`/`installpkg`) |
+| Release assets (`.deb`/`.rpm`/`.apk`) | 0.2.0 | ✅ validated; signed tag release pending |
 | Nix flake | 0.2.0 | ✅ |
 | nixpkgs | — | ⏸ deferred |
 
@@ -250,9 +252,10 @@ Time support file. The app crates also have integration tests with a fake Rofi
 (`crates/*/tests/cli.rs`).
 
 The CI pipeline runs lint, workspace tests, the MSRV (Rust 1.89), installer
-fault injection, bundle smoke tests on x86_64 and aarch64, and Nix flake checks.
-Tag builds sign `SHA256SUMS` and `install.sh` and upload them to the GitHub
-release.
+fault injection, the install tree on x86_64 and aarch64, bundle smoke tests,
+the five-distro build matrix, and Nix flake checks. Tag builds build the
+`.deb`, `.rpm`, `.apk`, and source assets, smoke-test them in clean containers,
+then sign `SHA256SUMS` and upload the complete set to the GitHub release.
 
 ## License
 

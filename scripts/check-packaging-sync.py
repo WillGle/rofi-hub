@@ -241,6 +241,23 @@ def main() -> int:
     for asset in ("*.deb", "*.rpm", "*.apk"):
         if asset not in workflow:
             fail(f".github/workflows/release.yml: release assets miss {asset}")
+    if "rofi-hub-*-source.tar.gz" not in workflow:
+        fail(".github/workflows/release.yml: source asset is not uploaded")
+    if "ubuntu-24.04-arm" not in workflow:
+        fail(".github/workflows/release.yml: install tree misses the aarch64 runner")
+    # The tag release job must gate on package builds and attach every artifact
+    # type; uploading them in another job alone is not enough.
+    marker = "\n  release:\n"
+    if marker not in workflow:
+        fail(".github/workflows/release.yml: missing release job")
+    else:
+        release_job = workflow.split(marker, 1)[1]
+        for job in ("artifacts", "apk-package", "release-smoke"):
+            if job not in release_job:
+                fail(f".github/workflows/release.yml: release does not gate on {job}")
+        for asset in ("*.deb", "*.rpm", "*.apk"):
+            if asset not in release_job:
+                fail(f".github/workflows/release.yml: release job does not attach {asset}")
 
     # Executable bits on scripts that package managers invoke.
     for path in (

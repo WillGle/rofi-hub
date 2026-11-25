@@ -69,6 +69,8 @@ The script refuses to run if a selected binary or asset is missing, checks the
 `systemctl`. The systemd unit is installed from
 `packaging/systemd/screen-time.service.in` with `@BINDIR@` replaced. The
 existing `install.sh` keeps its own `sed` substitution for user-local installs.
+`scripts/test-install-tree.sh` runs the same staging contract on x86_64 and
+aarch64 in CI.
 
 ## Split packages
 
@@ -147,8 +149,13 @@ Release tarballs are built inside `debian:12`, whose glibc is **2.36**. The
 current release binaries require at most `GLIBC_2.34` (verified with
 `objdump -T`), so they run on Debian 12 and newer without a newer-glibc host.
 Distro packages build from source and use their own toolchain; they do not
-depend on this baseline. A musl static build is not the default: `zbus` and
-bundled SQLite must be validated on musl first, and the flake still builds with
+depend on this baseline.
+
+The musl path is validated: `alpine:edge` builds the workspace, runs
+`cargo test --workspace --locked`, and passes `scripts/test-install-tree.sh`.
+The release tarball still uses the Debian 12 glibc build because a static musl
+tarball would need extra handling for Hyprland/systemd integration; Alpine and
+other musl distros build from source instead. The Nix flake keeps using
 nixpkgs' glibc.
 
 Verify a binary before publishing:
@@ -171,7 +178,10 @@ objdump -T target/release/rofi-hub | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -
 a host with a newer glibc. The nfpm `.apk` is metadata-only today: Alpine
 `apk-tools` 3 rejects it. Use the `abuild`-generated `.apk` for publication.
 Checksums are written to `dist/SHA256SUMS`; release signatures use the existing
-minisign key. Validate with:
+minisign key. The source asset is built by `scripts/package-source.sh` with
+sorted entries and a fixed epoch, so it is reproducible from the working tree;
+`scripts/update-source-checksums.py` refreshes every recipe after a change.
+Validate with:
 
 ```bash
 scripts/test-package-artifacts.sh dist/*.deb dist/*.rpm dist/*.apk
@@ -249,8 +259,8 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 |---|---|---|---|---|
 | Arch/AUR source | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
 | Arch/AUR `-bin` | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Arch/AUR `-git` | 0.2.0 | ⏳ recipe; needs AUR push | WillGle | `makepkg` |
-| Debian/Ubuntu `.deb` | 0.2.0 | ✅ artifact metadata validated; rebuild in Debian 12 | WillGle | `dpkg-deb` |
+| Arch/AUR `-git` | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Debian/Ubuntu `.deb` | 0.2.0 | ✅ rebuilt in Debian 12; install/remove clean | WillGle | `dpkg-deb`/`dpkg -i` |
 | Debian official | 0.2.0 | ✅ binary lintian-clean; sponsorship pending | WillGle | `dpkg-buildpackage`/`lintian` |
 | Fedora `.spec` | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
 | Alpine `APKBUILD` | 0.2.0 | ✅ validated | WillGle | `abuild -r`/`apk add`/`apk del` |
@@ -265,46 +275,54 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 
 ### Current release blockers
 
-- **AUR publication** requires the AUR SSH key and a release that actually
-  hosts `rofi-hub-<version>-source.tar.gz`; the recipes and `.SRCINFO` are
-  ready, but nothing has been pushed to `aur.archlinux.org`.
+- **AUR publication** requires the AUR SSH key. The three recipes and
+  `.SRCINFO` files are ready and validated in `archlinux:base-devel`, but
+  nothing has been pushed to `aur.archlinux.org`. `rofi-hub-bin` keeps `SKIP`
+  checksums until the matching GitHub release assets exist; run `updpkgsums`
+  after the first asset upload.
 - **GitHub release** requires `MINISIGN_SECRET_KEY`, a release token, and a
-  tag/asset upload. The local `.deb`/`.rpm`/`.apk` metadata is validated, but
-  no signed GitHub release exists yet.
-- **APK runtime**: Alpine `apk-tools` 3 rejects the nfpm APK payload. The
-  validated `.apk` is the one produced by `abuild` in `alpine:edge`; the
-  release job must upload that artifact rather than the nfpm output.
+  `v*` tag. The release job now gates on the distro matrix, builds and
+  smoke-tests `.deb`, `.rpm`, `.apk`, and the source asset, then signs
+  `SHA256SUMS` with the pinned minisign key.
 - **Repology** has no package to track until the AUR or another repository
   actually publishes one.
 
-The Repology badge is added once at least one package outside the flake is
-published:
+The Repology badge is already wired in the README and starts reporting once at
+least one package outside the flake is published:
 
 ```markdown
 [![Packaging status](https://repology.org/badge/vertical-allrepos/rofi-hub.svg)](https://repology.org/project/rofi-hub/versions)
 ```
 
-## Current release phase
+## Release phase
 
-**Phase A — native release.** The first release publishes only the Nix flake
-packages and the `install.sh` tarball path:
+A `v0.2.x` tag publishes one complete asset set from the same install tree:
 
-- `nix build .#` / `.#rofi-hub-only` / `.#screen-time`;
 - `rofi-hub-<arch>-linux.tar.gz` with `install.sh`, `uninstall.sh`, and
-  `minisign.pub`;
-- checksums and minisign signatures for the tarball and installer.
+  `minisign.pub` for user-local installs;
+- `rofi-hub_<version>_<arch>.deb` and `rofi-hub-<version>-1.<arch>.rpm` built by
+  `nfpm` from the staged tree;
+- `rofi-hub-<version>-r0.apk` built by `abuild` in `alpine:edge`;
+- `rofi-hub-<version>-source.tar.gz` for the source recipes;
+- `SHA256SUMS` covering every asset, signed with minisign.
 
-Distro artifacts (`.deb`, `.rpm`, `.apk`) and AUR are validated locally but
-are not release gates in this phase. They move to their own release phase once
-the native assets are stable.
+The release job depends on `artifacts`, `apk-package`, and `release-smoke`, so a
+tag is only published after each package installs and is removed cleanly in a
+clean container. Distro builds, package artifacts, and the release job skip
+pull requests; PRs still run lint, tests, MSRV, installer, install-tree, and
+the Nix flake check.
 
 ## Release checklist
 
 - [ ] bump workspace and Screen Time versions and update `CHANGELOG.md`
 - [ ] `cargo test --workspace --locked`, `scripts/test-installer.sh`,
       `scripts/test-install-tree.sh`
+- [ ] `scripts/package-source.sh` and
+      `python3 scripts/update-source-checksums.py`
+- [ ] `scripts/build-package-artifacts.sh`, `scripts/test-package-artifacts.sh`
 - [ ] tag `vX.Y.Z`, sign and publish the release
-- [ ] update AUR `pkgver` and hashes
+- [ ] update AUR `pkgver`, run `updpkgsums`, replace the `rofi-hub-bin` `SKIP`
+      checksums with the published asset hashes, and regenerate `.SRCINFO`
 - [ ] update Debian/Fedora/Alpine/Gentoo/openSUSE recipes
 - [ ] run `python3 scripts/check-packaging-sync.py`
 - [ ] update this status table and the README badge/table

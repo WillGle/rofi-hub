@@ -65,7 +65,10 @@ packaging/
 
 Release `.deb`, `.rpm`, and `.apk` artifacts are produced by
 `scripts/build-package-artifacts.sh` from the same staged tree and checked by
-`scripts/test-package-artifacts.sh`.
+`scripts/test-package-artifacts.sh`. The `.apk` that is published comes from
+`abuild` in `alpine:edge`; `nfpm` produces the `.deb` and `.rpm`. A tag also
+publishes `rofi-hub-<version>-source.tar.gz`, which the source recipes use, and
+a signed `SHA256SUMS` covering every asset.
 
 ## Validation
 
@@ -76,5 +79,7 @@ scripts/build-package-artifacts.sh    # requires nfpm on PATH
 scripts/test-package-artifacts.sh dist/*.deb dist/*.rpm dist/*.apk
 ```
 
-The full matrix runs in `.github/workflows/release.yml` (`install-tree`,
-`distro-build`, `artifacts`, `release-smoke`). See `docs/PACKAGING.md`.
+The full matrix runs in `.github/workflows/release.yml` (`install-tree` on
+x86_64 and aarch64, `distro-build`, `artifacts`, `apk-package`,
+`release-smoke`). Pull requests skip the container matrix; main and tag builds
+run it. See `docs/PACKAGING.md`.
