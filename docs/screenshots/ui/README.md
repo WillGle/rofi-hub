@@ -13,7 +13,7 @@ The README shows the Gruvbox row. Every app also has `nord`, `solarized`, and
 | Calendar | [![Calendar Gruvbox](calendar-gruvbox.png?v=3)](calendar-gruvbox.png) | [![Calendar Nord](calendar-nord.png?v=3)](calendar-nord.png) | [![Calendar Solarized](calendar-solarized.png?v=3)](calendar-solarized.png) | [![Calendar Auto](calendar-auto.png?v=3)](calendar-auto.png) |
 | Clipboard | [![Clipboard Gruvbox](clipboard-gruvbox.png?v=3)](clipboard-gruvbox.png) | [![Clipboard Nord](clipboard-nord.png?v=3)](clipboard-nord.png) | [![Clipboard Solarized](clipboard-solarized.png?v=3)](clipboard-solarized.png) | [![Clipboard Auto](clipboard-auto.png?v=3)](clipboard-auto.png) |
 | Keybinds | [![Keybinds Gruvbox](keybinds-gruvbox.png?v=3)](keybinds-gruvbox.png) | [![Keybinds Nord](keybinds-nord.png?v=3)](keybinds-nord.png) | [![Keybinds Solarized](keybinds-solarized.png?v=3)](keybinds-solarized.png) | [![Keybinds Auto](keybinds-auto.png?v=3)](keybinds-auto.png) |
-| Network | [![Network Gruvbox](network-gruvbox.png?v=3)](network-gruvbox.png) | [![Network Nord](network-nord.png?v=3)](network-nord.png) | [![Network Solarized](network-solarized.png?v=3)](network-solarized.png) | [![Network Auto](network-auto.png?v=3)](network-auto.png) |
+| Network | [![Network Gruvbox](network-gruvbox.png?v=4)](network-gruvbox.png) | [![Network Nord](network-nord.png?v=4)](network-nord.png) | [![Network Solarized](network-solarized.png?v=4)](network-solarized.png) | [![Network Auto](network-auto.png?v=4)](network-auto.png) |
 
 The `auto` column falls back to Gruvbox when no matugen palette or
 `static.env` is present. See [UI style](../../UI_STYLE.md) for the palette,

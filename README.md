@@ -28,7 +28,7 @@ below are real Rofi captures (not mockups).
 
 | Clipboard | Keybinds | Network |
 |---|---|---|
-| <img src="docs/screenshots/ui/clipboard-gruvbox.png?v=3" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png?v=3" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png?v=3" width="360" alt="Network in Gruvbox Dark"> |
+| <img src="docs/screenshots/ui/clipboard-gruvbox.png?v=3" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png?v=3" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png?v=4" width="360" alt="Network in Gruvbox Dark"> |
 
 [Full 6 app × 4 mode screenshot matrix](docs/screenshots/ui/README.md) ·
 [UI style guide](docs/UI_STYLE.md) · `rofi-hub theme dump --app <app>`
