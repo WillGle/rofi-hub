@@ -269,6 +269,7 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 | Void | 0.2.1 | ✅ validated | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
 | SlackBuilds | 0.2.1 | ✅ validated | WillGle | `SlackBuild`/`installpkg`/`removepkg` |
 | ALT Sisyphus | 0.2.1 | ✅ validated (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
+| Release assets (`.deb`/`.rpm`/`.apk`) | 0.2.1 | ✅ published with `v0.2.1` | WillGle | `sha256sum -c`/`minisign`/`test-package-artifacts` |
 | Nix flake | 0.2.1 | ✅ | WillGle | `nix flake check`/`nix build`/smoke |
 | nixpkgs | — | ⏸ deferred | — | — |
 | Flatpak/Snap/Scoop | — | ❌ N/A | — | — |
@@ -276,14 +277,12 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 ### Current release blockers
 
 - **AUR publication** requires the AUR SSH key. The three recipes and
-  `.SRCINFO` files are ready and validated in `archlinux:base-devel`, but
-  nothing has been pushed to `aur.archlinux.org`. `rofi-hub-bin` keeps `SKIP`
-  checksums until the matching GitHub release assets exist; run `updpkgsums`
-  after the first asset upload.
-- **GitHub release** requires `MINISIGN_SECRET_KEY`, a release token, and a
-  `v*` tag. The release job now gates on the distro matrix, builds and
-  smoke-tests `.deb`, `.rpm`, `.apk`, and the source asset, then signs
-  `SHA256SUMS` with the pinned minisign key.
+  `.SRCINFO` files are ready and validated in `archlinux:base-devel`;
+  `rofi-hub-bin` now carries the real `v0.2.1` asset checksums. Nothing has
+  been pushed to `aur.archlinux.org` yet.
+- **GitHub release** is published: `v0.2.1` hosts the tarballs, `.deb`, `.rpm`,
+  `.apk`, source asset, `SHA256SUMS`, and minisign signatures. Future releases
+  use the same tag workflow, which gates on the distro matrix and release-smoke.
 - **Repology** has no package to track until the AUR or another repository
   actually publishes one.
 
