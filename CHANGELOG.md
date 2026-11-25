@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1
+
+- Add multi-distro packaging: a `PREFIX`/`DESTDIR` install tree shared by every
+  recipe, systemd/OpenRC/runit services, desktop/AppStream/man/completions
+  assets, native `.deb`/`.rpm`/`.apk` artifacts, Arch/AUR, Debian, Fedora,
+  Alpine, Gentoo, openSUSE, Void, Slackware, and ALT recipes, a five-distro CI
+  matrix, and `docs/PACKAGING.md`.
+- Add the NetworkManager Wi-Fi and Ethernet menu (`rofi-hub network`).
+- Treat Rofi closing its stdin early as a cancellation instead of a fatal I/O
+  error.
+- Publish the tarball, `.deb`, `.rpm`, `.apk`, source asset, and signed
+  `SHA256SUMS` from the tag release.
+
 ## 0.2.0
 
 - Add three built-in provider apps: `calendar` (month sheet with date search),
@@ -13,11 +26,6 @@
   provider manifests against the workspace, installer, flake, packaging, and CI,
   a release-bundle smoke test, and a CI pipeline with lint, workspace tests,
   MSRV, installer fault injection, bundle builds, and Nix checks.
-- Add multi-distro packaging: a `PREFIX`/`DESTDIR` install tree shared by every
-  recipe, systemd/OpenRC/runit services, desktop/AppStream/man/completions
-  assets, native `.deb`/`.rpm`/`.apk` artifacts, Arch/AUR, Debian, Fedora,
-  Alpine, Gentoo, openSUSE, Void, Slackware, and ALT recipes, a five-distro CI
-  matrix, and `docs/PACKAGING.md`.
 
 ## 0.1.0
 

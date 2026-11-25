@@ -57,7 +57,7 @@ packaging/
 | Debian/Ubuntu | `debian/` (official track), release `.deb` from `nfpm.yaml` | `dpkg-buildpackage`, `lintian` |
 | Fedora | `fedora/rofi-hub.spec` | `fedpkg mockbuild`, `rpmlint` |
 | Alpine | `alpine/APKBUILD` | `abuild -r`, `apkbuild-lint` |
-| Gentoo | `gentoo/rofi-hub-0.2.0.ebuild` | `pkgcheck scan`, `ebuild ... manifest` |
+| Gentoo | `gentoo/rofi-hub-0.2.1.ebuild` | `pkgcheck scan`, `ebuild ... manifest` |
 | openSUSE | `opensuse/rofi-hub.spec` | `osc build`, `rpmlint` |
 | Void | `void/template` | `xbps-src pkg rofi-hub` |
 | Slackware | `slackbuilds/rofi-hub.SlackBuild` | `sbopkg` |

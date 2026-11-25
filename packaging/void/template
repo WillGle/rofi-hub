@@ -1,7 +1,7 @@
 # Template file for 'rofi-hub'
 # Build with: xbps-src pkg rofi-hub
 pkgname=rofi-hub
-version=0.2.0
+version=0.2.1
 revision=1
 build_style=cargo
 hostmakedepends="cargo rust gcc make pkg-config"
@@ -14,7 +14,7 @@ maintainer="WillGle <willgle@users.noreply.github.com>"
 license="MIT"
 homepage="https://github.com/WillGle/rofi-hub"
 distfiles="https://github.com/WillGle/rofi-hub/releases/download/v${version}/rofi-hub-${version}-source.tar.gz"
-checksum=423f01cad1be027532e092cb88af7697624cbd37bf07f993968cae0efcf13744
+checksum=7f9c3de1c807a41f8b1a997eb49dea6597fb6fb6bfa75a37f6ce829d8838aa17
 wrksrc="rofi-hub-${version}"
 
 do_check() {

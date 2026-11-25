@@ -22,16 +22,16 @@ Inside `archlinux:base-devel`:
 cd packaging/arch
 makepkg -f --noconfirm
 namcap PKGBUILD
-namcap rofi-hub-0.2.0-1-x86_64.pkg.tar.zst
-pacman -U --noconfirm rofi-hub-0.2.0-1-x86_64.pkg.tar.zst
+namcap rofi-hub-0.2.1-1-x86_64.pkg.tar.zst
+pacman -U --noconfirm rofi-hub-0.2.1-1-x86_64.pkg.tar.zst
 rofi-hub list --json
 pacman -Rns --noconfirm rofi-hub
 
 # binary package (using a locally built release tarball named as in source_x86_64)
 cd packaging/arch/rofi-hub-bin
 makepkg -f --skipchecksums --noconfirm
-namcap rofi-hub-bin-0.2.0-1-x86_64.pkg.tar.zst
-pacman -U --noconfirm rofi-hub-bin-0.2.0-1-x86_64.pkg.tar.zst
+namcap rofi-hub-bin-0.2.1-1-x86_64.pkg.tar.zst
+pacman -U --noconfirm rofi-hub-bin-0.2.1-1-x86_64.pkg.tar.zst
 pacman -Rns --noconfirm rofi-hub-bin
 ```
 

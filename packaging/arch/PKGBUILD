@@ -2,7 +2,7 @@
 # Source package for AUR/Arch. The release asset is generated from the tagged
 # tree by scripts/package-source.sh and contains packaging/.
 pkgname=rofi-hub
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps"
 arch=('x86_64' 'aarch64')
@@ -23,7 +23,7 @@ conflicts=('rofi-hub-bin' 'rofi-hub-git')
 # rustc's lld link step cannot consume. Rust still uses its thin LTO profile.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz")
-sha256sums=('423f01cad1be027532e092cb88af7697624cbd37bf07f993968cae0efcf13744')
+sha256sums=('7f9c3de1c807a41f8b1a997eb49dea6597fb6fb6bfa75a37f6ce829d8838aa17')
 
 build() {
   cd "$pkgname-$pkgver"

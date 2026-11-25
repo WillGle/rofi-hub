@@ -1,6 +1,6 @@
 # Alpine APKBUILD. Tested with `abuild -r` in alpine:edge.
 pkgname=rofi-hub
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=0
 pkgdesc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps"
 url="https://github.com/WillGle/rofi-hub"
@@ -11,7 +11,7 @@ depends="rofi bash"
 makedepends="cargo rust"
 checkdepends="tzdata"
 source="$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz"
-sha512sums="21c73be071b107db80dab31ff32c45ceb824fd82d42b831cffd813d3a493edb251e0435a4fcab35d88357705d870e719ec86c9cd30e4ae2417159011e9536920  rofi-hub-$pkgver.tar.gz"
+sha512sums="d016f8456a507e4784457d2737dde056827858e2997f78c8a03aa4e6597d4f34f3fa7dff811243ac6d310ffd5e9652c3fc040550a1bde0dd10ffc8a86670d837  rofi-hub-$pkgver.tar.gz"
 
 build() {
 	cargo build --release --locked --workspace

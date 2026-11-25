@@ -1,6 +1,6 @@
 pkgbase = rofi-hub-bin
 	pkgdesc = Rofi launcher with screen-time, calendar, keybinds, and clipboard apps (binary release)
-	pkgver = 0.2.0
+	pkgver = 0.2.1
 	pkgrel = 1
 	url = https://github.com/WillGle/rofi-hub
 	arch = x86_64
@@ -19,9 +19,9 @@ pkgbase = rofi-hub-bin
 	conflicts = rofi-hub-git
 	options = !strip
 	options = !debug
-	source_x86_64 = rofi-hub-0.2.0-x86_64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v0.2.0/rofi-hub-x86_64-linux.tar.gz
+	source_x86_64 = rofi-hub-0.2.1-x86_64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v0.2.1/rofi-hub-x86_64-linux.tar.gz
 	sha256sums_x86_64 = SKIP
-	source_aarch64 = rofi-hub-0.2.0-aarch64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v0.2.0/rofi-hub-aarch64-linux.tar.gz
+	source_aarch64 = rofi-hub-0.2.1-aarch64.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v0.2.1/rofi-hub-aarch64-linux.tar.gz
 	sha256sums_aarch64 = SKIP
 
 pkgname = rofi-hub-bin

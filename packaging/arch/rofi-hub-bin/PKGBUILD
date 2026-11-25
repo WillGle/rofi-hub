@@ -2,7 +2,7 @@
 # Prebuilt release tarball. The asset is installed through the same
 # packaging/install-tree.sh shipped inside the tarball.
 pkgname=rofi-hub-bin
-pkgver=0.2.0
+pkgver=0.2.1
 pkgrel=1
 pkgdesc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps (binary release)"
 arch=('x86_64' 'aarch64')

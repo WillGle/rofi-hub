@@ -1,6 +1,6 @@
 # Packaging rofi-hub
 
-> **Owner:** WillGle · **Baseline:** `v0.2.0` (`fc0e5aa`) · **Updated:** 2026-11-25
+> **Owner:** WillGle · **Baseline:** `v0.2.0` (`fc0e5aa`) · **Current:** `v0.2.1` · **Updated:** 2026-11-25
 
 `rofi-hub` is a Rust workspace: a launcher, three Rofi apps, and the Screen
 Time tracker. One all-in-one package is the primary target. Split packages are
@@ -207,7 +207,7 @@ makepkg --printsrcinfo > .SRCINFO
 Release artifact:
 
 ```bash
-sudo dpkg -i rofi-hub_0.2.0_amd64.deb
+sudo dpkg -i rofi-hub_0.2.1_amd64.deb
 sudo apt-get -f install
 sudo apt-get remove rofi-hub
 ```
@@ -237,7 +237,7 @@ apkbuild-lint APKBUILD
 ```bash
 cd packaging/gentoo
 pkgcheck scan
-ebuild rofi-hub-0.2.0.ebuild manifest
+ebuild rofi-hub-0.2.1.ebuild manifest
 ```
 
 ### openSUSE
@@ -257,19 +257,19 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 
 | Target | Version | Status | Maintainer | Validation |
 |---|---|---|---|---|
-| Arch/AUR source | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Arch/AUR `-bin` | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Arch/AUR `-git` | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Debian/Ubuntu `.deb` | 0.2.0 | ✅ rebuilt in Debian 12; install/remove clean | WillGle | `dpkg-deb`/`dpkg -i` |
-| Debian official | 0.2.0 | ✅ binary lintian-clean; sponsorship pending | WillGle | `dpkg-buildpackage`/`lintian` |
-| Fedora `.spec` | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
-| Alpine `APKBUILD` | 0.2.0 | ✅ validated | WillGle | `abuild -r`/`apk add`/`apk del` |
-| Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |
-| openSUSE | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`zypper install`/`remove` |
-| Void | 0.2.0 | ✅ validated | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
-| SlackBuilds | 0.2.0 | ✅ validated | WillGle | `SlackBuild`/`installpkg`/`removepkg` |
-| ALT Sisyphus | 0.2.0 | ✅ validated (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
-| Nix flake | 0.2.0 | ✅ | WillGle | `nix flake check`/`nix build`/smoke |
+| Arch/AUR source | 0.2.1 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Arch/AUR `-bin` | 0.2.1 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Arch/AUR `-git` | 0.2.1 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Debian/Ubuntu `.deb` | 0.2.1 | ✅ rebuilt in Debian 12; install/remove clean | WillGle | `dpkg-deb`/`dpkg -i` |
+| Debian official | 0.2.1 | ✅ binary lintian-clean; sponsorship pending | WillGle | `dpkg-buildpackage`/`lintian` |
+| Fedora `.spec` | 0.2.1 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
+| Alpine `APKBUILD` | 0.2.1 | ✅ validated | WillGle | `abuild -r`/`apk add`/`apk del` |
+| Gentoo GURU | 0.2.1 | ✅ pkgcheck-clean; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |
+| openSUSE | 0.2.1 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`zypper install`/`remove` |
+| Void | 0.2.1 | ✅ validated | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
+| SlackBuilds | 0.2.1 | ✅ validated | WillGle | `SlackBuild`/`installpkg`/`removepkg` |
+| ALT Sisyphus | 0.2.1 | ✅ validated (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
+| Nix flake | 0.2.1 | ✅ | WillGle | `nix flake check`/`nix build`/smoke |
 | nixpkgs | — | ⏸ deferred | — | — |
 | Flatpak/Snap/Scoop | — | ❌ N/A | — | — |
 

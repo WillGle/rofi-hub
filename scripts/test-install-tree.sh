@@ -202,7 +202,7 @@ export ROFI_HUB_PROVIDER_DIR="$FULL${PREFIX}/share/rofi-hub/providers"
 export ROFI_HUB_THEME_FILE="$FULL${PREFIX}/share/rofi-hub/themes/hub.rasi"
 
 version="$("$FULL${PREFIX}/bin/rofi-hub" --version)"
-[ "$version" = "rofi-hub 0.2.0" ] || fail "unexpected hub version: $version"
+[ "$version" = "rofi-hub 0.2.1" ] || fail "unexpected hub version: $version"
 pass "staged rofi-hub --version: $version"
 
 "$FULL${PREFIX}/bin/rofi-hub" list --json >"$WORK/list.json"

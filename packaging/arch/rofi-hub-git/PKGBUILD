@@ -2,7 +2,7 @@
 # Live git build. The repository copy of packaging/install-tree.sh is used so
 # the installed tree always matches the checked-out commit.
 pkgname=rofi-hub-git
-pkgver=0.2.0.r0.gfc0e5aa
+pkgver=0.2.1.r0.gfc0e5aa
 pkgrel=1
 pkgdesc="Rofi launcher with screen-time, calendar, keybinds, and clipboard apps (git)"
 arch=('x86_64' 'aarch64')

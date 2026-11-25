@@ -9,7 +9,7 @@
 %global __requires_exclude_from ^/usr/share/rofi-hub/contrib/.*
 
 Name:           rofi-hub
-Version:        0.2.0
+Version:        0.2.1
 Release:        1%{?dist}
 Summary:        Rofi launcher with screen-time, calendar, key bindings, and clipboard apps
 License:        MIT
@@ -75,5 +75,5 @@ DESTDIR=%{buildroot} PREFIX=/usr packaging/install-tree.sh --all
 %{_userunitdir}/screen-time.service
 
 %changelog
-* Wed Nov 25 2026 WillGle <willgle@users.noreply.github.com> - 0.2.0-1
+* Wed Nov 25 2026 WillGle <willgle@users.noreply.github.com> - 0.2.1-1
 - Initial package.

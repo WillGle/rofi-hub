@@ -103,19 +103,19 @@ files, and per-distro commands.
 
 | Target | Version | Status |
 |---|---|---|
-| Arch/AUR (`rofi-hub`, `-bin`) | 0.2.0 | ✅ validated; AUR push pending |
-| Arch/AUR `-git` | 0.2.0 | ✅ validated; AUR push pending |
-| Debian/Ubuntu `.deb` | 0.2.0 | ✅ rebuilt in Debian 12; install/remove clean |
-| Debian official | 0.2.0 | ✅ `dpkg-buildpackage`/`lintian` |
-| Fedora `.spec` | 0.2.0 | ✅ validated (`rpmbuild`/`dnf`) |
-| Alpine `APKBUILD` | 0.2.0 | ✅ validated (`abuild`/`apk`) |
-| Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; PR pending |
-| openSUSE | 0.2.0 | ✅ validated (`rpmbuild`/`zypper`) |
-| Void | 0.2.0 | ✅ validated (`xbps-src`/`xbps-install`) |
-| ALT Sisyphus | 0.2.0 | ✅ validated (`rpmbuild`/`rpm`) |
-| SlackBuilds | 0.2.0 | ✅ validated (`SlackBuild`/`installpkg`) |
-| Release assets (`.deb`/`.rpm`/`.apk`) | 0.2.0 | ✅ validated; signed tag release pending |
-| Nix flake | 0.2.0 | ✅ |
+| Arch/AUR (`rofi-hub`, `-bin`) | 0.2.1 | ✅ validated; AUR push pending |
+| Arch/AUR `-git` | 0.2.1 | ✅ validated; AUR push pending |
+| Debian/Ubuntu `.deb` | 0.2.1 | ✅ rebuilt in Debian 12; install/remove clean |
+| Debian official | 0.2.1 | ✅ `dpkg-buildpackage`/`lintian` |
+| Fedora `.spec` | 0.2.1 | ✅ validated (`rpmbuild`/`dnf`) |
+| Alpine `APKBUILD` | 0.2.1 | ✅ validated (`abuild`/`apk`) |
+| Gentoo GURU | 0.2.1 | ✅ pkgcheck-clean; PR pending |
+| openSUSE | 0.2.1 | ✅ validated (`rpmbuild`/`zypper`) |
+| Void | 0.2.1 | ✅ validated (`xbps-src`/`xbps-install`) |
+| ALT Sisyphus | 0.2.1 | ✅ validated (`rpmbuild`/`rpm`) |
+| SlackBuilds | 0.2.1 | ✅ validated (`SlackBuild`/`installpkg`) |
+| Release assets (`.deb`/`.rpm`/`.apk`) | 0.2.1 | ✅ built and smoke-tested; v0.2.1 release |
+| Nix flake | 0.2.1 | ✅ |
 | nixpkgs | — | ⏸ deferred |
 
 ## Use

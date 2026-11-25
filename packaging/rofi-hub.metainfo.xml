@@ -38,6 +38,11 @@
     <binary>rofi-screen-time</binary>
   </provides>
   <releases>
+    <release version="0.2.1" date="2026-11-25">
+      <description>
+        <p>Multi-distro packaging release with native .deb, .rpm, .apk, and Arch/AUR recipes.</p>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-11-24">
       <description>
         <p>First multi-app release with calendar, keybinds, and clipboard providers.</p>
