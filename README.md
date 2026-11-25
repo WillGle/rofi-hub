@@ -105,6 +105,7 @@ files, and per-distro commands.
 |---|---|---|
 | Arch/AUR (`rofi-hub`, `-bin`) | 0.2.0 | ✅ validated; AUR push pending |
 | Debian/Ubuntu `.deb` | 0.2.0 | ✅ metadata validated |
+| Debian official | 0.2.0 | ✅ `dpkg-buildpackage`/`lintian` |
 | Fedora `.spec` | 0.2.0 | ✅ validated (`rpmbuild`/`dnf`) |
 | Alpine `APKBUILD` | 0.2.0 | ✅ validated (`abuild`/`apk`) |
 | Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; PR pending |

@@ -250,7 +250,7 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 | Arch/AUR `-bin` | 0.2.0 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
 | Arch/AUR `-git` | 0.2.0 | ⏳ recipe; needs AUR push | WillGle | `makepkg` |
 | Debian/Ubuntu `.deb` | 0.2.0 | ✅ artifact metadata validated; rebuild in Debian 12 | WillGle | `dpkg-deb` |
-| Debian official | 0.2.0 | ⏳ skeleton | WillGle | `sbuild`/`lintian` |
+| Debian official | 0.2.0 | ✅ binary lintian-clean; sponsorship pending | WillGle | `dpkg-buildpackage`/`lintian` |
 | Fedora `.spec` | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
 | Alpine `APKBUILD` | 0.2.0 | ✅ validated | WillGle | `abuild -r`/`apk add`/`apk del` |
 | Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |

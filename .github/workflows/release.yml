@@ -112,6 +112,38 @@ jobs:
       - name: Packaging sync
         run: python3 scripts/check-packaging-sync.py
 
+  debian-official:
+    name: debian-official (dpkg-buildpackage/lintian)
+    runs-on: ubuntu-latest
+    container: debian:12
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Debian build tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential debhelper ca-certificates curl git pkg-config python3 \
+            lintian rofi systemd desktop-file-utils
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+            sh -s -- -y --profile minimal --default-toolchain 1.89.0
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Build Debian binary package
+        run: |
+          cp -a packaging/debian debian
+          dpkg-buildpackage -us -uc -b -d
+      - name: Lintian
+        run: lintian --fail-on error ../rofi-hub_*.deb
+      - name: Install and smoke-test
+        run: |
+          dpkg -i ../rofi-hub_*.deb
+          rofi-hub --version
+          rofi-hub list --json | python3 -c 'import json,sys; d={x["id"]:x for x in json.load(sys.stdin)}; assert all(x["available"] for x in d.values()), d; print("debian package ok")'
+          systemd-analyze verify /usr/lib/systemd/user/screen-time.service
+          apt-get remove -y rofi-hub
+
   distro-build:
     name: distro-build (${{ matrix.family }})
     runs-on: ubuntu-latest
@@ -446,6 +478,7 @@ jobs:
       - msrv
       - installer
       - install-tree
+      - debian-official
       - distro-build
       - bundle
       - artifacts
