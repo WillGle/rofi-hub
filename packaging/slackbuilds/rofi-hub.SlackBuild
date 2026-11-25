@@ -48,7 +48,10 @@ tar xf "$CWD/$PRGNAM-$VERSION-source.tar.gz"
 
 cd "$SRCDIR"
 chown -R root:root .
-find . -L -type f -exec chmod 644 {} \;
+find -L . -type f -exec chmod 644 {} \;
+# install-tree.sh is invoked directly by package(); restore its mode after
+# the source-tree normalization above.
+chmod 755 packaging/install-tree.sh
 
 export CARGO_TARGET_DIR="$SRCDIR/target"
 cargo build --release --locked --workspace
@@ -56,8 +59,8 @@ cargo test --workspace --locked
 
 DESTDIR="$PKG" PREFIX=/usr packaging/install-tree.sh --all
 
-find "$PKG" -type f -exec chmod 644 {} \;
-find "$PKG" -type f -perm /111 -exec chmod 755 {} \;
+# install-tree.sh already applies 644/755 per file; do not flatten the
+# executable bits before makepkg.
 find "$PKG" -type d -exec chmod 755 {} \;
 
 cd "$PKG"
