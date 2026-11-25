@@ -176,8 +176,6 @@ jobs:
             family: opensuse
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-        if: matrix.family == 'debian'
       - name: Install Rust and build dependencies
         run: |
           set -eux
@@ -207,6 +205,10 @@ jobs:
                 diffutils findutils gawk
               ;;
           esac
+      - uses: dtolnay/rust-toolchain@stable
+        if: matrix.family == 'debian'
+      - name: Record toolchain versions
+        run: |
           cargo --version
           rustc --version
       - name: Build

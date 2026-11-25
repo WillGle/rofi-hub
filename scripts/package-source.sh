@@ -29,7 +29,8 @@ trap 'rm -f -- "$tmp"' EXIT INT TERM
 tar --sort=name --mtime="@$EPOCH" --owner=0 --group=0 --numeric-owner \
     --exclude='./target' --exclude='./dist' --exclude='./result' \
     --exclude='./.git' --exclude='./.direnv' --exclude='./state' \
-    --exclude='./goal*.md' \
+    --exclude='./goal*.md' --exclude='__pycache__' --exclude='*.pyc' \
+    --exclude='./.pytest_cache' --exclude='./.mypy_cache' \
     --exclude='./packaging/arch' --exclude='./packaging/alpine' \
     --exclude='./packaging/gentoo' --exclude='./packaging/void' \
     --exclude='./packaging/slackbuilds' --exclude='./packaging/fedora' \
