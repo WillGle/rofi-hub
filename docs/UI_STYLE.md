@@ -59,7 +59,7 @@ Entertainment/System/Other to palette roles.
 | Calendar | 64ch (auto-fit) | 12 | no |
 | Clipboard | 110ch (auto-fit) | 16 | no |
 | Keybinds | 110ch | 16 | no |
-| Network | 90ch (auto-fit) | 16 | yes |
+| Network | 90ch (auto-fit) | 12 | yes |
 
 `rofi-hub theme dump --app <app>` prints the generated `.rasi`. Installed
 `themes/hub.rasi` and Screen Time fallback are checked against the generator.

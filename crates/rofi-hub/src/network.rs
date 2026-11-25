@@ -89,13 +89,35 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
             .details
             .as_ref()
             .map(|details| {
-                ui::inline_detail(
-                    &[
-                        ("IP", details.address.as_deref().unwrap_or("--")),
-                        ("Gateway", details.gateway.as_deref().unwrap_or("--")),
-                    ],
-                    &choice.theme,
-                )
+                let dns = if details.dns.is_empty() {
+                    "--".to_owned()
+                } else {
+                    details.dns.join(", ")
+                };
+                [
+                    ui::inline_detail(
+                        &[
+                            ("IP", details.address.as_deref().unwrap_or("--")),
+                            ("Gateway", details.gateway.as_deref().unwrap_or("--")),
+                        ],
+                        &choice.theme,
+                    ),
+                    ui::inline_detail(
+                        &[
+                            ("Subnet", details.subnet.as_deref().unwrap_or("--")),
+                            ("Broadcast", details.broadcast.as_deref().unwrap_or("--")),
+                        ],
+                        &choice.theme,
+                    ),
+                    ui::inline_detail(
+                        &[
+                            ("DNS", &dns),
+                            ("MAC", details.mac.as_deref().unwrap_or("--")),
+                        ],
+                        &choice.theme,
+                    ),
+                ]
+                .join("\n")
             })
             .unwrap_or_default();
         let mesg = format!(
@@ -405,39 +427,6 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
         );
     }
 
-    if let Some(details) = &state.details
-        && (details.address.is_some() || details.mac.is_some())
-    {
-        push_section(&mut items, &mut actions, "CONNECTION", "", theme);
-        let dns = if details.dns.is_empty() {
-            "--".to_owned()
-        } else {
-            details.dns.join(", ")
-        };
-        push_detail(
-            &mut items,
-            &mut actions,
-            "Subnet",
-            details.subnet.as_deref().unwrap_or("--"),
-            theme,
-        );
-        push_detail(
-            &mut items,
-            &mut actions,
-            "Broadcast",
-            details.broadcast.as_deref().unwrap_or("--"),
-            theme,
-        );
-        push_detail(&mut items, &mut actions, "DNS", &dns, theme);
-        push_detail(
-            &mut items,
-            &mut actions,
-            "MAC",
-            details.mac.as_deref().unwrap_or("--"),
-            theme,
-        );
-    }
-
     if state.enabled {
         if let Some(iface) = &state.iface {
             let access_points = access_points(iface);
@@ -631,23 +620,6 @@ fn push_section(
         ui::section(label, meta, 74, theme),
     )
     .active()
-    .nonselectable();
-    item.id = items.len().to_string();
-    items.push(item);
-    actions.push(Action::Quit);
-}
-
-fn push_detail(
-    items: &mut Vec<Item>,
-    actions: &mut Vec<Action>,
-    label: &str,
-    value: &str,
-    theme: &Theme,
-) {
-    let mut item = Item::new(
-        format!("detail-{}", label.to_ascii_lowercase()),
-        ui::detail_row(label, value, theme),
-    )
     .nonselectable();
     item.id = items.len().to_string();
     items.push(item);

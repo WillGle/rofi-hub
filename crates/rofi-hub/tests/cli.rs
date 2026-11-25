@@ -407,7 +407,7 @@ fn network_menu_shows_details_and_connects_to_wifi() {
             "#!/bin/sh\ninput=$(cat)\nprintf '%s\\n' \"$input\" >> '{}'\n\
              printf '%s\\n' \"$@\" >> '{}'\n\
              if [ -f '{}' ]; then exit 1; fi\n\
-             : > '{}'\nprintf '12\\n'\n",
+             : > '{}'\nprintf '7\\n'\n",
             rofi_stdin.display(),
             rofi_args.display(),
             flag.display(),
@@ -415,8 +415,8 @@ fn network_menu_shows_details_and_connects_to_wifi() {
         ),
     );
 
-    // 12 is the open `Open` access point: QUICK ACTIONS 0-4,
-    // CONNECTION 5-9, NEARBY WI-FI 10, Home:5G 11, Open 12.
+    // 7 is the open `Open` access point: QUICK ACTIONS 0-4,
+    // NEARBY WI-FI 5, Home:5G 6, Open 7.
     let output = env
         .command()
         .env("ROFI_BIN", &rofi)
