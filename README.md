@@ -154,10 +154,11 @@ service files, and per-distro commands.
 
 ## Use
 
-Every native app shares one design language: Gruvbox Dark by default, 20px
-window padding, the same palette roles, and a 2px accent strip on the active
-row. Direct launches generate the same profile-aware theme, so the look stays
-consistent without starting the hub first. See [UI style](docs/UI_STYLE.md).
+Every native app shares one design language: Gruvbox Dark by default, zoned
+cards with 1px borders, the same palette roles, and an accent strip on the
+active row. Direct launches generate the same profile-aware theme, so the look
+stays consistent without starting the hub first. See
+[UI style](docs/UI_STYLE.md).
 
 ### Hub
 
@@ -187,10 +188,33 @@ rofi-hub keybinds    # Keyboard Shortcuts provider
 rofi-hub show drun   # raw Rofi mode with the shared theme
 ```
 
-`rofi-hub network` opens a NetworkManager menu. It shows the active connection
-panel (SSID, signal, band, IP, gateway, subnet, broadcast, DNS, MAC, security),
-quick actions, nearby Wi-Fi networks, wired interfaces, saved profiles, edit
-saved connection, rescan, and radio toggle. It requires `nmcli`.
+`rofi-hub network` opens a NetworkManager menu. The top bar shows the active
+SSID, signal/band/security, interface, IP, and gateway. The zoned list adds
+subnet, broadcast, DNS, MAC, quick actions, nearby Wi-Fi networks, wired
+interfaces, edit-saved, rescan, and radio toggle. It does not list every saved
+profile; use **Edit saved network** when you need one. It requires `nmcli`.
+
+### Configuration
+
+Optional `~/.config/rofi-hub/config.toml`; start from
+[`config.example.toml`](docs/config.example.toml):
+
+```toml
+[ui]
+# prompt = "Rofi Hub"
+# font = "JetBrainsMono Nerd Font"
+# font_size = 12
+
+[theme]
+# mode = "gruvbox" # auto | nord | solarized | gruvbox | /path/to/theme.rasi
+
+[launcher]
+columns = 3 # 1..6; only `rofi-hub launcher` (drun)
+```
+
+Text-heavy apps stay single-column. `launcher.columns` is applied as a per-run
+Rofi theme override, so it does not change Clipboard, Network, Calendar, or
+Screen Time.
 
 ### Calendar
 
@@ -206,7 +230,9 @@ saved connection, rescan, and radio toggle. It requires `nmcli`.
 
 ### Clipboard History
 
-- Lists `cliphist` entries; `Enter` copies the selected entry with `wl-copy`.
+- Lists `cliphist` entries with type/metadata and a `HISTORY` section.
+- `Enter` copies; `Alt+d` deletes one entry; `Alt+x` clears with confirmation;
+  `Alt+r` refreshes.
 
 ### Screen Time
 

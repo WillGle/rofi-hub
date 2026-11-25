@@ -10,6 +10,14 @@ use serde::Deserialize;
 pub struct Config {
     pub ui: Ui,
     pub theme: ThemeSection,
+    pub launcher: Launcher,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct Launcher {
+    /// Number of columns in `rofi-hub launcher`; clamped to 1..=6.
+    pub columns: Option<u32>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -76,6 +84,12 @@ impl Config {
     pub fn font_size(&self) -> Option<u8> {
         self.ui.font_size.filter(|size| (6..=72).contains(size))
     }
+
+    pub fn launcher_columns(&self) -> Option<u32> {
+        self.launcher
+            .columns
+            .filter(|columns| (1..=6).contains(columns))
+    }
 }
 
 #[cfg(test)]
@@ -88,6 +102,7 @@ mod tests {
         assert_eq!(config.prompt(), "Rofi Hub");
         assert_eq!(config.font_family(), None);
         assert_eq!(config.font_size(), None);
+        assert_eq!(config.launcher_columns(), None);
     }
 
     #[test]
@@ -107,6 +122,18 @@ font_size = 200
     }
 
     #[test]
+    fn parses_and_clamps_launcher_columns() {
+        let config: Config = toml::from_str("[launcher]\ncolumns = 3\n").unwrap();
+        assert_eq!(config.launcher_columns(), Some(3));
+
+        let config: Config = toml::from_str("[launcher]\ncolumns = 0\n").unwrap();
+        assert_eq!(config.launcher_columns(), None);
+
+        let config: Config = toml::from_str("[launcher]\ncolumns = 9\n").unwrap();
+        assert_eq!(config.launcher_columns(), None);
+    }
+
+    #[test]
     fn parses_a_full_file() {
         let config: Config = toml::from_str(
             r#"
@@ -117,6 +144,9 @@ font_size = 14
 
 [theme]
 mode = "nord"
+
+[launcher]
+columns = 3
 "#,
         )
         .unwrap();
@@ -124,5 +154,6 @@ mode = "nord"
         assert_eq!(config.font_family(), Some("Iosevka"));
         assert_eq!(config.font_size(), Some(14));
         assert_eq!(config.theme.mode.as_deref(), Some("nord"));
+        assert_eq!(config.launcher_columns(), Some(3));
     }
 }

@@ -53,6 +53,12 @@ impl TestEnv {
         }
     }
 
+    fn write_config(&self, relative: &str, text: &str) {
+        let path = self.config.join(relative);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
     fn command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_rofi-hub"));
         let path = format!(
@@ -508,6 +514,25 @@ fn theme_dump_uses_app_profiles() {
     assert!(calendar.contains("64ch"), "{calendar}");
     assert!(calendar.contains("lines: 12;"), "{calendar}");
     assert!(calendar.contains("show-icons: false"), "{calendar}");
+}
+
+#[test]
+fn launcher_columns_are_applied_from_config() {
+    let env = TestEnv::new();
+    let log = env.root.path().join("rofi-args");
+    let rofi = fake_rofi(&env, &log);
+    env.write_config("rofi-hub/config.toml", "[launcher]\ncolumns = 3\n");
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["launcher"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-theme-str"), "{args}");
+    assert!(args.contains("listview { columns: 3; }"), "{args}");
 }
 
 #[test]

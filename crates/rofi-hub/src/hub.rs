@@ -42,8 +42,15 @@ pub fn run(cli: Cli) -> Result<()> {
         Some(CliCommand::List { json }) => list(json),
         Some(CliCommand::Theme { action }) => theme_command(theme, &config, action),
         Some(CliCommand::Doctor { json }) => doctor(theme, &config, json, &warnings),
-        Some(CliCommand::Launcher) => show_mode(theme, no_theme, &config, "drun", &[]),
-        Some(CliCommand::Window) => show_mode(theme, no_theme, &config, "window", &[]),
+        Some(CliCommand::Launcher) => show_mode(
+            theme,
+            no_theme,
+            &config,
+            "drun",
+            &["-p".to_owned(), "Apps".to_owned()],
+            config.launcher_columns(),
+        ),
+        Some(CliCommand::Window) => show_mode(theme, no_theme, &config, "window", &[], None),
         Some(CliCommand::Calc) => show_calc(theme, no_theme, &config),
         Some(CliCommand::Emoji) => show_mode(
             theme,
@@ -51,6 +58,7 @@ pub fn run(cli: Cli) -> Result<()> {
             &config,
             "emoji",
             &["-modi".to_owned(), "emoji".to_owned()],
+            None,
         ),
         Some(CliCommand::Power) => show_power(theme, no_theme, &config),
         Some(CliCommand::Network) => crate::network::run(theme, no_theme, &config),
@@ -58,7 +66,9 @@ pub fn run(cli: Cli) -> Result<()> {
         Some(CliCommand::Clipboard) => open_provider(theme, no_theme, &config, "clipboard"),
         Some(CliCommand::Keybinds) => open_provider(theme, no_theme, &config, "keybinds"),
         Some(CliCommand::ScreenTime) => open_provider(theme, no_theme, &config, "screen-time"),
-        Some(CliCommand::Show { mode, args }) => show_mode(theme, no_theme, &config, &mode, &args),
+        Some(CliCommand::Show { mode, args }) => {
+            show_mode(theme, no_theme, &config, &mode, &args, None)
+        }
         None => open(theme, no_theme, &config, provider),
     }
 }
@@ -78,6 +88,7 @@ fn show_mode(
     config: &Config,
     mode: &str,
     extra: &[String],
+    columns: Option<u32>,
 ) -> Result<()> {
     let choice = theme::resolve(theme_override, config)?;
     let rofi = Rofi::find()?;
@@ -88,6 +99,11 @@ fn show_mode(
     }
     if !no_theme && let Some(path) = &choice.path {
         command.arg("-theme").arg(path);
+    }
+    if let Some(columns) = columns {
+        command
+            .arg("-theme-str")
+            .arg(format!("listview {{ columns: {columns}; }}"));
     }
     command.args(extra);
     command
@@ -116,7 +132,7 @@ fn show_calc(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()>
         extra.push("-calc-command".to_owned());
         extra.push("echo -n '{result}' | wl-copy".to_owned());
     }
-    show_mode(theme, no_theme, config, "calc", &extra)
+    show_mode(theme, no_theme, config, "calc", &extra, None)
 }
 
 fn show_power(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()> {
@@ -129,6 +145,7 @@ fn show_power(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()
         config,
         "power-menu",
         &["-modi".to_owned(), format!("power-menu:{}", menu.display())],
+        None,
     )
 }
 

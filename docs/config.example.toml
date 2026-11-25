@@ -1,0 +1,15 @@
+# Optional user configuration. Copy to:
+#   ~/.config/rofi-hub/config.toml
+
+[ui]
+# prompt = "Rofi Hub"
+# font = "JetBrainsMono Nerd Font"
+# font_size = 12
+
+[theme]
+# auto | nord | solarized | gruvbox | /path/to/theme.rasi
+# mode = "gruvbox"
+
+[launcher]
+# Columns for `rofi-hub launcher` (drun). Clamped to 1..=6.
+columns = 3
