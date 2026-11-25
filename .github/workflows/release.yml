@@ -335,7 +335,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Install Alpine build tools
-        run: apk add --no-cache alpine-sdk cargo rust bash fakeroot tzdata python3
+        run: apk add --no-cache alpine-sdk cargo rust bash fakeroot tzdata python3 git
       - name: Build source asset and APK
         run: |
           set -eux

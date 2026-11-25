@@ -20,26 +20,28 @@ EPOCH="${SOURCE_DATE_EPOCH:-0}"
 
 mkdir -p "$DIST"
 tmp="$DIST/.$NAME-source.tar.gz.$$"
-trap 'rm -f -- "$tmp"' EXIT INT TERM
+files="$DIST/.$NAME-source.files.$$"
+trap 'rm -f -- "$tmp" "$files"' EXIT INT TERM
 
-# Keep the tree taggable and reproducible: no build output, no local state,
-# no git metadata, no user goal file. packaging/ install assets are included;
-# distro recipe directories are excluded because their checksums describe
-# this archive, which would otherwise be self-referential.
+git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+    printf 'package-source: must run from a git checkout\n' >&2
+    exit 1
+}
+
+# Build from tracked files only, so untracked caches, editor state, and goal
+# notes never change the release asset. packaging/ install assets are included;
+# distro recipe directories are excluded because their checksums describe this
+# archive, which would otherwise be self-referential.
+git ls-files \
+    | LC_ALL=C sort \
+    | grep -vE '^packaging/(arch|alpine|gentoo|void|slackbuilds|fedora|opensuse|alt|debian)/' \
+    | sed 's,^,./,' >"$files"
 tar --sort=name --mtime="@$EPOCH" --owner=0 --group=0 --numeric-owner \
-    --exclude='./target' --exclude='./dist' --exclude='./result' \
-    --exclude='./.git' --exclude='./.direnv' --exclude='./state' \
-    --exclude='./goal*.md' --exclude='__pycache__' --exclude='*.pyc' \
-    --exclude='./.pytest_cache' --exclude='./.mypy_cache' \
-    --exclude='./packaging/arch' --exclude='./packaging/alpine' \
-    --exclude='./packaging/gentoo' --exclude='./packaging/void' \
-    --exclude='./packaging/slackbuilds' --exclude='./packaging/fedora' \
-    --exclude='./packaging/opensuse' --exclude='./packaging/alt' \
-    --exclude='./packaging/debian' \
     --transform="s,^\./,${NAME}/," --transform="s,^\.,${NAME}," \
-    -cf - . | gzip -9n >"$tmp"
+    -cf - -T "$files" | gzip -9n >"$tmp"
 mv -f -- "$tmp" "$ASSET"
 trap - EXIT INT TERM
+rm -f -- "$files"
 
 case "$ASSET" in
     "$ROOT"/*) display="${ASSET#"$ROOT"/}" ;;

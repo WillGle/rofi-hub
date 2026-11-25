@@ -21,6 +21,6 @@ pkgbase = rofi-hub
 	conflicts = rofi-hub-git
 	options = !lto
 	source = rofi-hub-0.2.0.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v0.2.0/rofi-hub-0.2.0-source.tar.gz
-	sha256sums = 7af52da9abcd48f9f305964a0035b4da80fb372e2d8ab6677f40c9fae4aadaf9
+	sha256sums = 9af8638818e7e9a3181c4ca66b16b99de9558ba8a896b5951d2a90049f17a477
 
 pkgname = rofi-hub
