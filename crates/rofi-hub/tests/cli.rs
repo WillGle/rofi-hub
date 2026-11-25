@@ -448,6 +448,42 @@ fn network_menu_shows_details_and_connects_to_wifi() {
 }
 
 #[test]
+fn network_quick_action_connects_wired() {
+    let env = TestEnv::new();
+    let nmcli_log = env.root.path().join("nmcli.log");
+    let flag = env.root.path().join("rofi-first");
+    env.script(
+        "bin/nmcli",
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\ncase \"$*\" in\n\
+             'radio wifi') echo enabled ;;\n\
+             *DEVICE,TYPE,STATE*device*) printf 'wlan0:wifi:connected\\neth0:ethernet:disconnected\\n' ;;\n\
+             *IN-USE,SSID,SIGNAL,SECURITY,FREQ*) printf '*:Home\\n' ;;\n\
+             *GENERAL.CONNECTION*device*show*) printf 'GENERAL.CONNECTION:Home\\n' ;;\n\
+             esac\nexit 0\n",
+            nmcli_log.display()
+        ),
+    );
+    let rofi = env.script(
+        "bin/rofi",
+        &format!(
+            "#!/bin/sh\ncat >/dev/null\nif [ -f '{}' ]; then exit 1; fi\n: > '{}'\nprintf '1\\n'\n",
+            flag.display(),
+            flag.display()
+        ),
+    );
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["network"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let calls = fs::read_to_string(&nmcli_log).unwrap();
+    assert!(calls.contains("device connect eth0"), "{calls}");
+}
+
+#[test]
 fn theme_dump_uses_app_profiles() {
     let env = TestEnv::new();
     let hub = env
