@@ -19,7 +19,6 @@ use crate::theme::{self, Choice};
 enum Action {
     ConnectAp { ssid: String, security: String },
     ConnectHidden,
-    Saved(String),
     ConnectEthernet(String),
     DisconnectRole { iface: String, wifi: bool },
     Rescan,
@@ -86,10 +85,23 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
         } else {
             format!("\n{}", ui::status(&status, Level::Info, &choice.theme))
         };
+        let summary = state
+            .details
+            .as_ref()
+            .map(|details| {
+                ui::inline_detail(
+                    &[
+                        ("IP", details.address.as_deref().unwrap_or("--")),
+                        ("Gateway", details.gateway.as_deref().unwrap_or("--")),
+                    ],
+                    &choice.theme,
+                )
+            })
+            .unwrap_or_default();
         let mesg = format!(
             "{}\n{}\n{}",
             ui::header("NETWORK", &hero, &meta, &choice.theme),
-            ui::hint(&[("Enter", "select"), ("esc", "close")], &choice.theme),
+            summary,
             status_line
         );
         let fitted_width = ui::widest(&items).max(ui::widest_text(&mesg)).clamp(48, 96) + 2;
@@ -150,10 +162,6 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
             Action::ConnectEthernet(iface) => {
                 nmcli(&["device", "connect", &iface])?;
                 status = format!("Connected {iface}.");
-            }
-            Action::Saved(name) => {
-                nmcli(&["connection", "up", &name])?;
-                status = format!("Activated saved connection {name}.");
             }
             Action::ConnectHidden => {
                 let Some(iface) = &state.iface else {
@@ -347,8 +355,6 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
     let mut items = Vec::new();
     let mut actions = Vec::new();
     let ethernet = ethernet_ifaces();
-    let saved = saved_connections();
-
     push_section(&mut items, &mut actions, "QUICK ACTIONS", "", theme);
     push_row(
         &mut items,
@@ -408,20 +414,6 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
         } else {
             details.dns.join(", ")
         };
-        push_detail(
-            &mut items,
-            &mut actions,
-            "IP",
-            details.address.as_deref().unwrap_or("--"),
-            theme,
-        );
-        push_detail(
-            &mut items,
-            &mut actions,
-            "Gateway",
-            details.gateway.as_deref().unwrap_or("--"),
-            theme,
-        );
         push_detail(
             &mut items,
             &mut actions,
@@ -606,27 +598,6 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
         }
     }
 
-    if !saved.is_empty() {
-        push_section(
-            &mut items,
-            &mut actions,
-            "SAVED",
-            &format!("{} profiles", saved.len()),
-            theme,
-        );
-    }
-    for saved in saved {
-        push_row(
-            &mut items,
-            &mut actions,
-            Item::new(
-                format!("saved:{}", saved.name),
-                ui::row("\u{f02e}", &saved.name, &saved.kind, "", theme),
-            ),
-            Action::Saved(saved.name),
-        );
-    }
-
     push_row(
         &mut items,
         &mut actions,
@@ -640,7 +611,10 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
     (items, actions)
 }
 
-fn push_row(items: &mut Vec<Item>, actions: &mut Vec<Action>, item: Item, action: Action) {
+fn push_row(items: &mut Vec<Item>, actions: &mut Vec<Action>, mut item: Item, action: Action) {
+    // Rofi returns the row id; keep it numeric so the action index is stable
+    // even when labels or section ids change.
+    item.id = items.len().to_string();
     items.push(item);
     actions.push(action);
 }
@@ -652,14 +626,14 @@ fn push_section(
     meta: &str,
     theme: &Theme,
 ) {
-    items.push(
-        Item::new(
-            format!("section-{}", label.to_ascii_lowercase()),
-            ui::section(label, meta, 84, theme),
-        )
-        .active()
-        .nonselectable(),
-    );
+    let mut item = Item::new(
+        format!("section-{}", label.to_ascii_lowercase()),
+        ui::section(label, meta, 78, theme),
+    )
+    .active()
+    .nonselectable();
+    item.id = items.len().to_string();
+    items.push(item);
     actions.push(Action::Quit);
 }
 
@@ -670,13 +644,13 @@ fn push_detail(
     value: &str,
     theme: &Theme,
 ) {
-    items.push(
-        Item::new(
-            format!("detail-{}", label.to_ascii_lowercase()),
-            ui::detail_row(label, value, theme),
-        )
-        .nonselectable(),
-    );
+    let mut item = Item::new(
+        format!("detail-{}", label.to_ascii_lowercase()),
+        ui::detail_row(label, value, theme),
+    )
+    .nonselectable();
+    item.id = items.len().to_string();
+    items.push(item);
     actions.push(Action::Quit);
 }
 

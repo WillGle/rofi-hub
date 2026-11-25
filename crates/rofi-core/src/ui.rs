@@ -178,6 +178,23 @@ pub fn detail_row(label: &str, value: &str, theme: &Theme) -> String {
     )
 }
 
+/// A compact line of label/value pairs: `IP 192.0.2.42/24   Gateway 192.0.2.1`.
+pub fn inline_detail(pairs: &[(&str, &str)], theme: &Theme) -> String {
+    let parts: Vec<String> = pairs
+        .iter()
+        .map(|(label, value)| {
+            format!(
+                "<span foreground='{muted}'>{}</span> <span foreground='{text}'>{}</span>",
+                escape_markup(label),
+                escape_markup(value),
+                muted = theme.muted,
+                text = theme.text,
+            )
+        })
+        .collect();
+    parts.join("   ")
+}
+
 /// A clipboard/history row: index, colored kind glyph, title, muted metadata.
 pub fn entry_row(
     index: usize,
@@ -362,6 +379,18 @@ mod tests {
         assert!(text.contains("Alt+x"));
         assert!(!text.contains('\u{00b7}'));
         assert!(text.contains('['));
+    }
+
+    #[test]
+    fn inline_detail_keeps_pairs_on_one_line() {
+        let text = inline_detail(
+            &[("IP", "192.0.2.42/24"), ("Gateway", "192.0.2.1")],
+            &theme(),
+        );
+        assert!(text.contains("IP"));
+        assert!(text.contains("192.0.2.42/24"));
+        assert!(text.contains("Gateway"));
+        assert!(text.contains("192.0.2.1"));
     }
 
     #[test]
