@@ -71,11 +71,14 @@ fn run() -> Result<()> {
         "-selected-row".to_owned(),
         "1".to_owned(),
         "-mesg".to_owned(),
-        ui::header(
-            "SHORTCUTS",
-            &format!("{} bindings", bindings.len()),
-            "hyprland.conf",
-            &theme,
+        format!(
+            "{}\n",
+            ui::header(
+                "SHORTCUTS",
+                &format!("{} bindings", bindings.len()),
+                "hyprland.conf",
+                &theme,
+            )
         ),
     ];
 
