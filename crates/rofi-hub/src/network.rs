@@ -121,7 +121,7 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
             })
             .unwrap_or_default();
         let mesg = format!(
-            "{}\n{}\n{}",
+            "{}\n{}\n{}\n",
             ui::header("NETWORK", &hero, &meta, &choice.theme),
             summary,
             status_line

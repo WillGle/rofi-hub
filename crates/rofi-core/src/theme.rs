@@ -98,7 +98,7 @@ impl ChromeProfile {
             "calendar" => Self::new(64, 12, false, 20),
             "clipboard" => Self::new(110, 16, false, 18),
             "keybinds" => Self::new(110, 16, false, 18),
-            "network" => Self::new(90, 12, true, 20),
+            "network" => Self::new(90, 10, true, 20),
             _ => Self::new(96, 20, false, 20),
         }
     }
