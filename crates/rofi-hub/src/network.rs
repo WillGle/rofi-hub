@@ -104,7 +104,7 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
             summary,
             status_line
         );
-        let fitted_width = ui::widest(&items).max(ui::widest_text(&mesg)).clamp(48, 96) + 2;
+        let fitted_width = ui::widest(&items).max(ui::widest_text(&mesg)).clamp(48, 96) + 6;
         options.extra_args = vec![
             "-selected-row".to_owned(),
             "1".to_owned(),
@@ -628,7 +628,7 @@ fn push_section(
 ) {
     let mut item = Item::new(
         format!("section-{}", label.to_ascii_lowercase()),
-        ui::section(label, meta, 78, theme),
+        ui::section(label, meta, 74, theme),
     )
     .active()
     .nonselectable();
