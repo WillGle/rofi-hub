@@ -422,28 +422,28 @@ PUB1="$(tail -n1 "$WORK/key1.pub")"
 FIXTURE="$WORK/fixture"
 NEW_BUNDLE="$WORK/release-0.2/rofi-hub-x86_64-linux.tar.gz"
 LATEST_BUNDLE="$WORK/release-0.3/rofi-hub-x86_64-linux.tar.gz"
-make_bundle "$NEW_BUNDLE" "0.2.0"
+make_bundle "$NEW_BUNDLE" "0.2.2"
 make_bundle "$LATEST_BUNDLE" "0.3.0"
 make_fixture "$FIXTURE" "$TEST_TAG" "$BUNDLE" "$KEY1"
-make_fixture "$FIXTURE" "v0.2.0" "$NEW_BUNDLE" "$KEY1"
+make_fixture "$FIXTURE" "v0.2.2" "$NEW_BUNDLE" "$KEY1"
 make_fixture "$FIXTURE" "v0.3.0" "$LATEST_BUNDLE" "$KEY1"
 
 export ROFI_HUB_TRUSTED_KEYS="test-key-1:$PUB1"
 export ROFI_HUB_RELEASES_BASE="file://$FIXTURE"
 
 assert_success "signed hub-only update" \
-    env ROFI_HUB_LATEST_TAG=v0.2.0 bash "$ROOT/install.sh" --update --no-service
-assert_eq "0.2.0" "$(cat "$VERSION_FILE")" "update records the new version"
+    env ROFI_HUB_LATEST_TAG=v0.2.2 bash "$ROOT/install.sh" --update --no-service
+assert_eq "0.2.2" "$(cat "$VERSION_FILE")" "update records the new version"
 assert_not_file "$SC_BIN" "hub-only update does not add screen-time"
 assert_eq "hub" "$(cat "$COMPONENTS_FILE")" "hub-only update keeps the selection"
 
 set +e
-ROFI_HUB_LATEST_TAG=v0.2.0 bash "$ROOT/install.sh" --check --json >"$WORK/check-current.json"
+ROFI_HUB_LATEST_TAG=v0.2.2 bash "$ROOT/install.sh" --check --json >"$WORK/check-current.json"
 current_status=$?
 set -e
 assert_eq "0" "$current_status" "check exits 0 when current"
 assert_eq "test-key-1" "$(jq -r '.signature_key_id' "$WORK/check-current.json")" "check verifies the signed release"
-assert_eq "0.2.0" "$(jq -r '.installed_version' "$WORK/check-current.json")" "check reports the installed version"
+assert_eq "0.2.2" "$(jq -r '.installed_version' "$WORK/check-current.json")" "check reports the installed version"
 
 set +e
 ROFI_HUB_LATEST_TAG=v0.3.0 bash "$ROOT/install.sh" --check --json >"$WORK/check-new.json"
@@ -454,7 +454,7 @@ assert_eq "0.3.0" "$(jq -r '.latest_version' "$WORK/check-new.json")" "check rep
 
 # Up to date must exit before any download.
 assert_success "up-to-date update makes no download" \
-    env ROFI_HUB_LATEST_TAG=v0.2.0 ROFI_HUB_RELEASES_BASE="file://$WORK/missing" \
+    env ROFI_HUB_LATEST_TAG=v0.2.2 ROFI_HUB_RELEASES_BASE="file://$WORK/missing" \
     bash "$ROOT/install.sh" --update --no-service
 
 # Tampered asset and wrong key fail closed.
