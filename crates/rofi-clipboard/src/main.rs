@@ -10,7 +10,7 @@ use std::process::{Command, ExitCode, Stdio};
 use anyhow::{Context, Result, bail};
 use rofi_core::{ChromeProfile, DmenuOptions, Item, Outcome, Rofi, Theme, app, ui, which};
 
-const TITLE_WIDTH: usize = 64;
+const TITLE_WIDTH: usize = 72;
 
 fn main() -> ExitCode {
     match run() {
@@ -154,19 +154,14 @@ fn classify(preview: &str) -> (Kind, String, String) {
         return (
             Kind::Link,
             ui::truncate(preview, TITLE_WIDTH),
-            "link".to_owned(),
+            String::new(),
         );
     }
 
-    let count = preview.chars().count();
     (
         Kind::Text,
         ui::truncate(preview, TITLE_WIDTH),
-        if count == 1 {
-            "1 char".to_owned()
-        } else {
-            format!("{count} chars")
-        },
+        String::new(),
     )
 }
 
@@ -569,7 +564,7 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].raw, "123\tHello\tworld");
         assert_eq!(entries[0].title, "Hello world");
-        assert_eq!(entries[0].detail, "11 chars");
+        assert_eq!(entries[0].detail, "");
         assert_eq!(entries[0].kind, Kind::Text);
         assert_eq!(entries[1].raw, "456\t");
         assert_eq!(entries[1].title, "(empty)");
@@ -595,7 +590,7 @@ mod tests {
         );
         assert_eq!(entries[0].kind, Kind::Link);
         assert_eq!(entries[0].title, "https://example.com/path");
-        assert_eq!(entries[0].detail, "link");
+        assert_eq!(entries[0].detail, "");
         assert_eq!(entries[1].kind, Kind::Image);
         assert_eq!(entries[1].title, "Image");
         assert_eq!(
