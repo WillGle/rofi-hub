@@ -333,6 +333,8 @@ jobs:
     container: alpine:edge
     timeout-minutes: 45
     steps:
+      - name: Install git for checkout
+        run: apk add --no-cache git
       - uses: actions/checkout@v7
       - name: Install Alpine build tools
         run: apk add --no-cache alpine-sdk cargo rust bash fakeroot tzdata python3 git
