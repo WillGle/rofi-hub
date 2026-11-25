@@ -9,7 +9,7 @@ complete -c rofi-hub -n '__fish_use_subcommand' -a window -d 'Open the Rofi wind
 complete -c rofi-hub -n '__fish_use_subcommand' -a calc -d 'Open rofi-calc'
 complete -c rofi-hub -n '__fish_use_subcommand' -a emoji -d 'Open rofi-emoji'
 complete -c rofi-hub -n '__fish_use_subcommand' -a power -d 'Open rofi-power-menu'
-complete -c rofi-hub -n '__fish_use_subcommand' -a network -d 'Not ported in this phase'
+complete -c rofi-hub -n '__fish_use_subcommand' -a network -d 'Open the NetworkManager menu'
 complete -c rofi-hub -n '__fish_use_subcommand' -a calendar -d 'Open the Calendar provider'
 complete -c rofi-hub -n '__fish_use_subcommand' -a clipboard -d 'Open the Clipboard provider'
 complete -c rofi-hub -n '__fish_use_subcommand' -a keybinds -d 'Open the Keyboard Shortcuts provider'

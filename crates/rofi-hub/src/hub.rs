@@ -52,9 +52,7 @@ pub fn run(cli: Cli) -> Result<()> {
             &["-modi".to_owned(), "emoji".to_owned()],
         ),
         Some(CliCommand::Power) => show_power(theme, no_theme, &config),
-        Some(CliCommand::Network) => bail!(
-            "the network manager is not ported in this phase; use nmcli or your desktop network applet"
-        ),
+        Some(CliCommand::Network) => crate::network::run(theme, no_theme, &config),
         Some(CliCommand::Calendar) => open_provider(theme, no_theme, &config, "calendar"),
         Some(CliCommand::Clipboard) => open_provider(theme, no_theme, &config, "clipboard"),
         Some(CliCommand::Keybinds) => open_provider(theme, no_theme, &config, "keybinds"),

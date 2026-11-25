@@ -13,6 +13,7 @@ supported for distros that want lean dependencies.
 | `rofi-hub`, `rofi-calendar` | Rust 1.89+, C compiler, `make` | `rofi >= 2.0` | — |
 | `rofi-keybinds` | Rust 1.89+ | `rofi`, Hyprland config | Hyprland |
 | `rofi-clipboard` | Rust 1.89+ | `rofi`, `cliphist`, `wl-clipboard` | Wayland |
+| `rofi-hub network` | Rust 1.89+ | `rofi`, NetworkManager (`nmcli`) | NetworkManager |
 | `screen-time` | Rust 1.89+, C compiler, `make` | `rofi`, Hyprland, systemd user, `tzdata` | systemd, Hyprland |
 | `rofi-screen-time` | — | `bash`, `rofi`, `screen-time` | — |
 | installer (`install.sh`) | `minisign` | `rofi`, systemd user | — |

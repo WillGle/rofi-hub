@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod hub;
+mod network;
 mod theme;
 
 use clap::Parser;

@@ -149,8 +149,9 @@ rofi-hub keybinds    # Keyboard Shortcuts provider
 rofi-hub show drun   # raw Rofi mode with the shared theme
 ```
 
-`rofi-hub network` is intentionally not ported in this phase; use `nmcli` or
-the desktop network applet.
+`rofi-hub network` opens a NetworkManager menu: Wi-Fi scan/connect, password
+prompt, saved connections, Ethernet devices, rescan, and radio toggle. It
+requires `nmcli` from NetworkManager.
 
 ### Calendar
 

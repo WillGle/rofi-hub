@@ -66,7 +66,7 @@ pub enum Command {
     /// Power menu through rofi-power-menu.
     Power,
 
-    /// Network manager (not ported in this phase).
+    /// NetworkManager Wi-Fi and Ethernet menu.
     #[command(alias = "wifi")]
     Network,
 

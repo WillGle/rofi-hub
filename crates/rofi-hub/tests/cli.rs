@@ -349,7 +349,7 @@ fn provider_aliases_open_the_same_provider() {
 }
 
 #[test]
-fn missing_power_menu_and_unported_network_fail_cleanly() {
+fn missing_power_menu_and_nmcli_fail_cleanly() {
     let env = TestEnv::new();
     let log = env.root.path().join("rofi-args");
     let rofi = fake_rofi(&env, &log);
@@ -372,7 +372,50 @@ fn missing_power_menu_and_unported_network_fail_cleanly() {
         .output()
         .unwrap();
     assert!(!output.status.success());
-    assert!(stderr(&output).contains("network manager is not ported"));
+    assert!(stderr(&output).contains("nmcli"));
+}
+
+#[test]
+fn network_menu_lists_and_connects_to_wifi() {
+    let env = TestEnv::new();
+    let nmcli_log = env.root.path().join("nmcli.log");
+    let count = env.root.path().join("rofi-count");
+    env.script(
+        "bin/nmcli",
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\ncase \"$*\" in\n\
+             'radio wifi') echo enabled ;;\n\
+             *DEVICE,TYPE,STATE*device*) printf 'wlan0:wifi:connected\\n' ;;\n\
+             *IN-USE,SSID,SIGNAL,SECURITY*) printf '*:Home\\\\:5G:82:WPA2\\n :Open:41:--\\n' ;;\n\
+             *NAME,TYPE*connection*show*) printf 'Home:802-11-wireless\\n' ;;\n\
+             esac\nexit 0\n",
+            nmcli_log.display()
+        ),
+    );
+    let rofi = env.script(
+        "bin/rofi",
+        &format!(
+            "#!/bin/sh\nn=0\n[ -f '{}' ] && n=$(cat '{}')\nn=$((n + 1))\nprintf '%s\\n' \"$n\" > '{}'\n\
+             case \"$n\" in 1) printf '0\\n' ;; 2) printf 'secret\\n' ;; *) exit 1 ;; esac\n",
+            count.display(),
+            count.display(),
+            count.display()
+        ),
+    );
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .env("NMCLI_LOG", &nmcli_log)
+        .args(["network"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let calls = fs::read_to_string(&nmcli_log).unwrap();
+    assert!(
+        calls.contains("device wifi connect Home:5G ifname wlan0 password secret"),
+        "{calls}"
+    );
 }
 
 #[test]

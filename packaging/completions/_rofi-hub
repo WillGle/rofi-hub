@@ -19,7 +19,7 @@ _rofi-hub() {
                 'calc[open rofi-calc]' \
                 'emoji[open rofi-emoji]' \
                 'power[open rofi-power-menu]' \
-                'network[not ported in this phase]' \
+                'network[open the NetworkManager menu]' \
                 'calendar[open the Calendar provider]' \
                 'clipboard[open the Clipboard provider]' \
                 'keybinds[open the Keyboard Shortcuts provider]' \
