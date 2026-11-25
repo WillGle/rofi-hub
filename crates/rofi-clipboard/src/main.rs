@@ -10,7 +10,7 @@ use std::process::{Command, ExitCode, Stdio};
 use anyhow::{Context, Result, bail};
 use rofi_core::{ChromeProfile, DmenuOptions, Item, Outcome, Rofi, Theme, app, ui, which};
 
-const TITLE_WIDTH: usize = 68;
+const TITLE_WIDTH: usize = 64;
 
 fn main() -> ExitCode {
     match run() {
@@ -264,7 +264,7 @@ fn empty_header(theme: &Theme) -> String {
 fn render_items(entries: &[Entry], theme: &Theme) -> Vec<Item> {
     let width = ChromeProfile::for_app("clipboard")
         .width_ch
-        .saturating_sub(14);
+        .saturating_sub(26);
     let mut items = Vec::with_capacity(entries.len() + 1);
     items.push(
         Item::new(
