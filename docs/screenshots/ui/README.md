@@ -38,7 +38,8 @@ DISPLAY=:99 import -window root docs/screenshots/ui/hub-gruvbox.png
 ```
 
 Set `ROFI_HUB_THEME` to `nord`, `solarized`, `gruvbox`, or unset it for `auto`.
-Fake `cliphist`, `wl-copy`, `nmcli`, and a small `hyprland.conf` provide
-deterministic data for the non-hub apps. Network captures use
-`fixtures/nmcli`: example SSIDs, TEST-NET-1 IPv4 (`192.0.2.0/24`), and the
-locally administered MAC `02:00:00:00:00:01`.
+The committed `fixtures/` directory contains the fake `cliphist`, `wl-copy`,
+and `nmcli` scripts plus a small `hyprland.conf` for deterministic non-hub
+captures. Network captures use `fixtures/nmcli`: example SSIDs, TEST-NET-1
+IPv4 (`192.0.2.0/24`), and the locally administered MAC
+`02:00:00:00:00:01`.

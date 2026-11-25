@@ -1,0 +1,14 @@
+#!/bin/sh
+case "$1" in
+  list)
+    printf '1\tOpenBranch has moved to a new domain. Update your bookmarks to example.com.\n'
+    printf '2\thttps://example.com/docs/rofi-hub/themes\n'
+    printf '3\t[[ binary data 40 KiB png 1524x513 ]]\n'
+    printf '4\tnix build .#  # all-in-one (hub + Screen Time)\n'
+    printf '5\tgit clone ssh://git@example.com/team/project.git\n'
+    printf '6\tA longer text preview that should stay on one line and show how the metadata column behaves.\n'
+    printf '7\t[[ binary data 218 KiB png 1396x1167 ]]\n'
+    printf '8\tjournalctl --user -u screen-time -f\n'
+    ;;
+  decode) cat ;;
+esac

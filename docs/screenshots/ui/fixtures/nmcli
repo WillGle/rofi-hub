@@ -2,12 +2,17 @@
 case "$*" in
   'radio wifi') echo enabled ;;
   '-t -f DEVICE,TYPE,STATE device')
-    printf 'wlan0:wifi:connected\n'
+    printf 'wlan0:wifi:connected\neth0:ethernet:unavailable\n'
     ;;
   *IN-USE,SSID,SIGNAL,SECURITY,FREQ*)
     printf '*:Example WiFi:77:WPA2:5180\n'
-    printf ' :Neighbor 5G:64:WPA2:5745\n'
+    printf ' :Example WiFi:64:WPA2:5745\n'
+    printf ' :Neighbor 5G:92:WPA1 WPA2:5180\n'
+    printf ' :Neighbor 5G:87:WPA1 WPA2:2412\n'
     printf ' :Guest Network:41:WPA1:2412\n'
+    printf ' :IoT 2.4G:69:WPA2:2412\n'
+    printf ' :Cafe Open:45:--:2462\n'
+    printf ' :Office WiFi:55:WPA2:5745\n'
     ;;
   *GENERAL.CONNECTION*device*show*)
     printf 'GENERAL.CONNECTION:Example WiFi\n'
@@ -15,10 +20,12 @@ case "$*" in
     printf 'IP4.ADDRESS[1]:192.0.2.42/24\n'
     printf 'IP4.GATEWAY:192.0.2.1\n'
     printf 'IP4.DNS[1]:192.0.2.53\n'
+    printf 'IP4.DNS[2]:192.0.2.54\n'
     ;;
   *NAME,TYPE*connection*show*)
     printf 'Example WiFi:802-11-wireless\n'
     printf 'Office WiFi:802-11-wireless\n'
+    printf 'Wired:802-3-ethernet\n'
     ;;
 esac
 exit 0
