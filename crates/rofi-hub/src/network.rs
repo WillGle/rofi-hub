@@ -942,8 +942,8 @@ mod tests {
     #[test]
     fn computes_ipv4_subnet_and_broadcast() {
         assert_eq!(
-            ipv4_network("192.168.100.75/24"),
-            Some(("192.168.100.0".to_owned(), "192.168.100.255".to_owned()))
+            ipv4_network("192.0.2.42/24"),
+            Some(("192.0.2.0".to_owned(), "192.0.2.255".to_owned()))
         );
         assert_eq!(
             ipv4_network("10.0.0.5/8"),

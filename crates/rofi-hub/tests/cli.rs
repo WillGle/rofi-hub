@@ -389,7 +389,7 @@ fn network_menu_shows_details_and_connects_to_wifi() {
              'radio wifi') echo enabled ;;\n\
              *DEVICE,TYPE,STATE*device*) printf 'wlan0:wifi:connected\\n' ;;\n\
              *IN-USE,SSID,SIGNAL,SECURITY,FREQ*) printf '*:Home\\\\:5G:82:WPA2:5180\\n :Open:41:--:2412\\n' ;;\n\
-             *GENERAL.CONNECTION*device*show*) printf 'GENERAL.CONNECTION:Home\\nGENERAL.HWADDR:20:BD:1D:78:96:D7\\nIP4.ADDRESS[1]:192.168.100.75/24\\nIP4.GATEWAY:192.168.100.1\\nIP4.DNS[1]:192.168.100.1\\n' ;;\n\
+             *GENERAL.CONNECTION*device*show*) printf 'GENERAL.CONNECTION:Home\\nGENERAL.HWADDR:02:00:00:00:00:01\\nIP4.ADDRESS[1]:192.0.2.42/24\\nIP4.GATEWAY:192.0.2.1\\nIP4.DNS[1]:192.0.2.1\\n' ;;\n\
              *NAME,TYPE*connection*show*) printf 'Home:802-11-wireless\\n' ;;\n\
              esac\nexit 0\n",
             nmcli_log.display()
@@ -431,11 +431,11 @@ fn network_menu_shows_details_and_connects_to_wifi() {
     );
     for expected in [
         "Wi-Fi: Home:5G",
-        "192.168.100.75/24",
-        "192.168.100.1",
-        "192.168.100.0",
-        "192.168.100.255",
-        "20:BD:1D:78:96:D7",
+        "192.0.2.42/24",
+        "192.0.2.1",
+        "192.0.2.0",
+        "192.0.2.255",
+        "02:00:00:00:00:01",
         "WPA2",
         "5 GHz",
         "QUICK ACTIONS",
