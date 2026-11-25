@@ -1,7 +1,7 @@
 //! Small wrapper around `rofi -dmenu`.
 
 use std::env;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
@@ -156,7 +156,15 @@ impl Rofi {
 
         if let Some(stdin) = child.stdin.as_mut() {
             for item in items {
-                writeln!(stdin, "{}", item.to_line())?;
+                if let Err(source) = writeln!(stdin, "{}", item.to_line()) {
+                    // Rofi closes its stdin as soon as it has enough rows or
+                    // the user cancels; that is a normal early exit, not a
+                    // fatal prompt error.
+                    if source.kind() == ErrorKind::BrokenPipe {
+                        break;
+                    }
+                    return Err(source.into());
+                }
             }
         }
         drop(child.stdin.take());
