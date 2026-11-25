@@ -376,17 +376,20 @@ fn missing_power_menu_and_nmcli_fail_cleanly() {
 }
 
 #[test]
-fn network_menu_lists_and_connects_to_wifi() {
+fn network_menu_shows_details_and_connects_to_wifi() {
     let env = TestEnv::new();
     let nmcli_log = env.root.path().join("nmcli.log");
-    let count = env.root.path().join("rofi-count");
+    let rofi_args = env.root.path().join("rofi-args");
+    let rofi_stdin = env.root.path().join("rofi-stdin");
+    let flag = env.root.path().join("rofi-first");
     env.script(
         "bin/nmcli",
         &format!(
             "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\ncase \"$*\" in\n\
              'radio wifi') echo enabled ;;\n\
              *DEVICE,TYPE,STATE*device*) printf 'wlan0:wifi:connected\\n' ;;\n\
-             *IN-USE,SSID,SIGNAL,SECURITY*) printf '*:Home\\\\:5G:82:WPA2\\n :Open:41:--\\n' ;;\n\
+             *IN-USE,SSID,SIGNAL,SECURITY,FREQ*) printf '*:Home\\\\:5G:82:WPA2:5180\\n :Open:41:--:2412\\n' ;;\n\
+             *GENERAL.CONNECTION*device*show*) printf 'GENERAL.CONNECTION:Home\\nGENERAL.HWADDR:20:BD:1D:78:96:D7\\nIP4.ADDRESS[1]:192.168.100.75/24\\nIP4.GATEWAY:192.168.100.1\\nIP4.DNS[1]:192.168.100.1\\n' ;;\n\
              *NAME,TYPE*connection*show*) printf 'Home:802-11-wireless\\n' ;;\n\
              esac\nexit 0\n",
             nmcli_log.display()
@@ -395,27 +398,53 @@ fn network_menu_lists_and_connects_to_wifi() {
     let rofi = env.script(
         "bin/rofi",
         &format!(
-            "#!/bin/sh\nn=0\n[ -f '{}' ] && n=$(cat '{}')\nn=$((n + 1))\nprintf '%s\\n' \"$n\" > '{}'\n\
-             case \"$n\" in 1) printf '1\\n' ;; 2) printf 'secret\\n' ;; *) exit 1 ;; esac\n",
-            count.display(),
-            count.display(),
-            count.display()
+            "#!/bin/sh\ninput=$(cat)\nprintf '%s\\n' \"$input\" >> '{}'\n\
+             printf '%s\\n' \"$@\" >> '{}'\n\
+             if [ -f '{}' ]; then exit 1; fi\n\
+             : > '{}'\nprintf '7\\n'\n",
+            rofi_stdin.display(),
+            rofi_args.display(),
+            flag.display(),
+            flag.display()
         ),
     );
 
+    // 7 is the open `Open` access point: QUICK ACTIONS occupies 0-4,
+    // NEARBY WI-FI is 5, Home:5G 6, Open 7.
     let output = env
         .command()
         .env("ROFI_BIN", &rofi)
-        .env("NMCLI_LOG", &nmcli_log)
         .args(["network"])
         .output()
         .unwrap();
     assert!(output.status.success(), "{}", stderr(&output));
+
     let calls = fs::read_to_string(&nmcli_log).unwrap();
     assert!(
-        calls.contains("device wifi connect Home:5G ifname wlan0 password secret"),
+        calls.contains("device wifi connect Open ifname wlan0"),
         "{calls}"
     );
+    let args = format!(
+        "{}\n{}",
+        fs::read_to_string(&rofi_args).unwrap(),
+        fs::read_to_string(&rofi_stdin).unwrap()
+    );
+    for expected in [
+        "Wi-Fi: Home:5G",
+        "192.168.100.75/24",
+        "192.168.100.1",
+        "192.168.100.0",
+        "192.168.100.255",
+        "20:BD:1D:78:96:D7",
+        "WPA2",
+        "5 GHz",
+        "QUICK ACTIONS",
+        "NEARBY WI-FI",
+        "MANAGE",
+        "Edit saved network",
+    ] {
+        assert!(args.contains(expected), "missing {expected} in {args}");
+    }
 }
 
 #[test]

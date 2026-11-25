@@ -5,10 +5,11 @@
 //! machine small: scan, connect (including a password prompt), saved profiles,
 //! wired devices, radio toggle, rescan, and disconnect.
 
+use std::env;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{DmenuOptions, Item, Level, Outcome, Rofi, Theme, paths, ui, which};
+use rofi_core::{DmenuOptions, Item, Level, Outcome, Rofi, Theme, escape_markup, paths, ui, which};
 
 use crate::config::Config;
 use crate::hub::rofi_config;
@@ -22,6 +23,8 @@ enum Action {
     ConnectEthernet(String),
     DisconnectRole { iface: String, wifi: bool },
     Rescan,
+    ConnectWired,
+    EditSaved,
     WifiOn,
     WifiOff,
     Quit,
@@ -32,6 +35,19 @@ struct WifiState {
     enabled: bool,
     iface: Option<String>,
     active_ssid: Option<String>,
+    active: Option<AccessPoint>,
+    details: Option<ConnectionDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConnectionDetails {
+    connection: String,
+    address: Option<String>,
+    gateway: Option<String>,
+    subnet: Option<String>,
+    broadcast: Option<String>,
+    dns: Vec<String>,
+    mac: Option<String>,
 }
 
 pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Result<()> {
@@ -62,6 +78,7 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
             .iface
             .clone()
             .unwrap_or_else(|| "no wireless adapter".to_owned());
+        let details = connection_panel(&state, &choice.theme);
         let status_line = if status.is_empty() {
             String::new()
         } else {
@@ -72,8 +89,9 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
             "1".to_owned(),
             "-mesg".to_owned(),
             format!(
-                "{}{}",
+                "{}{}{}",
                 ui::header("NETWORK", &hero, &meta, &choice.theme),
+                details,
                 status_line
             ),
         ];
@@ -107,6 +125,16 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
                     status = format!("Requested a Wi-Fi scan on {iface}.");
                 }
             }
+            Action::ConnectWired => {
+                let Some(iface) = ethernet_ifaces().into_iter().find(|iface| !iface.connected)
+                else {
+                    status = "No wired interface available.".to_owned();
+                    continue;
+                };
+                nmcli(&["device", "connect", &iface.name])?;
+                status = format!("Connected {}.", iface.name);
+            }
+            Action::EditSaved => edit_saved(&rofi, &choice, no_theme, &mut status)?,
             Action::DisconnectRole { iface, wifi } => {
                 nmcli(&["device", "disconnect", &iface])?;
                 status = format!(
@@ -206,9 +234,183 @@ fn connect_ap(
     }
 }
 
+fn connection_panel(state: &WifiState, theme: &Theme) -> String {
+    let Some(details) = &state.details else {
+        return String::new();
+    };
+    let active = state.active.as_ref();
+    let ssid = active
+        .map(|ap| ap.ssid.as_str())
+        .filter(|ssid| !ssid.is_empty())
+        .unwrap_or(details.connection.as_str());
+    let signal = active.map_or_else(|| "--".to_owned(), |ap| ap.signal.to_string());
+    let band = active.map(AccessPoint::band).unwrap_or("");
+    let security = active
+        .map(|ap| ap.security.as_str())
+        .filter(|value| !value.is_empty() && *value != "--")
+        .unwrap_or("--");
+    let ip = details.address.as_deref().unwrap_or("--");
+    let gateway = details.gateway.as_deref().unwrap_or("--");
+    let subnet = details.subnet.as_deref().unwrap_or("--");
+    let broadcast = details.broadcast.as_deref().unwrap_or("--");
+    let dns = if details.dns.is_empty() {
+        "--".to_owned()
+    } else {
+        details.dns.join(", ")
+    };
+    let mac = details.mac.as_deref().unwrap_or("--");
+    format!(
+        "\n<span foreground='{accent}' weight='bold'>Wi-Fi: {ssid}</span>\
+         <span foreground='{muted}'> ({signal}%{band})</span>\n\
+         <span foreground='{muted}'>IP:</span> {ip}   <span foreground='{muted}'>Gateway:</span> {gateway}\n\
+         <span foreground='{muted}'>Subnet:</span> {subnet}   <span foreground='{muted}'>Broadcast:</span> {broadcast}\n\
+         <span foreground='{muted}'>DNS:</span> {dns}   <span foreground='{muted}'>MAC:</span> {mac}\n\
+         <span foreground='{muted}'>Security:</span> {security}",
+        accent = theme.accent,
+        muted = theme.muted,
+        band = if band.is_empty() {
+            String::new()
+        } else {
+            format!(", {band}")
+        },
+        ip = escape_markup(ip),
+        gateway = escape_markup(gateway),
+        subnet = escape_markup(subnet),
+        broadcast = escape_markup(broadcast),
+        dns = escape_markup(&dns),
+        mac = escape_markup(mac),
+        security = escape_markup(security),
+        ssid = escape_markup(ssid),
+        signal = signal,
+    )
+}
+
+fn edit_saved(rofi: &Rofi, choice: &Choice, no_theme: bool, status: &mut String) -> Result<()> {
+    let saved = saved_connections();
+    if saved.is_empty() {
+        *status = "No saved connections.".to_owned();
+        return Ok(());
+    }
+    let items: Vec<Item> = saved
+        .iter()
+        .map(|saved| {
+            Item::new(
+                saved.name.clone(),
+                ui::row("\u{f02e}", &saved.name, &saved.kind, "", &choice.theme),
+            )
+        })
+        .collect();
+    let mut options = DmenuOptions::new("EDIT CONNECTION");
+    if !no_theme {
+        options.theme = choice.path.clone();
+    }
+    options.config = rofi_config();
+    let runtime = paths::hub_runtime_dir();
+    let _ = std::fs::create_dir_all(&runtime);
+    options.pid = Some(runtime.join("rofi-network-edit.pid"));
+    options.extra_args = vec![
+        "-mesg".to_owned(),
+        ui::header(
+            "EDIT CONNECTION",
+            "Saved profiles",
+            "Enter opens `nmcli connection edit` in a terminal",
+            &choice.theme,
+        ),
+    ];
+    if let Outcome::Selected(name) = rofi.dmenu(&items, &options)? {
+        edit_connection(&name, status)?;
+    }
+    Ok(())
+}
+
+fn edit_connection(name: &str, status: &mut String) -> Result<()> {
+    let mut candidates = Vec::new();
+    if let Ok(terminal) = env::var("TERMINAL")
+        && !terminal.trim().is_empty()
+    {
+        candidates.push(terminal);
+    }
+    candidates.extend(["foot", "kitty", "alacritty", "wezterm", "xterm"].map(str::to_owned));
+    let Some(terminal) = candidates
+        .into_iter()
+        .find(|candidate| which::find(candidate).is_some())
+    else {
+        *status = format!("No terminal found; run `nmcli connection edit id {name}`.");
+        return Ok(());
+    };
+    let mut command = Command::new(&terminal);
+    if terminal.contains("wezterm") {
+        command.args(["start", "--"]);
+    } else {
+        command.arg("-e");
+    }
+    command
+        .args(["nmcli", "connection", "edit", "id", name])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    match command.spawn() {
+        Ok(_) => *status = format!("Opened editor for {name}."),
+        Err(error) => *status = format!("Could not open a terminal: {error}"),
+    }
+    Ok(())
+}
+
 fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
     let mut items = Vec::new();
     let mut actions = Vec::new();
+    let ethernet = ethernet_ifaces();
+    let saved = saved_connections();
+
+    push_section(&mut items, &mut actions, "QUICK ACTIONS", "", theme);
+    push_row(
+        &mut items,
+        &mut actions,
+        Item::new(
+            "wired",
+            ui::row("\u{f00c}", "Connect wired network", "", "", theme),
+        ),
+        Action::ConnectWired,
+    );
+    push_row(
+        &mut items,
+        &mut actions,
+        Item::new(
+            "new-network",
+            ui::row("\u{f067}", "Connect new network", "", "", theme),
+        ),
+        Action::ConnectHidden,
+    );
+    push_row(
+        &mut items,
+        &mut actions,
+        Item::new(
+            "rescan",
+            ui::row("\u{f021}", "Scan for networks", "", "", theme),
+        ),
+        Action::Rescan,
+    );
+    if state.enabled {
+        push_row(
+            &mut items,
+            &mut actions,
+            Item::new(
+                "wifi-off",
+                ui::row("\u{f00d}", "Turn Wi-Fi off", "", "", theme),
+            ),
+            Action::WifiOff,
+        );
+    } else {
+        push_row(
+            &mut items,
+            &mut actions,
+            Item::new(
+                "wifi-on",
+                ui::row("\u{f00c}", "Turn Wi-Fi on", "", "", theme),
+            ),
+            Action::WifiOn,
+        );
+    }
 
     if state.enabled {
         if let Some(iface) = &state.iface {
@@ -216,7 +418,7 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
             push_section(
                 &mut items,
                 &mut actions,
-                "WI-FI",
+                "NEARBY WI-FI",
                 &format!("{} networks", access_points.len()),
                 theme,
             );
@@ -230,9 +432,30 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
                 );
             }
             for ap in access_points {
-                let open = ap.security.is_empty() || ap.security == "--";
-                let lock = if open { "" } else { "\u{f023}" };
-                let active = if ap.active { "\u{25cf}" } else { "" };
+                let open = ap.security.is_empty()
+                    || ap.security == "--"
+                    || ap.security.eq_ignore_ascii_case("open");
+                let trailing = if ap.active {
+                    "\u{2713}".to_owned()
+                } else if open {
+                    String::new()
+                } else {
+                    "\u{f023}".to_owned()
+                };
+                let band = ap.band();
+                let detail = if band.is_empty() {
+                    format!(
+                        "{}% \u{00b7} {}",
+                        ap.signal,
+                        if open { "open" } else { &ap.security }
+                    )
+                } else {
+                    format!(
+                        "{}% \u{00b7} {band} \u{00b7} {}",
+                        ap.signal,
+                        if open { "open" } else { &ap.security }
+                    )
+                };
                 push_row(
                     &mut items,
                     &mut actions,
@@ -242,12 +465,8 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
                             signal_glyph(ap.signal),
                             &theme.browser,
                             &ap.ssid,
-                            &format!(
-                                "{}% \u{00b7} {}",
-                                ap.signal,
-                                if open { "open" } else { "secured" }
-                            ),
-                            if active.is_empty() { lock } else { active },
+                            &detail,
+                            &trailing,
                             theme,
                         ),
                     ),
@@ -257,55 +476,14 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
                     },
                 );
             }
-            push_row(
-                &mut items,
-                &mut actions,
-                Item::new(
-                    "rescan",
-                    ui::row("\u{f021}", "Scan for networks", "", "", theme),
-                ),
-                Action::Rescan,
-            );
-            push_row(
-                &mut items,
-                &mut actions,
-                Item::new(
-                    "hidden",
-                    ui::row("\u{f023}", "Connect to hidden network", "", "", theme),
-                ),
-                Action::ConnectHidden,
-            );
-            if let Some(ssid) = &state.active_ssid {
-                push_row(
-                    &mut items,
-                    &mut actions,
-                    Item::new(
-                        "disconnect",
-                        ui::row(
-                            "\u{f00d}",
-                            &format!("Disconnect from {ssid}"),
-                            "",
-                            "",
-                            theme,
-                        ),
-                    ),
-                    Action::DisconnectRole {
-                        iface: iface.clone(),
-                        wifi: true,
-                    },
-                );
-            }
-            push_row(
-                &mut items,
-                &mut actions,
-                Item::new(
-                    "wifi-off",
-                    ui::row("\u{f00d}", "Turn Wi-Fi off", "", "", theme),
-                ),
-                Action::WifiOff,
-            );
         } else {
-            push_section(&mut items, &mut actions, "WI-FI", "no adapter", theme);
+            push_section(
+                &mut items,
+                &mut actions,
+                "NEARBY WI-FI",
+                "no adapter",
+                theme,
+            );
             push_row(
                 &mut items,
                 &mut actions,
@@ -313,20 +491,39 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
                 Action::WifiOff,
             );
         }
-    } else {
-        push_section(&mut items, &mut actions, "WI-FI", "disabled", theme);
+    }
+
+    push_section(&mut items, &mut actions, "MANAGE", "", theme);
+    if let Some(ssid) = &state.active_ssid {
         push_row(
             &mut items,
             &mut actions,
             Item::new(
-                "wifi-on",
-                ui::row("\u{f00c}", "Turn Wi-Fi on", "", "", theme),
+                "disconnect",
+                ui::row(
+                    "\u{f00d}",
+                    &format!("Disconnect current network ({ssid})"),
+                    "",
+                    "",
+                    theme,
+                ),
             ),
-            Action::WifiOn,
+            Action::DisconnectRole {
+                iface: state.iface.clone().unwrap_or_default(),
+                wifi: true,
+            },
         );
     }
+    push_row(
+        &mut items,
+        &mut actions,
+        Item::new(
+            "edit-saved",
+            ui::row("\u{f02e}", "Edit saved network", "", "", theme),
+        ),
+        Action::EditSaved,
+    );
 
-    let ethernet = ethernet_ifaces();
     if !ethernet.is_empty() {
         push_section(
             &mut items,
@@ -375,7 +572,6 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
         }
     }
 
-    let saved = saved_connections();
     if !saved.is_empty() {
         push_section(
             &mut items,
@@ -397,14 +593,6 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
         );
     }
 
-    if items.is_empty() {
-        push_row(
-            &mut items,
-            &mut actions,
-            Item::new("empty", ui::empty("No NetworkManager devices found", theme)),
-            Action::Quit,
-        );
-    }
     push_row(
         &mut items,
         &mut actions,
@@ -446,6 +634,18 @@ struct AccessPoint {
     ssid: String,
     signal: u8,
     security: String,
+    freq: u32,
+}
+
+impl AccessPoint {
+    fn band(&self) -> &'static str {
+        match self.freq {
+            5925.. => "6 GHz",
+            4900.. => "5 GHz",
+            2400.. => "2.4 GHz",
+            _ => "",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -479,9 +679,9 @@ fn wifi_state() -> Result<WifiState> {
     }
     if let Some(iface) = &state.iface {
         let aps = access_points(iface);
-        state.active_ssid = aps.iter().find(|ap| ap.active).map(|ap| ap.ssid.clone());
-        // `access_points` is intentionally only the visible list; an active
-        // hidden network is still reported by `device wifi list` when present.
+        state.active = aps.iter().find(|ap| ap.active).cloned();
+        state.active_ssid = state.active.as_ref().map(|ap| ap.ssid.clone());
+        state.details = connection_details(iface);
     }
     Ok(state)
 }
@@ -490,7 +690,7 @@ fn access_points(iface: &str) -> Vec<AccessPoint> {
     let output = nmcli(&[
         "-t",
         "-f",
-        "IN-USE,SSID,SIGNAL,SECURITY",
+        "IN-USE,SSID,SIGNAL,SECURITY,FREQ",
         "device",
         "wifi",
         "list",
@@ -503,8 +703,8 @@ fn access_points(iface: &str) -> Vec<AccessPoint> {
     output
         .lines()
         .filter_map(|line| {
-            let fields = split_fields(line, 4);
-            if fields.len() < 4 || fields[1].is_empty() {
+            let fields = split_fields(line, 5);
+            if fields.len() < 5 || fields[1].is_empty() {
                 return None;
             }
             Some(AccessPoint {
@@ -512,9 +712,74 @@ fn access_points(iface: &str) -> Vec<AccessPoint> {
                 ssid: fields[1].clone(),
                 signal: fields[2].parse().unwrap_or(0),
                 security: fields[3].clone(),
+                freq: fields[4].parse().unwrap_or(0),
             })
         })
         .collect()
+}
+
+fn connection_details(iface: &str) -> Option<ConnectionDetails> {
+    let output = nmcli(&[
+        "-t",
+        "-f",
+        "GENERAL.CONNECTION,GENERAL.HWADDR,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS",
+        "device",
+        "show",
+        iface,
+    ])
+    .ok()?;
+    let mut details = ConnectionDetails {
+        connection: iface.to_owned(),
+        address: None,
+        gateway: None,
+        subnet: None,
+        broadcast: None,
+        dns: Vec::new(),
+        mac: None,
+    };
+    for line in output.lines() {
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            continue;
+        }
+        match key {
+            "GENERAL.CONNECTION" => details.connection = value.to_owned(),
+            "GENERAL.HWADDR" => details.mac = Some(value.to_owned()),
+            "IP4.ADDRESS[1]" | "IP4.ADDRESS" => details.address = Some(value.to_owned()),
+            "IP4.GATEWAY" => details.gateway = Some(value.to_owned()),
+            key if key.starts_with("IP4.DNS") => details.dns.push(value.to_owned()),
+            _ => {}
+        }
+    }
+    if let Some(address) = &details.address
+        && let Some((subnet, broadcast)) = ipv4_network(address)
+    {
+        details.subnet = Some(subnet);
+        details.broadcast = Some(broadcast);
+    }
+    Some(details)
+}
+
+fn ipv4_network(address: &str) -> Option<(String, String)> {
+    let (ip, prefix) = address.split_once('/')?;
+    let ip: std::net::Ipv4Addr = ip.parse().ok()?;
+    let prefix: u32 = prefix.parse().ok()?;
+    if prefix > 32 {
+        return None;
+    }
+    let mask = if prefix == 0 {
+        0
+    } else {
+        u32::MAX << (32 - prefix)
+    };
+    let ip = u32::from(ip);
+    Some((
+        std::net::Ipv4Addr::from(ip & mask).to_string(),
+        std::net::Ipv4Addr::from((ip & mask) | !mask).to_string(),
+    ))
 }
 
 fn ethernet_ifaces() -> Vec<Ethernet> {
@@ -653,22 +918,38 @@ mod tests {
 
     #[test]
     fn parses_wifi_list_rows() {
-        let rows = "*:Home\\:5G:82:WPA2\n :Cafe:41:--\n";
+        let rows = "*:Home\\:5G:82:WPA2:5180\n :Cafe:41:--:2412\n";
         let aps: Vec<AccessPoint> = rows
             .lines()
             .filter_map(|line| {
-                let fields = split_fields(line, 4);
-                (fields.len() == 4 && !fields[1].is_empty()).then(|| AccessPoint {
+                let fields = split_fields(line, 5);
+                (fields.len() == 5 && !fields[1].is_empty()).then(|| AccessPoint {
                     active: fields[0] == "*",
                     ssid: fields[1].clone(),
                     signal: fields[2].parse().unwrap_or(0),
                     security: fields[3].clone(),
+                    freq: fields[4].parse().unwrap_or(0),
                 })
             })
             .collect();
         assert_eq!(aps[0].ssid, "Home:5G");
         assert_eq!(aps[0].signal, 82);
+        assert_eq!(aps[0].band(), "5 GHz");
         assert_eq!(aps[1].security, "--");
+        assert_eq!(aps[1].band(), "2.4 GHz");
+    }
+
+    #[test]
+    fn computes_ipv4_subnet_and_broadcast() {
+        assert_eq!(
+            ipv4_network("192.168.100.75/24"),
+            Some(("192.168.100.0".to_owned(), "192.168.100.255".to_owned()))
+        );
+        assert_eq!(
+            ipv4_network("10.0.0.5/8"),
+            Some(("10.0.0.0".to_owned(), "10.255.255.255".to_owned()))
+        );
+        assert_eq!(ipv4_network("bad"), None);
     }
 
     #[test]

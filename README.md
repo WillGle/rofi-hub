@@ -174,9 +174,10 @@ rofi-hub keybinds    # Keyboard Shortcuts provider
 rofi-hub show drun   # raw Rofi mode with the shared theme
 ```
 
-`rofi-hub network` opens a NetworkManager menu: Wi-Fi scan/connect, password
-prompt, saved connections, Ethernet devices, rescan, and radio toggle. It
-requires `nmcli` from NetworkManager.
+`rofi-hub network` opens a NetworkManager menu. It shows the active connection
+panel (SSID, signal, band, IP, gateway, subnet, broadcast, DNS, MAC, security),
+quick actions, nearby Wi-Fi networks, wired interfaces, saved profiles, edit
+saved connection, rescan, and radio toggle. It requires `nmcli`.
 
 ### Calendar
 
