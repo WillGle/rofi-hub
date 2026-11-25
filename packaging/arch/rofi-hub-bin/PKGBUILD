@@ -14,6 +14,7 @@ optdepends=(
   'wl-clipboard: clipboard copy'
   'hyprland: keybinds and screen-time'
   'systemd: Screen Time user service'
+  'networkmanager: Wi-Fi and Ethernet menu'
 )
 provides=('rofi-hub')
 conflicts=('rofi-hub' 'rofi-hub-git')

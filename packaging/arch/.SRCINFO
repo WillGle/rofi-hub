@@ -15,11 +15,12 @@ pkgbase = rofi-hub
 	optdepends = wl-clipboard: clipboard copy
 	optdepends = hyprland: keybinds and screen-time
 	optdepends = systemd: Screen Time user service
+	optdepends = networkmanager: Wi-Fi and Ethernet menu
 	provides = rofi-hub
 	conflicts = rofi-hub-bin
 	conflicts = rofi-hub-git
 	options = !lto
 	source = rofi-hub-0.2.0.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v0.2.0/rofi-hub-0.2.0-source.tar.gz
-	sha256sums = b3a7b60761ef5addd6d0088d23cc09e0e22702fc86c01f8f3d322faf8079bae9
+	sha256sums = d015150bb4d0c0739dad497971de3129101e00c5360bf8cf2997f88130fbb302
 
 pkgname = rofi-hub

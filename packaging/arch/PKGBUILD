@@ -15,6 +15,7 @@ optdepends=(
   'wl-clipboard: clipboard copy'
   'hyprland: keybinds and screen-time'
   'systemd: Screen Time user service'
+  'networkmanager: Wi-Fi and Ethernet menu'
 )
 provides=('rofi-hub')
 conflicts=('rofi-hub-bin' 'rofi-hub-git')
@@ -22,7 +23,7 @@ conflicts=('rofi-hub-bin' 'rofi-hub-git')
 # rustc's lld link step cannot consume. Rust still uses its thin LTO profile.
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/WillGle/rofi-hub/releases/download/v$pkgver/rofi-hub-$pkgver-source.tar.gz")
-sha256sums=('b3a7b60761ef5addd6d0088d23cc09e0e22702fc86c01f8f3d322faf8079bae9')
+sha256sums=('d015150bb4d0c0739dad497971de3129101e00c5360bf8cf2997f88130fbb302')
 
 build() {
   cd "$pkgname-$pkgver"

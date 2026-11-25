@@ -23,6 +23,7 @@ Requires:       bash
 Recommends:     cliphist
 Recommends:     wl-clipboard
 Recommends:     systemd
+Recommends:     NetworkManager
 Suggests:       hyprland
 
 %description

@@ -16,6 +16,7 @@ pkgbase = rofi-hub-git
 	optdepends = wl-clipboard: clipboard copy
 	optdepends = hyprland: keybinds and screen-time
 	optdepends = systemd: Screen Time user service
+	optdepends = networkmanager: Wi-Fi and Ethernet menu
 	provides = rofi-hub
 	conflicts = rofi-hub
 	conflicts = rofi-hub-bin
