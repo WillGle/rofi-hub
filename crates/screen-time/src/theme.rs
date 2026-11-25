@@ -146,7 +146,7 @@ impl Theme {
     font: "{font}";
     background-color: {base};
     text-color: {text};
-    border-color: {mantle};
+    border-color: {border};
     selected-normal-background: {mantle};
     selected-normal-foreground: {text};
     normal-background: {base};
@@ -162,8 +162,10 @@ window {{
     width: calc( ( {columns}ch + 64px ) min 94% );
     location: center;
     anchor: center;
-    border: 0;
-    padding: 20px;
+    border: 1px;
+    border-color: {border};
+    border-radius: 12px;
+    padding: 12px;
     background-color: {base};
 }}
 
@@ -171,31 +173,25 @@ mainbox {{
     background-color: {base};
     padding: 0;
     children: [ message, listview ];
-    spacing: 0;
+    spacing: 8px;
 }}
 
-message, textbox {{
-    background-color: {base};
+message {{
+    background-color: {mantle};
     text-color: {text};
-    padding: 0px 5px;
-    border: 0;
+    padding: 0px 12px;
+    border: 0px 0px 1px 0px;
+    border-color: {border};
 }}
 
 textbox {{
+    background-color: transparent;
+    text-color: {text};
+    padding: 0;
+    border: 0;
     font: "{family} {header}";
     markup: true;
     vertical-align: 0.5;
-}}
-
-element normal.active, element alternate.active, element selected.active {{
-    background-color: {mantle};
-    border: 0;
-    border-radius: 0;
-}}
-
-element selected.active {{
-    border: 0px 0px 0px 2px;
-    border-color: {accent};
 }}
 
 inputbar {{
@@ -203,7 +199,7 @@ inputbar {{
 }}
 
 listview {{
-    background-color: {base};
+    background-color: {mantle};
     columns: 1;
     lines: {lines};
     spacing: 0;
@@ -211,18 +207,42 @@ listview {{
     cycle: true;
     dynamic: true;
     fixed-height: false;
+    padding: 4px;
+    border: 1px;
+    border-color: {border};
+    border-radius: 8px;
+}}
+
+element normal.active, element alternate.active, element selected.active {{
+    background-color: {surface_alt};
+    border: 0px 0px 1px 0px;
+    border-color: {border};
+    border-radius: 4px;
 }}
 
 element {{
     children: [ element-text ];
-    padding: 3px 10px;
-    background-color: {base};
+    padding: 4px 10px;
+    background-color: {mantle};
     text-color: {text};
+    border: 0px 0px 1px 0px;
+    border-color: {border};
+    border-radius: 0;
 }}
 
 element selected {{
-    background-color: {mantle};
+    background-color: {surface_alt};
     text-color: {text};
+    border: 0px 0px 1px 2px;
+    border-color: {accent};
+    border-radius: 4px;
+}}
+
+element selected.active {{
+    background-color: {surface_alt};
+    border: 0px 0px 1px 2px;
+    border-color: {accent};
+    border-radius: 4px;
 }}
 
 element-text {{
@@ -236,6 +256,8 @@ element-text {{
             accent = self.accent,
             base = self.base,
             mantle = self.mantle,
+            surface_alt = self.surface_alt,
+            border = self.border,
             text = self.text,
             show_icons = profile.show_icons,
             header = profile.header_pt,

@@ -87,8 +87,14 @@ impl TestEnv {
     /// Queue one fake-rofi reply. The next invocation consumes it and exits 0;
     /// later invocations exit 1 (cancel).
     pub fn set_reply(&self, text: &str) {
-        fs::write(self.root.path().join("rofi-reply"), format!("{text}\n"))
-            .expect("write fake rofi reply");
+        self.set_replies(&[text]);
+    }
+
+    /// Queue several replies. `@custom:N` exits with Rofi's custom-key status
+    /// `10 + N`; `@cancel` exits 1; anything else is printed as a selection.
+    pub fn set_replies(&self, replies: &[&str]) {
+        let body: String = replies.iter().map(|reply| format!("{reply}\n")).collect();
+        fs::write(self.root.path().join("rofi-reply"), body).expect("write fake rofi replies");
     }
 
     pub fn args_log(&self) -> String {
@@ -147,9 +153,18 @@ impl TestEnv {
              printf 'ARG:%s\\n' \"$@\" >>\"${{ROFI_ARGS_LOG:-/dev/null}}\"\n\
              cat >>\"${{ROFI_STDIN_LOG:-/dev/null}}\"\n\
              if [ -f \"${{ROFI_REPLY:-/nonexistent}}\" ]; then\n\
-               cat \"$ROFI_REPLY\"\n\
-               rm -f \"$ROFI_REPLY\"\n\
-               exit 0\n\
+               first=$(sed -n '1p' \"$ROFI_REPLY\")\n\
+               if [ \"$(wc -l < \"$ROFI_REPLY\")\" -gt 1 ]; then\n\
+                 sed '1d' \"$ROFI_REPLY\" > \"$ROFI_REPLY.tmp\"\n\
+                 mv \"$ROFI_REPLY.tmp\" \"$ROFI_REPLY\"\n\
+               else\n\
+                 rm -f \"$ROFI_REPLY\"\n\
+               fi\n\
+               case \"$first\" in\n\
+                 @custom:*) exit $((10 + ${{first#@custom:}})) ;;\n\
+                 @cancel) exit 1 ;;\n\
+                 *) printf '%s\\n' \"$first\"; exit 0 ;;\n\
+               esac\n\
              fi\n\
              exit 1\n",
             shell_path().display()

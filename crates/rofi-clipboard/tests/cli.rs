@@ -40,11 +40,110 @@ esac
     );
 
     let args = env.args_log();
-    assert!(args.contains("ARG:CLIPBOARD"), "{args}");
+    assert!(args.contains("ARG:FILTER"), "{args}");
     assert!(args.contains("ARG:-no-custom"), "{args}");
+    assert!(args.contains("Alt+d"), "{args}");
     let stdin = env.stdin_log();
     assert!(stdin.contains("one"));
     assert!(stdin.contains("two"));
+    assert!(stdin.contains("HISTORY"), "{stdin}");
+    assert!(args.contains("2 text"), "{args}");
+}
+
+#[test]
+fn clear_action_wipes_history_after_confirmation() {
+    let env = TestEnv::new();
+    let calls = env.home().join("cliphist.log");
+    env.script(
+        "cliphist",
+        r#"printf '%s\n' "$*" >> "$CLIPHIST_LOG"
+case "$1" in
+  list) printf '7\tone\n8\ttwo\n' ;;
+esac
+"#,
+    );
+    env.script("wl-copy", "cat >/dev/null\n");
+
+    env.set_replies(&["@custom:0", "yes"]);
+    let output = env
+        .command(BIN)
+        .env("CLIPHIST_LOG", &calls)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "rofi-clipboard failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let calls = std::fs::read_to_string(calls).unwrap();
+    assert!(calls.contains("wipe"), "{calls}");
+}
+
+#[test]
+fn delete_action_removes_the_selected_entry() {
+    let env = TestEnv::new();
+    let calls = env.home().join("cliphist.log");
+    let deleted = env.home().join("cliphist-deleted");
+    env.script(
+        "cliphist",
+        r#"printf '%s\n' "$*" >> "$CLIPHIST_LOG"
+case "$1" in
+  list) printf '7\tone\n8\ttwo\n' ;;
+  delete) cat >> "$CLIPHIST_DELETED" ;;
+esac
+"#,
+    );
+    env.script("wl-copy", "cat >/dev/null\n");
+
+    // Alt+d opens the delete picker; row 1 is the second entry.
+    env.set_replies(&["@custom:2", "1"]);
+    let output = env
+        .command(BIN)
+        .env("CLIPHIST_LOG", &calls)
+        .env("CLIPHIST_DELETED", &deleted)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "rofi-clipboard failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let calls = std::fs::read_to_string(calls).unwrap();
+    assert!(calls.contains("delete"), "{calls}");
+    assert_eq!(
+        std::fs::read_to_string(deleted).unwrap(),
+        "8\ttwo\n",
+        "delete picked the wrong entry"
+    );
+}
+
+#[test]
+fn refresh_action_reloads_history() {
+    let env = TestEnv::new();
+    let calls = env.home().join("cliphist.log");
+    env.script(
+        "cliphist",
+        r#"printf '%s\n' "$*" >> "$CLIPHIST_LOG"
+case "$1" in
+  list) printf '7\tone\n' ;;
+esac
+"#,
+    );
+    env.script("wl-copy", "cat >/dev/null\n");
+
+    env.set_replies(&["@custom:1"]);
+    let output = env
+        .command(BIN)
+        .env("CLIPHIST_LOG", &calls)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "rofi-clipboard failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let calls = std::fs::read_to_string(calls).unwrap();
+    assert_eq!(calls.matches("list").count(), 2, "{calls}");
 }
 
 #[test]

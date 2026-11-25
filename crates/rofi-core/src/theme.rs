@@ -94,11 +94,11 @@ impl ChromeProfile {
 
     pub fn for_app(app: &str) -> Self {
         match app {
-            "screen-time" => Self::new(144, 24, false, 26),
+            "screen-time" => Self::new(144, 18, false, 26),
             "calendar" => Self::new(64, 12, false, 20),
-            "clipboard" => Self::new(96, 20, false, 18),
-            "keybinds" => Self::new(110, 20, false, 18),
-            "network" => Self::new(90, 20, true, 20),
+            "clipboard" => Self::new(110, 16, false, 18),
+            "keybinds" => Self::new(110, 16, false, 18),
+            "network" => Self::new(90, 16, true, 20),
             _ => Self::new(96, 20, false, 20),
         }
     }
@@ -249,6 +249,8 @@ impl Theme {
         let font = escape_rasi(&self.font());
         let base = &self.base;
         let mantle = &self.mantle;
+        let surface_alt = &self.surface_alt;
+        let border = &self.border;
         let text = &self.text;
         let muted = &self.muted;
         let accent = &self.accent;
@@ -274,7 +276,7 @@ configuration {{
     font: "{font}";
     background-color: {base};
     text-color: {text};
-    border-color: {mantle};
+    border-color: {border};
     selected-normal-background: {mantle};
     selected-normal-foreground: {text};
     normal-background: {base};
@@ -286,14 +288,15 @@ configuration {{
     padding: 0;
 }}
 
-/* Match the Screen Time window: flat chrome, generous padding, and the same
-   centered geometry. */
+/* Zoned chrome: one bordered card for filter, header, and list. */
 window {{
     width: calc( ( {width}ch + 64px ) min 94% );
     location: center;
     anchor: center;
-    border: 0;
-    padding: 20px;
+    border: 1px;
+    border-color: {border};
+    border-radius: 12px;
+    padding: 12px;
     background-color: {base};
 }}
 
@@ -304,29 +307,35 @@ mainbox {{
     padding: 0;
 }}
 
-/* Screen Time draws its header with message/textbox. The dmenu apps keep an
-   input bar for filtering, but style it as the same flat header surface. */
 inputbar {{
-    background-color: {base};
+    background-color: {mantle};
     text-color: {text};
-    padding: 0px 5px;
-    border: 0;
+    padding: 6px 12px;
+    border: 1px;
+    border-color: {border};
+    border-radius: 8px;
     children: [ prompt, entry ];
-    spacing: 8px;
+    spacing: 10px;
 }}
 
-/* Screen Time styles its header through message/textbox. Keep the same flat
-   surface for dmenu messages such as the calendar sheet. */
-message, textbox {{
-    background-color: {base};
+message {{
+    background-color: {mantle};
     text-color: {text};
-    padding: 0px 5px;
+    padding: 0px 12px;
+    border: 0px 0px 1px 0px;
+    border-color: {border};
+}}
+
+textbox {{
+    background-color: transparent;
+    text-color: {text};
+    padding: 0;
     border: 0;
 }}
 
 prompt {{
     background-color: transparent;
-    text-color: {muted};
+    text-color: {accent};
 }}
 
 entry {{
@@ -337,7 +346,7 @@ entry {{
 }}
 
 listview {{
-    background-color: {base};
+    background-color: {mantle};
     columns: 1;
     lines: {lines};
     spacing: 0;
@@ -345,31 +354,44 @@ listview {{
     cycle: true;
     dynamic: true;
     fixed-height: false;
+    padding: 4px;
+    border: 1px;
+    border-color: {border};
+    border-radius: 8px;
 }}
 
-/* Screen Time uses a flat row plus a 2px accent strip for the active row. */
+/* Section rows are marked active by the apps; the band separates zones. */
 element normal.active, element alternate.active, element selected.active {{
-    background-color: {mantle};
-    border: 0;
-    border-radius: 0;
-}}
-
-element selected.active {{
-    border: 0px 0px 0px 2px;
-    border-color: {accent};
+    background-color: {surface_alt};
+    border: 0px 0px 1px 0px;
+    border-color: {border};
+    border-radius: 4px;
 }}
 
 element {{
     children: [ element-icon, element-text ];
-    padding: 3px 10px;
-    background-color: {base};
+    padding: 4px 10px;
+    background-color: {mantle};
     text-color: {text};
     spacing: 8px;
+    border: 0px 0px 1px 0px;
+    border-color: {border};
+    border-radius: 0;
 }}
 
 element selected {{
-    background-color: {mantle};
+    background-color: {surface_alt};
     text-color: {text};
+    border: 0px 0px 1px 2px;
+    border-color: {accent};
+    border-radius: 4px;
+}}
+
+element selected.active {{
+    background-color: {surface_alt};
+    border: 0px 0px 1px 2px;
+    border-color: {accent};
+    border-radius: 4px;
 }}
 
 element-icon {{
@@ -718,8 +740,25 @@ pub fn prepare(mode: Mode, theme: &Theme, app: &str) -> Option<std::path::PathBu
     let dir = paths::hub_runtime_dir();
     std::fs::create_dir_all(&dir).ok()?;
     set_private_dir(&dir);
-    let path = dir.join("theme.rasi");
-    let temp = dir.join(format!(".theme.rasi.{}", std::process::id()));
+    // Each app has its own geometry (width, visible lines, icons), so the
+    // generated file must be app-scoped instead of a single shared theme.rasi.
+    let safe_app: String = app
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe_app = if safe_app.is_empty() {
+        "app"
+    } else {
+        &safe_app
+    };
+    let path = dir.join(format!("theme-{safe_app}.rasi"));
+    let temp = dir.join(format!(".theme-{safe_app}.{}", std::process::id()));
     if std::fs::write(&temp, theme.rasi_with(ChromeProfile::for_app(app))).is_err() {
         return None;
     }
@@ -807,17 +846,18 @@ mod tests {
     }
 
     #[test]
-    fn generated_theme_matches_screen_time_chrome() {
+    fn generated_theme_has_zoned_chrome() {
         let rasi = Theme::nord().rasi();
         // Shared visual tokens with crates/screen-time/src/theme.rs.
-        assert!(rasi.contains("padding: 20px;"));
+        assert!(rasi.contains("padding: 12px;"));
         assert!(rasi.contains("width: calc( ( 96ch + 64px ) min 94% );"));
-        assert!(rasi.contains("border: 0px 0px 0px 2px;"));
+        assert!(rasi.contains("border-radius: 12px;"));
+        assert!(rasi.contains("border: 0px 0px 1px 2px;"));
         assert!(rasi.contains("border-color: #88c0d0;"));
         assert!(rasi.contains("hover-select: false;"));
         assert!(rasi.contains("lines: 20;"));
-        assert!(rasi.contains("padding: 3px 10px;"));
-        assert!(!rasi.contains("border-radius: 6px"));
+        assert!(rasi.contains("padding: 4px 10px;"));
+        assert!(rasi.contains("border-radius: 8px;"));
     }
 
     #[test]

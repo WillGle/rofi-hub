@@ -84,7 +84,7 @@ fn run() -> Result<()> {
                     &[
                         ("\u{2190}/\u{2192}", "month"),
                         ("Ctrl+t", "today"),
-                        ("esc", "close"),
+                        ("esc", ""),
                     ],
                     &palette,
                 ),
@@ -105,6 +105,7 @@ fn run() -> Result<()> {
         let sheet = render_sheet(&view, today, &palette);
         let note_line = render_note(&view, note.as_deref(), &palette);
         let mesg = format!("{header}\n{sheet}{note_line}");
+        let fitted_width = ui::widest(&items).max(ui::widest_text(&mesg)).clamp(34, 64) + 2;
 
         let mut options = app::dmenu_options("calendar", "CALENDAR");
         options.allow_custom = true;
@@ -131,6 +132,7 @@ fn run() -> Result<()> {
             "-kb-custom-3".to_owned(),
             "Control+t".to_owned(),
         ];
+        options.extra_args.extend(ui::width_override(fitted_width));
 
         match rofi.dmenu(&items, &options)? {
             Outcome::Cancelled => return Ok(()),

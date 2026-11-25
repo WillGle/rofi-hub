@@ -282,8 +282,9 @@ fn hub_items(providers: &[ProviderManifest], theme: &Theme) -> Vec<Item> {
         items.push(
             Item::new(
                 format!("section-{}", label.to_ascii_lowercase()),
-                ui::section(&label, &providers.len().to_string(), 96, theme),
+                ui::section(&label, &providers.len().to_string(), 84, theme),
             )
+            .active()
             .nonselectable(),
         );
         for provider in providers {
@@ -373,7 +374,14 @@ fn launch(provider: &ProviderManifest, choice: &Choice) -> Result<()> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit());
-    if let Some(path) = &choice.path {
+    let theme_path = if choice.custom_path {
+        choice.path.clone()
+    } else {
+        // Generate a theme with this provider's ChromeProfile, not the hub's
+        // 96ch/20-line geometry.
+        rofi_core::theme::prepare(choice.mode, &choice.theme, &provider.id)
+    };
+    if let Some(path) = theme_path {
         command.env("ROFI_HUB_THEME_FILE", path);
     }
     if let Some(config) = rofi_config() {

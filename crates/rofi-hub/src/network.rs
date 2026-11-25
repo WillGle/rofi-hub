@@ -9,7 +9,7 @@ use std::env;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{DmenuOptions, Item, Level, Outcome, Rofi, Theme, escape_markup, paths, ui, which};
+use rofi_core::{DmenuOptions, Item, Level, Outcome, Rofi, Theme, paths, ui, which};
 
 use crate::config::Config;
 use crate::hub::rofi_config;
@@ -61,7 +61,13 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
         let (items, actions) = build_menu(&state, &choice.theme);
         let mut options = DmenuOptions::new("NETWORK");
         if !no_theme {
-            options.theme = choice.path.clone();
+            // The hub's own theme file uses the hub profile (96ch/20 lines).
+            // Network needs its own geometry so the larger cards still fit.
+            options.theme = if choice.custom_path {
+                choice.path.clone()
+            } else {
+                rofi_core::theme::prepare(choice.mode, &choice.theme, "network")
+            };
         }
         options.config = rofi_config();
         let runtime = paths::hub_runtime_dir();
@@ -74,27 +80,26 @@ pub fn run(theme_override: Option<&str>, no_theme: bool, config: &Config) -> Res
                 "Wi-Fi off".to_owned()
             }
         });
-        let meta = state
-            .iface
-            .clone()
-            .unwrap_or_else(|| "no wireless adapter".to_owned());
-        let details = connection_panel(&state, &choice.theme);
+        let meta = header_meta(&state);
         let status_line = if status.is_empty() {
             String::new()
         } else {
             format!("\n{}", ui::status(&status, Level::Info, &choice.theme))
         };
+        let mesg = format!(
+            "{}\n{}\n{}",
+            ui::header("NETWORK", &hero, &meta, &choice.theme),
+            ui::hint(&[("Enter", "select"), ("esc", "close")], &choice.theme),
+            status_line
+        );
+        let fitted_width = ui::widest(&items).max(ui::widest_text(&mesg)).clamp(48, 96) + 2;
         options.extra_args = vec![
             "-selected-row".to_owned(),
             "1".to_owned(),
             "-mesg".to_owned(),
-            format!(
-                "{}{}{}",
-                ui::header("NETWORK", &hero, &meta, &choice.theme),
-                details,
-                status_line
-            ),
+            mesg,
         ];
+        options.extra_args.extend(ui::width_override(fitted_width));
 
         let selected = match rofi.dmenu(&items, &options)? {
             Outcome::Selected(id) => id,
@@ -234,55 +239,37 @@ fn connect_ap(
     }
 }
 
-fn connection_panel(state: &WifiState, theme: &Theme) -> String {
-    let Some(details) = &state.details else {
-        return String::new();
+fn header_meta(state: &WifiState) -> String {
+    let iface = state.iface.as_deref().unwrap_or("no wireless adapter");
+    if !state.enabled {
+        return format!("Wi-Fi off \u{00b7} {iface}");
+    }
+    let ssid = state.active_ssid.as_deref().or_else(|| {
+        state
+            .details
+            .as_ref()
+            .map(|details| details.connection.as_str())
+    });
+    let Some(ssid) = ssid else {
+        return format!("Wi-Fi on \u{00b7} {iface}");
     };
-    let active = state.active.as_ref();
-    let ssid = active
-        .map(|ap| ap.ssid.as_str())
-        .filter(|ssid| !ssid.is_empty())
-        .unwrap_or(details.connection.as_str());
-    let signal = active.map_or_else(|| "--".to_owned(), |ap| ap.signal.to_string());
-    let band = active.map(AccessPoint::band).unwrap_or("");
-    let security = active
+    let signal = state
+        .active
+        .as_ref()
+        .map_or_else(|| "--".to_owned(), |ap| ap.signal.to_string());
+    let band = state.active.as_ref().map(AccessPoint::band).unwrap_or("");
+    let band = if band.is_empty() {
+        String::new()
+    } else {
+        format!(", {band}")
+    };
+    let security = state
+        .active
+        .as_ref()
         .map(|ap| ap.security.as_str())
         .filter(|value| !value.is_empty() && *value != "--")
         .unwrap_or("--");
-    let ip = details.address.as_deref().unwrap_or("--");
-    let gateway = details.gateway.as_deref().unwrap_or("--");
-    let subnet = details.subnet.as_deref().unwrap_or("--");
-    let broadcast = details.broadcast.as_deref().unwrap_or("--");
-    let dns = if details.dns.is_empty() {
-        "--".to_owned()
-    } else {
-        details.dns.join(", ")
-    };
-    let mac = details.mac.as_deref().unwrap_or("--");
-    format!(
-        "\n<span foreground='{accent}' weight='bold'>Wi-Fi: {ssid}</span>\
-         <span foreground='{muted}'> ({signal}%{band})</span>\n\
-         <span foreground='{muted}'>IP:</span> {ip}   <span foreground='{muted}'>Gateway:</span> {gateway}\n\
-         <span foreground='{muted}'>Subnet:</span> {subnet}   <span foreground='{muted}'>Broadcast:</span> {broadcast}\n\
-         <span foreground='{muted}'>DNS:</span> {dns}   <span foreground='{muted}'>MAC:</span> {mac}\n\
-         <span foreground='{muted}'>Security:</span> {security}",
-        accent = theme.accent,
-        muted = theme.muted,
-        band = if band.is_empty() {
-            String::new()
-        } else {
-            format!(", {band}")
-        },
-        ip = escape_markup(ip),
-        gateway = escape_markup(gateway),
-        subnet = escape_markup(subnet),
-        broadcast = escape_markup(broadcast),
-        dns = escape_markup(&dns),
-        mac = escape_markup(mac),
-        security = escape_markup(security),
-        ssid = escape_markup(ssid),
-        signal = signal,
-    )
+    format!("Wi-Fi: {ssid} ({signal}%{band}) \u{00b7} {security} \u{00b7} {iface}")
 }
 
 fn edit_saved(rofi: &Rofi, choice: &Choice, no_theme: bool, status: &mut String) -> Result<()> {
@@ -409,6 +396,53 @@ fn build_menu(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<Action>) {
                 ui::row("\u{f00c}", "Turn Wi-Fi on", "", "", theme),
             ),
             Action::WifiOn,
+        );
+    }
+
+    if let Some(details) = &state.details
+        && (details.address.is_some() || details.mac.is_some())
+    {
+        push_section(&mut items, &mut actions, "CONNECTION", "", theme);
+        let dns = if details.dns.is_empty() {
+            "--".to_owned()
+        } else {
+            details.dns.join(", ")
+        };
+        push_detail(
+            &mut items,
+            &mut actions,
+            "IP",
+            details.address.as_deref().unwrap_or("--"),
+            theme,
+        );
+        push_detail(
+            &mut items,
+            &mut actions,
+            "Gateway",
+            details.gateway.as_deref().unwrap_or("--"),
+            theme,
+        );
+        push_detail(
+            &mut items,
+            &mut actions,
+            "Subnet",
+            details.subnet.as_deref().unwrap_or("--"),
+            theme,
+        );
+        push_detail(
+            &mut items,
+            &mut actions,
+            "Broadcast",
+            details.broadcast.as_deref().unwrap_or("--"),
+            theme,
+        );
+        push_detail(&mut items, &mut actions, "DNS", &dns, theme);
+        push_detail(
+            &mut items,
+            &mut actions,
+            "MAC",
+            details.mac.as_deref().unwrap_or("--"),
+            theme,
         );
     }
 
@@ -621,7 +655,25 @@ fn push_section(
     items.push(
         Item::new(
             format!("section-{}", label.to_ascii_lowercase()),
-            ui::section(label, meta, 90, theme),
+            ui::section(label, meta, 84, theme),
+        )
+        .active()
+        .nonselectable(),
+    );
+    actions.push(Action::Quit);
+}
+
+fn push_detail(
+    items: &mut Vec<Item>,
+    actions: &mut Vec<Action>,
+    label: &str,
+    value: &str,
+    theme: &Theme,
+) {
+    items.push(
+        Item::new(
+            format!("detail-{}", label.to_ascii_lowercase()),
+            ui::detail_row(label, value, theme),
         )
         .nonselectable(),
     );
@@ -700,7 +752,7 @@ fn access_points(iface: &str) -> Vec<AccessPoint> {
         "no",
     ])
     .unwrap_or_default();
-    output
+    let mut access_points: Vec<AccessPoint> = output
         .lines()
         .filter_map(|line| {
             let fields = split_fields(line, 5);
@@ -715,7 +767,28 @@ fn access_points(iface: &str) -> Vec<AccessPoint> {
                 freq: fields[4].parse().unwrap_or(0),
             })
         })
-        .collect()
+        .collect();
+    dedupe_access_points(&mut access_points);
+    access_points
+}
+
+/// One row per SSID: a scan often returns several BSSIDs with the same name,
+/// which makes a text menu unreadable. Prefer the active BSSID, then the
+/// strongest signal.
+fn dedupe_access_points(access_points: &mut Vec<AccessPoint>) {
+    let mut deduped: Vec<AccessPoint> = Vec::with_capacity(access_points.len());
+    for ap in access_points.drain(..) {
+        if let Some(existing) = deduped.iter_mut().find(|existing| existing.ssid == ap.ssid) {
+            let replace = (ap.active && !existing.active)
+                || (ap.active == existing.active && ap.signal > existing.signal);
+            if replace {
+                *existing = ap;
+            }
+        } else {
+            deduped.push(ap);
+        }
+    }
+    *access_points = deduped;
 }
 
 fn connection_details(iface: &str) -> Option<ConnectionDetails> {
@@ -937,6 +1010,39 @@ mod tests {
         assert_eq!(aps[0].band(), "5 GHz");
         assert_eq!(aps[1].security, "--");
         assert_eq!(aps[1].band(), "2.4 GHz");
+    }
+
+    #[test]
+    fn dedupes_access_points_by_ssid_and_prefers_active() {
+        let mut aps = vec![
+            AccessPoint {
+                active: false,
+                ssid: "Home".to_owned(),
+                signal: 90,
+                security: "WPA2".to_owned(),
+                freq: 5180,
+            },
+            AccessPoint {
+                active: true,
+                ssid: "Home".to_owned(),
+                signal: 70,
+                security: "WPA2".to_owned(),
+                freq: 2412,
+            },
+            AccessPoint {
+                active: false,
+                ssid: "Cafe".to_owned(),
+                signal: 40,
+                security: "--".to_owned(),
+                freq: 2412,
+            },
+        ];
+        dedupe_access_points(&mut aps);
+        assert_eq!(aps.len(), 2);
+        assert_eq!(aps[0].ssid, "Home");
+        assert!(aps[0].active);
+        assert_eq!(aps[0].signal, 70);
+        assert_eq!(aps[1].ssid, "Cafe");
     }
 
     #[test]

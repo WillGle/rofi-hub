@@ -4,7 +4,7 @@
 //! rows with a leading/trailing slot, and a muted footer hint. Apps may add
 //! their own body rows, but the chrome comes from here.
 
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::Theme;
 use crate::item::escape_markup;
@@ -25,7 +25,7 @@ pub fn header(label: &str, hero: &str, meta: &str, theme: &Theme) -> String {
     let meta = escape_markup(meta);
     format!(
         "<span foreground='{accent}' weight='bold'>{label}</span>\n\
-         <span foreground='{text}' weight='bold' size='26000'>{hero}</span>\n\
+         <span foreground='{text}' weight='bold' size='18000'>{hero}</span>\n\
          <span foreground='{muted}'>{meta}</span>",
         accent = theme.accent,
         text = theme.text,
@@ -143,6 +143,121 @@ pub fn status(text: &str, level: Level, theme: &Theme) -> String {
     )
 }
 
+/// Compact action chips: `[key label]` with the key in the accent role.
+///
+/// Rofi cannot draw clickable borders around arbitrary markup, so the chips
+/// stay textual; the surrounding message box supplies the real zone border.
+pub fn toolbar(actions: &[(&str, &str)], theme: &Theme) -> String {
+    let parts: Vec<String> = actions
+        .iter()
+        .map(|(key, label)| {
+            let key = escape_markup(key);
+            let label = escape_markup(label);
+            format!(
+                "<span foreground='{accent}' weight='bold'>[</span>\
+                 <span foreground='{accent}' weight='bold'>{key}</span>\
+                 <span foreground='{text}'>{separator}{label}</span>\
+                 <span foreground='{accent}' weight='bold'>]</span>",
+                accent = theme.accent,
+                text = theme.text,
+                separator = if label.is_empty() { "" } else { " " },
+            )
+        })
+        .collect();
+    parts.join("  ")
+}
+
+/// A detail row with a fixed-width label and a value: `IP  192.0.2.42/24`.
+pub fn detail_row(label: &str, value: &str, theme: &Theme) -> String {
+    format!(
+        "<span foreground='{muted}'>{:>10}</span>  <span foreground='{text}'>{}</span>",
+        escape_markup(label),
+        escape_markup(value),
+        muted = theme.muted,
+        text = theme.text,
+    )
+}
+
+/// A clipboard/history row: index, colored kind glyph, title, muted metadata.
+pub fn entry_row(
+    index: usize,
+    icon: &str,
+    icon_color: &str,
+    title: &str,
+    detail: &str,
+    theme: &Theme,
+) -> String {
+    let mut out = format!(
+        "<span foreground='{muted}'>{index:>3}</span>",
+        muted = theme.muted
+    );
+    if !icon.is_empty() {
+        out.push_str(&format!(
+            "  <span foreground='{icon_color}'>{}</span>",
+            escape_markup(icon)
+        ));
+    }
+    out.push_str(&format!(
+        "  <span foreground='{text}' weight='600'>{}</span>",
+        escape_markup(title),
+        text = theme.text
+    ));
+    if !detail.is_empty() {
+        out.push_str(&format!(
+            "  <span foreground='{muted}'>{}</span>",
+            escape_markup(detail),
+            muted = theme.muted
+        ));
+    }
+    out
+}
+
+/// Widest display width across rendered rows.
+pub fn widest(items: &[crate::Item]) -> usize {
+    items
+        .iter()
+        .map(|item| display_width(&item.display))
+        .max()
+        .unwrap_or(0)
+}
+
+/// Widest display width across the lines of a markup block.
+pub fn widest_text(text: &str) -> usize {
+    text.lines().map(display_width).max().unwrap_or(0)
+}
+
+/// Rofi arguments that override the generated window width for this launch.
+///
+/// The base theme keeps a conservative `ch` width for stability; apps with
+/// short content (calendar) or unusually long rows (clipboard) can fit the
+/// window to the rows they actually render.
+pub fn width_override(width_ch: usize) -> [String; 2] {
+    [
+        "-theme-str".to_owned(),
+        format!("window {{ width: calc( ( {width_ch}ch + 48px ) min 94% ); }}"),
+    ]
+}
+
+/// Truncate to a display width, reserving one cell for an ellipsis.
+pub fn truncate(text: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+    let budget = max_width.saturating_sub(1);
+    let mut out = String::new();
+    let mut width = 0;
+    for ch in text.chars() {
+        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if width + char_width > budget {
+            out.push('\u{2026}');
+            break;
+        }
+        out.push(ch);
+        width += char_width;
+    }
+    out
+}
+
 /// Empty-state line, muted and deliberately not a row action.
 pub fn empty(text: &str, theme: &Theme) -> String {
     format!(
@@ -237,6 +352,54 @@ mod tests {
         assert!(text.contains("\u{2191}/\u{2193} select"));
         assert!(text.contains("esc close"));
         assert!(text.contains("\u{00b7}"));
+    }
+
+    #[test]
+    fn toolbar_renders_key_and_label() {
+        let text = toolbar(&[("Alt+d", "Delete"), ("Alt+x", "Clear")], &theme());
+        assert!(text.contains("Alt+d"));
+        assert!(text.contains("Delete"));
+        assert!(text.contains("Alt+x"));
+        assert!(!text.contains('\u{00b7}'));
+        assert!(text.contains('['));
+    }
+
+    #[test]
+    fn entry_row_escapes_text_and_keeps_index() {
+        let text = entry_row(7, "\u{25a7}", "#83a598", "a & b", "<40 KiB>", &theme());
+        assert!(text.contains("  7"));
+        assert!(text.contains("a &amp; b"));
+        assert!(text.contains("&lt;40 KiB&gt;"));
+        assert!(text.contains("#83a598"));
+    }
+
+    #[test]
+    fn widest_measures_markup_rows_and_multiline_text() {
+        let items = vec![
+            crate::Item::new("a", "<b>short</b>"),
+            crate::Item::new("b", "a longer row"),
+        ];
+        assert_eq!(widest(&items), 12);
+        assert_eq!(widest_text("short\nlonger line"), 11);
+        let args = width_override(42);
+        assert_eq!(args[0], "-theme-str");
+        assert!(args[1].contains("42ch"), "{}", args[1]);
+    }
+
+    #[test]
+    fn truncate_reserves_space_for_the_ellipsis() {
+        assert_eq!(truncate("hello", 10), "hello");
+        let short = truncate("hello world", 6);
+        assert_eq!(short, "hello\u{2026}");
+        assert_eq!(display_width(&short), 6);
+        assert_eq!(truncate("hello", 0), "");
+    }
+
+    #[test]
+    fn detail_row_aligns_short_labels() {
+        let text = detail_row("IP", "192.0.2.42/24", &theme());
+        assert!(text.contains("        IP"));
+        assert!(text.contains("192.0.2.42/24"));
     }
 
     #[test]

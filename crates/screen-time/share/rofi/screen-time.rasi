@@ -13,7 +13,7 @@ configuration {
     font: "JetBrainsMono Nerd Font 12";
     background-color: #1d2021;
     text-color: #fbf1c7;
-    border-color: #282828;
+    border-color: #3c3836;
     selected-normal-background: #282828;
     selected-normal-foreground: #fbf1c7;
     normal-background: #1d2021;
@@ -25,14 +25,15 @@ configuration {
     padding: 0;
 }
 
-/* Match the Screen Time window: flat chrome, generous padding, and the same
-   centered geometry. */
+/* Zoned chrome: one bordered card for filter, header, and list. */
 window {
     width: calc( ( 144ch + 64px ) min 94% );
     location: center;
     anchor: center;
-    border: 0;
-    padding: 20px;
+    border: 1px;
+    border-color: #3c3836;
+    border-radius: 12px;
+    padding: 12px;
     background-color: #1d2021;
 }
 
@@ -43,29 +44,35 @@ mainbox {
     padding: 0;
 }
 
-/* Screen Time draws its header with message/textbox. The dmenu apps keep an
-   input bar for filtering, but style it as the same flat header surface. */
 inputbar {
-    background-color: #1d2021;
+    background-color: #282828;
     text-color: #fbf1c7;
-    padding: 0px 5px;
-    border: 0;
+    padding: 6px 12px;
+    border: 1px;
+    border-color: #3c3836;
+    border-radius: 8px;
     children: [ prompt, entry ];
-    spacing: 8px;
+    spacing: 10px;
 }
 
-/* Screen Time styles its header through message/textbox. Keep the same flat
-   surface for dmenu messages such as the calendar sheet. */
-message, textbox {
-    background-color: #1d2021;
+message {
+    background-color: #282828;
     text-color: #fbf1c7;
-    padding: 0px 5px;
+    padding: 0px 12px;
+    border: 0px 0px 1px 0px;
+    border-color: #3c3836;
+}
+
+textbox {
+    background-color: transparent;
+    text-color: #fbf1c7;
+    padding: 0;
     border: 0;
 }
 
 prompt {
     background-color: transparent;
-    text-color: #a89984;
+    text-color: #fabd2f;
 }
 
 entry {
@@ -76,39 +83,52 @@ entry {
 }
 
 listview {
-    background-color: #1d2021;
+    background-color: #282828;
     columns: 1;
-    lines: 24;
+    lines: 18;
     spacing: 0;
     scrollbar: false;
     cycle: true;
     dynamic: true;
     fixed-height: false;
+    padding: 4px;
+    border: 1px;
+    border-color: #3c3836;
+    border-radius: 8px;
 }
 
-/* Screen Time uses a flat row plus a 2px accent strip for the active row. */
+/* Section rows are marked active by the apps; the band separates zones. */
 element normal.active, element alternate.active, element selected.active {
-    background-color: #282828;
-    border: 0;
-    border-radius: 0;
-}
-
-element selected.active {
-    border: 0px 0px 0px 2px;
-    border-color: #fabd2f;
+    background-color: #32302f;
+    border: 0px 0px 1px 0px;
+    border-color: #3c3836;
+    border-radius: 4px;
 }
 
 element {
     children: [ element-icon, element-text ];
-    padding: 3px 10px;
-    background-color: #1d2021;
+    padding: 4px 10px;
+    background-color: #282828;
     text-color: #fbf1c7;
     spacing: 8px;
+    border: 0px 0px 1px 0px;
+    border-color: #3c3836;
+    border-radius: 0;
 }
 
 element selected {
-    background-color: #282828;
+    background-color: #32302f;
     text-color: #fbf1c7;
+    border: 0px 0px 1px 2px;
+    border-color: #fabd2f;
+    border-radius: 4px;
+}
+
+element selected.active {
+    background-color: #32302f;
+    border: 0px 0px 1px 2px;
+    border-color: #fabd2f;
+    border-radius: 4px;
 }
 
 element-icon {

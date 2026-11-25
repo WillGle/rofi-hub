@@ -214,7 +214,7 @@ fn selecting_a_provider_passes_its_environment_and_args() {
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines[0], "alpha");
     assert_eq!(lines[1], "gruvbox");
-    assert!(lines[2].ends_with("rofi-hub/theme.rasi"), "{text}");
+    assert!(lines[2].ends_with("rofi-hub/theme-alpha.rasi"), "{text}");
     assert_eq!(lines[3], "first argument");
 }
 
@@ -287,7 +287,7 @@ fn manager_modes_dispatch_raw_rofi_modes() {
     let args = fs::read_to_string(&log).unwrap();
     assert!(args.contains("-show\ndrun\n"), "{args}");
     assert!(args.contains("-theme\n"), "{args}");
-    assert!(args.contains("rofi-hub/theme.rasi"), "{args}");
+    assert!(args.contains("rofi-hub/theme-hub.rasi"), "{args}");
 
     let output = env
         .command()
@@ -401,7 +401,7 @@ fn network_menu_shows_details_and_connects_to_wifi() {
             "#!/bin/sh\ninput=$(cat)\nprintf '%s\\n' \"$input\" >> '{}'\n\
              printf '%s\\n' \"$@\" >> '{}'\n\
              if [ -f '{}' ]; then exit 1; fi\n\
-             : > '{}'\nprintf '7\\n'\n",
+             : > '{}'\nprintf '14\\n'\n",
             rofi_stdin.display(),
             rofi_args.display(),
             flag.display(),
@@ -409,8 +409,8 @@ fn network_menu_shows_details_and_connects_to_wifi() {
         ),
     );
 
-    // 7 is the open `Open` access point: QUICK ACTIONS occupies 0-4,
-    // NEARBY WI-FI is 5, Home:5G 6, Open 7.
+    // 14 is the open `Open` access point: QUICK ACTIONS 0-4, CONNECTION 5-11,
+    // NEARBY WI-FI 12, Home:5G 13, Open 14.
     let output = env
         .command()
         .env("ROFI_BIN", &rofi)

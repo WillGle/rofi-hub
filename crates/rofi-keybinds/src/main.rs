@@ -401,8 +401,9 @@ fn build_items(bindings: &[Binding], theme: &Theme) -> Vec<Item> {
             items.push(
                 Item::new(
                     format!("section-{index}"),
-                    ui::section(section, "", 110, theme),
+                    ui::section(section, "", 98, theme),
                 )
+                .active()
                 .nonselectable(),
             );
         }
