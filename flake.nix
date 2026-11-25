@@ -22,6 +22,23 @@
         );
       workspaceVersion = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
       screenTimeVersion = (builtins.fromTOML (builtins.readFile ./crates/screen-time/Cargo.toml)).package.version;
+      rofiWithPlugins =
+        pkgs:
+        pkgs.rofi.override {
+          plugins = [
+            pkgs.rofi-calc
+            pkgs.rofi-emoji
+          ];
+        };
+      runtimePackagesFor =
+        pkgs:
+        [
+          (rofiWithPlugins pkgs)
+          pkgs.rofi-power-menu
+          pkgs.wl-clipboard
+          pkgs.cliphist
+          pkgs.networkmanager
+        ];
     in
     {
       packages = forAllSystems (
@@ -51,6 +68,11 @@
             ];
             doCheck = true;
           };
+          # Rofi without plugins cannot load `calc` or `emoji`; the all-in-one
+          # wrapper must carry the plugin-enabled build instead of plain rofi.
+          rofi = rofiWithPlugins pkgs;
+          runtimePackages = runtimePackagesFor pkgs;
+          runtimePath = lib.makeBinPath runtimePackages;
 
           rofiHub = pkgs.rustPlatform.buildRustPackage (
             common
@@ -152,7 +174,7 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
               wrapProgram "$out/bin/rofi-hub" \
-                --prefix PATH : "${rofiApps}/bin" \
+                --prefix PATH : "${rofiApps}/bin:${runtimePath}" \
                 --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers"
             '';
             meta = rofiHub.meta // {
@@ -170,7 +192,7 @@
             nativeBuildInputs = [ pkgs.makeWrapper ];
             postBuild = ''
               wrapProgram "$out/bin/rofi-hub" \
-                --prefix PATH : "${rofiApps}/bin:${screenTime}/bin:${pkgs.rofi}/bin" \
+                --prefix PATH : "${rofiApps}/bin:${screenTime}/bin:${runtimePath}" \
                 --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers:${screenTime}/share/rofi-hub/providers"
             '';
             meta = rofiHub.meta // {
@@ -275,7 +297,7 @@
           };
 
           config = lib.mkIf cfg.enable {
-            home.packages = [ package pkgs.rofi ];
+            home.packages = [ package ] ++ runtimePackagesFor pkgs;
 
             home.sessionVariables = lib.mkIf (cfg.providerDirs != [ ]) {
               ROFI_HUB_PROVIDER_DIR = lib.concatStringsSep ":" cfg.providerDirs;
@@ -377,7 +399,7 @@
           };
 
           config = lib.mkIf cfg.enable {
-            environment.systemPackages = [ cfg.package pkgs.rofi ];
+            environment.systemPackages = [ cfg.package ] ++ runtimePackagesFor pkgs;
 
             systemd.user.services.screen-time = {
               enable = true;
