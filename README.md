@@ -112,7 +112,7 @@ files, and per-distro commands.
 | openSUSE | 0.2.0 | ✅ validated (`rpmbuild`/`zypper`) |
 | Void | 0.2.0 | ✅ validated (`xbps-src`/`xbps-install`) |
 | ALT Sisyphus | 0.2.0 | ✅ validated (`rpmbuild`/`rpm`) |
-| SlackBuilds | 0.2.0 | ⏳ metadata/shellcheck |
+| SlackBuilds | 0.2.0 | ✅ validated (`SlackBuild`/`installpkg`) |
 | Nix flake | 0.2.0 | ✅ |
 | nixpkgs | — | ⏸ deferred |
 

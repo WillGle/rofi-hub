@@ -256,7 +256,7 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 | Gentoo GURU | 0.2.0 | ✅ pkgcheck-clean; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |
 | openSUSE | 0.2.0 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`zypper install`/`remove` |
 | Void | 0.2.0 | ✅ validated | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
-| SlackBuilds | 0.2.0 | ⏳ metadata/shellcheck; no Slackware image | WillGle | `bash -n`/`shellcheck` |
+| SlackBuilds | 0.2.0 | ✅ validated | WillGle | `SlackBuild`/`installpkg`/`removepkg` |
 | ALT Sisyphus | 0.2.0 | ✅ validated (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
 | Nix flake | 0.2.0 | ✅ | WillGle | `nix flake check`/`nix build`/smoke |
 | nixpkgs | — | ⏸ deferred | — | — |
