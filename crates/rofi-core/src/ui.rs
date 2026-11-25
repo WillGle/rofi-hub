@@ -33,6 +33,22 @@ pub fn header(label: &str, hero: &str, meta: &str, theme: &Theme) -> String {
     )
 }
 
+/// One-line header for apps whose Rofi height is fixed: `LABEL  HERO  META`
+/// with explicit sizes so a large hero never leaks into the meta text.
+pub fn header_inline(label: &str, hero: &str, meta: &str, theme: &Theme) -> String {
+    let label = escape_markup(&label.to_uppercase());
+    let hero = escape_markup(hero);
+    let meta = escape_markup(meta);
+    format!(
+        "<span foreground='{accent}' weight='bold' size='12000'>{label}</span>   \
+         <span foreground='{text}' weight='bold' size='26000'>{hero}</span>   \
+         <span foreground='{muted}' size='12000'>{meta}</span>",
+        accent = theme.accent,
+        text = theme.text,
+        muted = theme.muted,
+    )
+}
+
 /// `▌ TITLE` on the left, muted meta right-aligned to `width` cells.
 pub fn section(label: &str, meta: &str, width: usize, theme: &Theme) -> String {
     let label = format!("\u{258c} {}", label.to_uppercase());

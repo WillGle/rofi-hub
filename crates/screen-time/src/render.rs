@@ -3,7 +3,7 @@ use crate::sessions::{display_label, display_name};
 use crate::theme::Theme;
 use crate::timeutil::{self, SLOT_COUNT};
 use crate::view::{APP_PAGE_SIZE, AppRow, DayView, DetailView, OtherRow, TOP_APPS};
-use rofi_core::Category;
+use rofi_core::{Category, ui};
 
 const NAME_WIDTH: usize = 16;
 const PREFIX_WIDTH: usize = 24;
@@ -185,10 +185,9 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
         format!(" No activity recorded · peak {peak}")
     };
     if mode == OutputMode::Rofi {
-        // The message widget measures mixed font sizes independently of list rows.
-        out.push_str(&format!(
-            "\0message\x1f <span size=\"{}pt\">{title}</span>    {total_line}    <span size=\"{}pt\">{date}</span>\n",theme.font_size,theme.font_size
-        ));
+        let meta = format!("{relative}{long_date}{stale}");
+        let header = ui::header_inline("SCREEN TIME", &total, &meta, theme);
+        out.push_str(&format!("\0message\x1f{header}\n"));
         let extra = usize::from(show_other || list_slots == 0);
         // The Rofi main view omits the three 4pt spacer rows used by plain
         // output. Six fixed rows + app rows + one footer row fit five apps.
@@ -307,22 +306,22 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
     if mode != OutputMode::Rofi {
         emit_spacer(&mut out, mode);
     }
+    let mut keys = vec![
+        ("←/→", "day"),
+        ("T", "today"),
+        ("R", "refresh"),
+        ("Enter", "detail"),
+        ("esc", "close"),
+    ];
+    if mode == OutputMode::Rofi {
+        if paginated {
+            keys.insert(1, ("Alt+↓/↑", "page"));
+        }
+        keys.push(("Alt+1–4", "theme"));
+    }
     emit(
         &mut out,
-        &format!(
-            " {}",
-            role_span(
-                if mode == OutputMode::Rofi && paginated {
-                    "←/→ day   Alt+↓/↑ page   T today   R refresh   Enter detail   esc close   Alt+1–4 theme"
-                } else if mode == OutputMode::Rofi {
-                    "←/→ day   T today   R refresh   Enter detail   esc close   Alt+1–4 theme"
-                } else {
-                    "←/→ day   T today   R refresh   Enter detail   esc close"
-                },
-                &theme.muted,
-                mode,
-            )
-        ),
+        &footer_hint(&keys, theme, mode),
         RowMeta::NonSelectable,
         mode,
     );
@@ -801,23 +800,22 @@ pub(crate) fn render_detail_with_theme(
     }
     let trend_end = body.lines().count() - 1;
     emit_spacer(&mut body, mode);
+    let mut keys = vec![("←/→", "day"), ("Backspace", "back"), ("Esc", "close")];
+    if mode == OutputMode::Rofi {
+        keys.push(("Alt+1–4", "theme"));
+    }
     emit(
         &mut body,
-        if mode == OutputMode::Rofi {
-            " ←/→ day   Backspace back   Esc close   Alt+1–4 theme"
-        } else {
-            " ←/→ day   Backspace back   Esc close"
-        },
+        &footer_hint(&keys, theme, mode),
         RowMeta::App("__back__".to_owned()),
         mode,
     );
 
     if mode == OutputMode::Rofi {
-        let font_size = theme.font_size;
         let lines = body.lines().count();
+        let header = ui::header_inline(&label, &total, &subtitle, theme);
         format!(
-            "\0message\x1f <span size=\"{font_size}pt\">{title}</span>  <span weight=\"700\">{total}</span>  <span size=\"{font_size}pt\" foreground=\"{}\">{subtitle}</span>\n\0theme\x1flistview {{ lines: {lines}; }}\n\0use-hot-keys\x1ftrue\n\0markup-rows\x1ftrue\n\0no-custom\x1ftrue\n\0active\x1f{activity_start}-{activity_end},{burst_start}-{burst_end},{trend_start}-{trend_end}\n\0keep-selection\x1ftrue\n\0new-selection\x1f{}\n{body}",
-            theme.muted,
+            "\0message\x1f{header}\n\0theme\x1flistview {{ lines: {lines}; }}\n\0use-hot-keys\x1ftrue\n\0markup-rows\x1ftrue\n\0no-custom\x1ftrue\n\0active\x1f{activity_start}-{activity_end},{burst_start}-{burst_end},{trend_start}-{trend_end}\n\0keep-selection\x1ftrue\n\0new-selection\x1f{}\n{body}",
             lines - 1
         )
     } else {
@@ -863,13 +861,28 @@ fn section_header(
     theme: &Theme,
     mode: OutputMode,
 ) -> String {
+    if mode == OutputMode::Rofi {
+        let line = ui::section(label, meta, width.saturating_sub(1), theme);
+        return panel_line(&format!(" {line}"), width, theme, mode);
+    }
     let left_plain = format!(" ▌ {label}");
     let padding = width.saturating_sub(visible_len(&left_plain) + visible_len(meta));
-    let marker = styled_span("▌", &theme.accent, Some("700"), mode);
-    let title = styled_span(label, &theme.accent, Some("700"), mode);
-    let meta = role_span(meta, &theme.muted, mode);
-    let line = format!(" {marker} {title}{}{meta}", " ".repeat(padding));
+    let line = format!("{left_plain}{}{meta}", " ".repeat(padding));
     panel_line(&line, width, theme, mode)
+}
+
+fn footer_hint(keys: &[(&str, &str)], theme: &Theme, mode: OutputMode) -> String {
+    if mode == OutputMode::Rofi {
+        ui::hint(keys, theme)
+    } else {
+        format!(
+            " {}",
+            keys.iter()
+                .map(|(key, description)| format!("{key} {description}"))
+                .collect::<Vec<_>>()
+                .join("   ")
+        )
+    }
 }
 
 /// Display width for our small Pango markup subset. Tags add no columns and

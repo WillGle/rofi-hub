@@ -81,6 +81,19 @@ fn plain_output_has_no_rofi_metadata() {
 }
 
 #[test]
+fn rofi_uses_the_shared_ui_kit() {
+    init_tz();
+    let fixture = Fixture::new();
+    let actual = fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
+    assert!(actual.contains("SCREEN TIME"), "{actual}");
+    assert!(actual.contains("\u{258c} DAY ACTIVITY"), "{actual}");
+    assert!(actual.contains("\u{258c} APP TIMELINE"), "{actual}");
+    assert!(actual.contains("Alt+1\u{2013}4 theme"), "{actual}");
+    assert!(actual.contains("\u{00b7}"), "{actual}");
+    assert!(actual.contains("foreground='#"), "{actual}");
+}
+
+#[test]
 fn rofi_protocol_marks_rows_and_carries_app_info() {
     init_tz();
     let fixture = Fixture::new();
@@ -166,8 +179,8 @@ fn matugen_palette_updates_section_data_colors_without_restart() {
         rofi_theme.display()
     ));
     let actual = fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
-    assert!(actual.contains("foreground=\"#aaccff\""), "{actual}");
-    assert!(actual.contains("foreground=\"#66aacc\""), "{actual}");
+    assert!(actual.contains("#aaccff"), "{actual}");
+    assert!(actual.contains("#66aacc"), "{actual}");
     let theme = fixture.render(&["render", "--format", "rofi-theme"]);
     assert!(theme.contains("@theme \""), "{theme}");
     assert!(theme.contains("font: \"Palette Mono 14\""), "{theme}");
@@ -189,8 +202,8 @@ fn matugen_palette_updates_section_data_colors_without_restart() {
     )
     .unwrap();
     let updated = fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
-    assert!(updated.contains("foreground=\"#aabbcc\""), "{updated}");
-    assert!(updated.contains("foreground=\"#ddeeff\""), "{updated}");
+    assert!(updated.contains("#aabbcc"), "{updated}");
+    assert!(updated.contains("#ddeeff"), "{updated}");
 }
 
 #[test]
