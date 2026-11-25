@@ -13,7 +13,18 @@ _rofi-hub() {
                 'open[open the hub menu or one provider]' \
                 'list[list installed providers]' \
                 'theme[show or change the hub theme]' \
-                'doctor[check Rofi, providers, and themes]'
+                'doctor[check Rofi, providers, and themes]' \
+                'launcher[open the Rofi drun launcher]' \
+                'window[open the Rofi window switcher]' \
+                'calc[open rofi-calc]' \
+                'emoji[open rofi-emoji]' \
+                'power[open rofi-power-menu]' \
+                'network[not ported in this phase]' \
+                'calendar[open the Calendar provider]' \
+                'clipboard[open the Clipboard provider]' \
+                'keybinds[open the Keyboard Shortcuts provider]' \
+                'screen-time[open the Screen Time provider]' \
+                'show[open a raw Rofi mode]'
             ;;
         args)
             case $words[1] in

@@ -41,8 +41,96 @@ pub fn run(cli: Cli) -> Result<()> {
         Some(CliCommand::List { json }) => list(json),
         Some(CliCommand::Theme { action }) => theme_command(theme, &config, action),
         Some(CliCommand::Doctor { json }) => doctor(theme, &config, json, &warnings),
+        Some(CliCommand::Launcher) => show_mode(theme, no_theme, &config, "drun", &[]),
+        Some(CliCommand::Window) => show_mode(theme, no_theme, &config, "window", &[]),
+        Some(CliCommand::Calc) => show_calc(theme, no_theme, &config),
+        Some(CliCommand::Emoji) => show_mode(
+            theme,
+            no_theme,
+            &config,
+            "emoji",
+            &["-modi".to_owned(), "emoji".to_owned()],
+        ),
+        Some(CliCommand::Power) => show_power(theme, no_theme, &config),
+        Some(CliCommand::Network) => bail!(
+            "the network manager is not ported in this phase; use nmcli or your desktop network applet"
+        ),
+        Some(CliCommand::Calendar) => open_provider(theme, no_theme, &config, "calendar"),
+        Some(CliCommand::Clipboard) => open_provider(theme, no_theme, &config, "clipboard"),
+        Some(CliCommand::Keybinds) => open_provider(theme, no_theme, &config, "keybinds"),
+        Some(CliCommand::ScreenTime) => open_provider(theme, no_theme, &config, "screen-time"),
+        Some(CliCommand::Show { mode, args }) => show_mode(theme, no_theme, &config, &mode, &args),
         None => open(theme, no_theme, &config, provider),
     }
+}
+
+fn open_provider(
+    theme: Option<&str>,
+    no_theme: bool,
+    config: &Config,
+    provider: &str,
+) -> Result<()> {
+    open(theme, no_theme, config, Some(provider.to_owned()))
+}
+
+fn show_mode(
+    theme_override: Option<&str>,
+    no_theme: bool,
+    config: &Config,
+    mode: &str,
+    extra: &[String],
+) -> Result<()> {
+    let choice = theme::resolve(theme_override, config)?;
+    let rofi = Rofi::find()?;
+    let mut command = Command::new(rofi.binary());
+    command.arg("-show").arg(mode);
+    if let Some(path) = rofi_config() {
+        command.arg("-config").arg(path);
+    }
+    if !no_theme && let Some(path) = &choice.path {
+        command.arg("-theme").arg(path);
+    }
+    command.args(extra);
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::inherit());
+
+    let status = command
+        .status()
+        .with_context(|| format!("cannot start Rofi mode `{mode}`"))?;
+    match status.code() {
+        // Rofi uses 1 for "cancelled" in show mode.
+        Some(0 | 1) | None => Ok(()),
+        Some(code) => bail!("Rofi mode `{mode}` exited with status {code}"),
+    }
+}
+
+fn show_calc(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()> {
+    let mut extra = vec![
+        "-modi".to_owned(),
+        "calc".to_owned(),
+        "-no-show-match".to_owned(),
+        "-no-sort".to_owned(),
+    ];
+    if which::find("wl-copy").is_some() {
+        extra.push("-calc-command".to_owned());
+        extra.push("echo -n '{result}' | wl-copy".to_owned());
+    }
+    show_mode(theme, no_theme, config, "calc", &extra)
+}
+
+fn show_power(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()> {
+    let Some(menu) = which::find("rofi-power-menu") else {
+        bail!("rofi-power-menu is required for `rofi-hub power`");
+    };
+    show_mode(
+        theme,
+        no_theme,
+        config,
+        "power-menu",
+        &["-modi".to_owned(), format!("power-menu:{}", menu.display())],
+    )
 }
 
 fn open(

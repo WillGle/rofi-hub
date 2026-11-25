@@ -261,6 +261,120 @@ fn doctor_honors_rofi_bin() {
     assert!(stdout(&output).contains("status         ok"));
 }
 
+fn fake_rofi(env: &TestEnv, log: &Path) -> PathBuf {
+    env.script(
+        "bin/rofi",
+        &format!(
+            "#!/bin/sh\nprintf '%s\\n' \"$@\" > '{}'\nexit 1\n",
+            log.display()
+        ),
+    )
+}
+
+#[test]
+fn manager_modes_dispatch_raw_rofi_modes() {
+    let env = TestEnv::new();
+    let log = env.root.path().join("rofi-args");
+    let rofi = fake_rofi(&env, &log);
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["launcher"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-show\ndrun\n"), "{args}");
+    assert!(args.contains("-theme\n"), "{args}");
+    assert!(args.contains("rofi-hub/theme.rasi"), "{args}");
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["show", "window", "-p", "Windows"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-show\nwindow\n"), "{args}");
+    assert!(args.contains("-p\nWindows\n"), "{args}");
+}
+
+#[test]
+fn calc_and_emoji_use_their_rofi_modes() {
+    let env = TestEnv::new();
+    let log = env.root.path().join("rofi-args");
+    let rofi = fake_rofi(&env, &log);
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["calc"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-show\ncalc\n"), "{args}");
+    assert!(args.contains("-modi\ncalc\n"), "{args}");
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["emoji"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-show\nemoji\n"), "{args}");
+    assert!(args.contains("-modi\nemoji\n"), "{args}");
+}
+
+#[test]
+fn provider_aliases_open_the_same_provider() {
+    let env = TestEnv::new();
+    let marker = env.root.path().join("alias-marker");
+    let script = env.script(
+        "provider.sh",
+        &format!(
+            "#!/bin/sh\nprintf '%s' \"$ROFI_HUB_PROVIDER\" > '{}'\n",
+            marker.display()
+        ),
+    );
+    env.provider("clipboard", "Clipboard", &[script.to_str().unwrap()]);
+
+    let output = env.run(&["clipboard"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(wait_for(&marker), "clipboard");
+}
+
+#[test]
+fn missing_power_menu_and_unported_network_fail_cleanly() {
+    let env = TestEnv::new();
+    let log = env.root.path().join("rofi-args");
+    let rofi = fake_rofi(&env, &log);
+
+    let isolated_path = env.root.path().join("bin");
+    let output = env
+        .command()
+        .env("PATH", &isolated_path)
+        .env("ROFI_BIN", &rofi)
+        .args(["power"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("rofi-power-menu"));
+
+    let output = env
+        .command()
+        .env("PATH", &isolated_path)
+        .args(["network"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("network manager is not ported"));
+}
+
 #[test]
 fn help_exits_zero() {
     let env = TestEnv::new();

@@ -79,6 +79,41 @@ Print the generated Rofi theme for the effective mode.
 .B doctor \fR[\fB\-\-json\fR]
 Check Rofi, provider manifests, and theme files. Returns a non-zero status
 when a required runtime piece is missing.
+.SH MANAGER COMPATIBILITY
+The former rofi app manager commands are available as aliases:
+.TP
+.B launcher
+Open Rofi's
+.B drun
+application launcher. Aliases:
+.BR drun ,
+.BR apps .
+.TP
+.B window
+Open Rofi's window switcher. Alias:
+.BR windows .
+.TP
+.B calc
+Open rofi-calc. Alias:
+.BR calculator .
+.TP
+.B emoji
+Open rofi-emoji.
+.TP
+.B power
+Open
+.BR rofi-power-menu .
+.TP
+.BR calendar ", " clipboard ", " keybinds ", " screen-time
+Open the matching hub provider directly.
+.TP
+.BI show " MODE " [ ARGS ...]
+Run a raw Rofi mode with the shared config and theme.
+.TP
+.B network
+Not ported in this phase; use
+.BR nmcli (1)
+or the desktop network applet.
 .SH ENVIRONMENT
 .TP
 .B ROFI_BIN

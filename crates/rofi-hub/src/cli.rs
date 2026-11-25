@@ -47,6 +47,51 @@ pub enum Command {
         #[arg(long)]
         json: bool,
     },
+
+    /// Desktop application launcher (Rofi drun).
+    #[command(alias = "drun", alias = "apps")]
+    Launcher,
+
+    /// Window switcher.
+    #[command(alias = "windows")]
+    Window,
+
+    /// Calculator through rofi-calc.
+    #[command(alias = "calculator")]
+    Calc,
+
+    /// Emoji picker through rofi-emoji.
+    Emoji,
+
+    /// Power menu through rofi-power-menu.
+    Power,
+
+    /// Network manager (not ported in this phase).
+    #[command(alias = "wifi")]
+    Network,
+
+    /// Open the Calendar provider directly.
+    Calendar,
+
+    /// Open the Clipboard provider directly.
+    Clipboard,
+
+    /// Open the Keyboard Shortcuts provider directly.
+    #[command(alias = "shortcuts")]
+    Keybinds,
+
+    /// Open the Screen Time provider directly.
+    ScreenTime,
+
+    /// Open a raw Rofi mode with the shared config and theme.
+    Show {
+        /// Rofi mode, for example `drun` or `window`.
+        mode: String,
+
+        /// Extra arguments passed to Rofi unchanged.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        args: Vec<String>,
+    },
 }
 
 #[derive(Debug, Subcommand)]

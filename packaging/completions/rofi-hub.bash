@@ -16,7 +16,7 @@ _rofi_hub() {
     esac
 
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "open list theme doctor --theme --no-theme --help --version" -- "$cur"))
+        COMPREPLY=($(compgen -W "open list theme doctor launcher window calc emoji power network calendar clipboard keybinds screen-time show --theme --no-theme --help --version" -- "$cur"))
         return 0
     fi
 

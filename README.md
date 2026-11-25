@@ -134,6 +134,24 @@ starting the hub first.
   manage the saved theme from a terminal.
 - `rofi-hub screen-time` opens one app directly.
 
+The old `rofi app manager` command surface is kept as aliases in
+`rofi-hub`:
+
+```bash
+rofi-hub launcher    # rofi -show drun
+rofi-hub window      # rofi -show window
+rofi-hub calc        # rofi-calc plugin
+rofi-hub emoji       # rofi-emoji plugin
+rofi-hub power       # rofi-power-menu
+rofi-hub calendar    # Calendar provider
+rofi-hub clipboard   # Clipboard provider
+rofi-hub keybinds    # Keyboard Shortcuts provider
+rofi-hub show drun   # raw Rofi mode with the shared theme
+```
+
+`rofi-hub network` is intentionally not ported in this phase; use `nmcli` or
+the desktop network applet.
+
 ### Calendar
 
 - Enter on the sheet opens today; type `15`, `15/3`, `3/2027`,
