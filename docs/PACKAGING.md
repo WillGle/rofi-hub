@@ -283,6 +283,20 @@ published:
 [![Packaging status](https://repology.org/badge/vertical-allrepos/rofi-hub.svg)](https://repology.org/project/rofi-hub/versions)
 ```
 
+## Current release phase
+
+**Phase A — native release.** The first release publishes only the Nix flake
+packages and the `install.sh` tarball path:
+
+- `nix build .#` / `.#rofi-hub-only` / `.#screen-time`;
+- `rofi-hub-<arch>-linux.tar.gz` with `install.sh`, `uninstall.sh`, and
+  `minisign.pub`;
+- checksums and minisign signatures for the tarball and installer.
+
+Distro artifacts (`.deb`, `.rpm`, `.apk`) and AUR are validated locally but
+are not release gates in this phase. They move to their own release phase once
+the native assets are stable.
+
 ## Release checklist
 
 - [ ] bump workspace and Screen Time versions and update `CHANGELOG.md`

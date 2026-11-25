@@ -472,18 +472,14 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
+    # Phase A release: Nix native packages + install.sh only. Distro package
+    # jobs are validated separately and do not gate the native release.
     needs:
       - lint
       - test
       - msrv
       - installer
-      - install-tree
-      - debian-official
-      - distro-build
       - bundle
-      - artifacts
-      - apk-package
-      - release-smoke
       - nix
     runs-on: ubuntu-latest
     permissions:
@@ -501,10 +497,9 @@ jobs:
           set -euo pipefail
           mkdir -p assets
           mv dist/rofi-hub-*.tar.gz assets/
-          cp dist/*.deb dist/*.rpm dist/*.apk assets/
           cp install.sh uninstall.sh minisign.pub assets/
           cd assets
-          sha256sum ./rofi-hub-*.tar.gz ./*.deb ./*.rpm ./*.apk install.sh uninstall.sh minisign.pub > SHA256SUMS
+          sha256sum ./rofi-hub-*.tar.gz install.sh uninstall.sh minisign.pub > SHA256SUMS
           cat SHA256SUMS
       - name: Sign release metadata
         env:
