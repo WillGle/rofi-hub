@@ -51,16 +51,16 @@ packaging/
 
 ## Recipes
 
-Official support currently covers `install.sh`, the Debian/Ubuntu `.deb`, the
-Fedora `.rpm`, and the Nix flake. Recipes below for other targets are
-experimental/community packaging, kept for future upstream work.
+The primary path is Nix (flake, standalone NixOS module, Home Manager module).
+`install.sh` is the secondary path for non-Nix distros. Debian `.deb` and Fedora
+`.rpm` are additional release artifacts; other recipes are experimental.
 
 | Target | Recipe | Support | Local build |
 |---|---|---|---|
-| `install.sh` | repo installer + release tarball | ✅ supported | `scripts/test-bundle.sh` |
-| Debian/Ubuntu `.deb` | `nfpm.yaml` | ✅ supported | `dpkg-deb`, `dpkg -i` |
-| Fedora | `fedora/rofi-hub.spec` + `nfpm` `.rpm` | ✅ supported | `fedpkg mockbuild`, `rpmlint` |
-| Nix | `flake.nix` | ✅ supported | `nix flake check`, `nix build` |
+| Nix | `flake.nix` + NixOS/Home Manager modules | ✅ primary | `nix flake check`, `nix build` |
+| `install.sh` | repo installer + release tarball | ✅ secondary | `scripts/test-bundle.sh` |
+| Debian/Ubuntu `.deb` | `nfpm.yaml` | ➕ additional artifact | `dpkg-deb`, `dpkg -i` |
+| Fedora | `fedora/rofi-hub.spec` + `nfpm` `.rpm` | ➕ additional artifact | `fedpkg mockbuild`, `rpmlint` |
 | Debian official | `debian/` | 🧪 experimental | `dpkg-buildpackage`, `lintian` |
 | Arch/AUR | `arch/PKGBUILD`, `-bin`, `-git` | 🧪 experimental | `makepkg`, `namcap` |
 | Alpine | `alpine/APKBUILD` | 🧪 experimental | `abuild -r`, `apkbuild-lint` |

@@ -33,103 +33,116 @@ below are real Rofi captures (not mockups).
 [Full 6 app × 4 mode screenshot matrix](docs/screenshots/ui/README.md) ·
 [UI style guide](docs/UI_STYLE.md) · `rofi-hub theme dump --app <app>`
 
-## Quick start
+## Install
 
-On Linux with Hyprland, Rofi 2.x, minisign, and a systemd user session, download
-and verify the release installer as your desktop user:
+**Nix is the primary installation path.** It is self-contained: hub, apps,
+Screen Time, providers, themes, and the user service. No local checkout or
+`install.sh` is required.
+
+### NixOS server (recommended)
+
+Add the flake input to `/etc/nixos/flake.nix`:
+
+```nix
+inputs.rofi-hub.url = "github:WillGle/rofi-hub";
+outputs = { nixpkgs, home-manager, rofi-hub, ... }@inputs: # add rofi-hub
+```
+
+Import the standalone NixOS module and enable it:
+
+```nix
+imports = [ inputs.rofi-hub.nixosModules.default ];
+
+services.rofi-hub.enable = true;
+```
+
+Rebuild:
+
+```bash
+sudo nixos-rebuild switch --flake /etc/nixos#<host>
+rofi-hub --version
+rofi-hub list --json
+systemctl --user status screen-time
+```
+
+No Home Manager is required. The module installs the all-in-one package and the
+`screen-time` user service.
+
+### Nix profile (other Nix machines)
+
+```bash
+nix profile add github:WillGle/rofi-hub
+rofi-hub --version
+```
+
+Or run without installing:
+
+```bash
+nix run github:WillGle/rofi-hub -- --version
+```
+
+### Home Manager
+
+```nix
+{
+  inputs.rofi-hub.url = "github:WillGle/rofi-hub";
+  imports = [ inputs.rofi-hub.homeManagerModules.default ];
+
+  services.rofi-hub = {
+    enable = true;
+    apps = [ "screen-time" "calendar" "keybinds" "clipboard" ];
+  };
+}
+```
+
+`apps = []` installs only the hub; `apps = [ "screen-time" ]` installs the hub
+and tracker.
+
+### Other Linux distributions (secondary: `install.sh`)
+
+On a non-Nix distro with Hyprland, Rofi 2.x, minisign, and a systemd user
+session, install the signed bundle as your desktop user:
 
 ```bash
 base=https://github.com/WillGle/rofi-hub/releases/latest/download
 curl -fsSLO https://raw.githubusercontent.com/WillGle/rofi-hub/main/minisign.pub
 curl -fsSLO "$base/install.sh" "$base/install.sh.minisig"
 minisign -Vm install.sh -p minisign.pub   # key id F1A59235D536DB40
-less install.sh
 bash install.sh
 ~/.local/bin/rofi-hub
 ```
 
-`install.sh` with no component flags installs the hub and every app.
+`install.sh` installs the hub and every app by default. Select components with
+`--app screen-time`, `--app calendar,keybinds,clipboard`, or `--list-apps`.
+
+Updates are signed and opt-in:
 
 ```bash
-# the hub plus only Screen Time
-bash install.sh --app screen-time
-
-# the hub plus the built-in apps, without the tracker
-bash install.sh --app calendar,keybinds,clipboard
-
-# list the apps in the bundle
-bash install.sh --list-apps
-
-# pick a theme while installing
-bash install.sh --theme nord
+bash install.sh --check
+bash install.sh --update
+bash install.sh --rollback
+bash uninstall.sh
 ```
-
-Updates are opt-in and signed:
-
-```bash
-bash install.sh --check                 # report only
-bash install.sh --update                # install a newer signed release
-bash install.sh --auto-update=check     # daily check timer
-bash install.sh --auto-update=apply     # daily signed auto-apply
-bash install.sh --rollback              # restore the last verified backup
-bash uninstall.sh                       # remove files; keep history
-bash uninstall.sh --purge --yes         # remove update state and history
-```
-
-The updater stops the tracker, snapshots the database, verifies the release,
-keeps a rollback copy, and restores files, data, and service state on failure.
-See [data safety and updates](crates/screen-time/docs/AUTO_UPDATE.md).
-
-## Nix and Home Manager
-
-```bash
-nix build .#                # all-in-one (hub + Screen Time)
-nix build .#rofi-hub-only   # launcher only
-nix build .#screen-time     # the tracker only
-./result/bin/rofi-hub
-```
-
-With flakes and Home Manager:
-
-```nix
-{
-  inputs.rofi-hub.url = "github:WillGle/rofi-hub";
-
-  # in your Home Manager configuration
-  imports = [ inputs.rofi-hub.homeManagerModules.default ];
-
-  services.rofi-hub = {
-    enable = true;
-    apps = [ "screen-time" ];       # [] installs only the hub
-    # Built-in apps can be added alone: [ "calendar" "keybinds" "clipboard" ]
-    # providerDirs = [ "/home/me/.local/share/rofi-hub/providers" ];
-  };
-}
-```
-
-`services.screen-time.enable = true` is still available through
-`homeManagerModules.screen-time` for standalone tracker installs.
 
 ## Packaging
 
-Official support currently covers four install paths:
+**Nix is the primary product path**: flake package, standalone NixOS module, and
+Home Manager module. **`install.sh` is the secondary path** for non-Nix distros.
+The Debian `.deb` and Fedora `.rpm` are additional release artifacts, not the
+primary installation method.
 
+- **Nix** — flake, `nixosModules.default`, `homeManagerModules.default`.
 - **`install.sh`** — signed release tarball, user-local install/update/rollback.
-- **Debian/Ubuntu `.deb`** — release artifact built from the shared install tree.
-- **Fedora `.rpm`** — release artifact plus `packaging/fedora/rofi-hub.spec`.
-- **Nix** — flake packages and Home Manager module.
-
-Other distro recipes in `packaging/` (Arch/AUR, Alpine, openSUSE, Gentoo,
-Void, Slackware, ALT) are **experimental/community recipes**, not supported
-release targets. The same applies to the extra `.apk` and source assets in the
-GitHub release; they are useful validation artifacts, not a support promise.
+- **Additional artifacts** — Debian/Ubuntu `.deb`, Fedora `.rpm`.
+- **Experimental** — Arch/AUR, Alpine `.apk`, openSUSE, Gentoo, Void,
+  Slackware, ALT, and the extra source asset.
 
 | Target | Version | Status |
 |---|---|---|
-| `install.sh` tarball | 0.2.1 | ✅ supported |
-| Debian/Ubuntu `.deb` | 0.2.1 | ✅ supported; install/remove clean |
-| Fedora `.rpm` / spec | 0.2.1 | ✅ supported; `rpmlint`/`dnf` |
-| Nix flake | 0.2.1 | ✅ supported; `nix flake check`/`nix build` |
+| Nix flake / NixOS / Home Manager | 0.2.1 | ✅ primary |
+| `install.sh` tarball (non-Nix) | 0.2.1 | ✅ secondary |
+| Debian/Ubuntu `.deb` | 0.2.1 | ➕ additional artifact |
+| Fedora `.rpm` / spec | 0.2.1 | ➕ additional artifact |
 | nixpkgs | — | ⏸ deferred |
 | Debian official source package | 0.2.1 | 🧪 experimental; sponsorship pending |
 | Arch/AUR | 0.2.1 | 🧪 experimental recipe; not published |

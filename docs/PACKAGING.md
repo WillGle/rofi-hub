@@ -2,9 +2,10 @@
 
 > **Owner:** WillGle · **Baseline:** `v0.2.0` (`fc0e5aa`) · **Current:** `v0.2.1` · **Updated:** 2026-11-25
 
-`rofi-hub` builds one install tree from `packaging/install-tree.sh`. Official
-support covers four install paths: `install.sh`, Debian/Ubuntu `.deb`, Fedora
-`.rpm`, and the Nix flake. Other recipes are experimental.
+`rofi-hub` is primarily a **Nix product**: flake package, standalone NixOS
+module, and Home Manager module. `install.sh` is the secondary path for non-Nix
+distros. The Debian `.deb` and Fedora `.rpm` are additional release artifacts;
+other recipes are experimental.
 
 ## Dependency matrix
 
@@ -143,10 +144,10 @@ cd packaging/alt && rpmlint rofi-hub.spec
 
 | Target | Version | Status | Validation |
 |---|---|---|---|
-| `install.sh` tarball | 0.2.1 | ✅ supported | bundle/upgrade/rollback |
-| Debian/Ubuntu `.deb` | 0.2.1 | ✅ supported | `dpkg-deb`/`dpkg -i` |
-| Fedora `.rpm` / spec | 0.2.1 | ✅ supported | `rpmlint`/`dnf` |
-| Nix flake | 0.2.1 | ✅ supported | `nix flake check`/`nix build` |
+| Nix flake / NixOS / Home Manager | 0.2.1 | ✅ primary | `nix flake check`/`nix build` |
+| `install.sh` tarball (non-Nix) | 0.2.1 | ✅ secondary | bundle/upgrade/rollback |
+| Debian/Ubuntu `.deb` | 0.2.1 | ➕ additional artifact | `dpkg-deb`/`dpkg -i` |
+| Fedora `.rpm` / spec | 0.2.1 | ➕ additional artifact | `rpmlint`/`dnf` |
 | nixpkgs | — | ⏸ deferred | — |
 | Debian official | 0.2.1 | 🧪 experimental | `dpkg-buildpackage`/`lintian` |
 | Arch/AUR | 0.2.1 | 🧪 experimental | `makepkg`/`namcap` |
