@@ -112,28 +112,32 @@ With flakes and Home Manager:
 
 ## Packaging
 
-Native packages use `packaging/install-tree.sh` with `PREFIX=/usr` and
-`DESTDIR`, so nothing is written to `$HOME` while staging. Release artifacts
-(`.deb`, `.rpm`, `.apk`) and distro recipes are built from the same tree. See
-[packaging](docs/PACKAGING.md) for the dependency matrix, layout, service
-files, and per-distro commands.
+Official support currently covers four install paths:
+
+- **`install.sh`** — signed release tarball, user-local install/update/rollback.
+- **Debian/Ubuntu `.deb`** — release artifact built from the shared install tree.
+- **Fedora `.rpm`** — release artifact plus `packaging/fedora/rofi-hub.spec`.
+- **Nix** — flake packages and Home Manager module.
+
+Other distro recipes in `packaging/` (Arch/AUR, Alpine, openSUSE, Gentoo,
+Void, Slackware, ALT) are **experimental/community recipes**, not supported
+release targets. The same applies to the extra `.apk` and source assets in the
+GitHub release; they are useful validation artifacts, not a support promise.
 
 | Target | Version | Status |
 |---|---|---|
-| Arch/AUR (`rofi-hub`, `-bin`) | 0.2.1 | ✅ validated; AUR push pending |
-| Arch/AUR `-git` | 0.2.1 | ✅ validated; AUR push pending |
-| Debian/Ubuntu `.deb` | 0.2.1 | ✅ rebuilt in Debian 12; install/remove clean |
-| Debian official | 0.2.1 | ✅ `dpkg-buildpackage`/`lintian` |
-| Fedora `.spec` | 0.2.1 | ✅ validated (`rpmbuild`/`dnf`) |
-| Alpine `APKBUILD` | 0.2.1 | ✅ validated (`abuild`/`apk`) |
-| Gentoo GURU | 0.2.1 | ✅ pkgcheck-clean; PR pending |
-| openSUSE | 0.2.1 | ✅ validated (`rpmbuild`/`zypper`) |
-| Void | 0.2.1 | ✅ validated (`xbps-src`/`xbps-install`) |
-| ALT Sisyphus | 0.2.1 | ✅ validated (`rpmbuild`/`rpm`) |
-| SlackBuilds | 0.2.1 | ✅ validated (`SlackBuild`/`installpkg`) |
-| Release assets (`.deb`/`.rpm`/`.apk`) | 0.2.1 | ✅ built and smoke-tested; v0.2.1 release |
-| Nix flake | 0.2.1 | ✅ |
+| `install.sh` tarball | 0.2.1 | ✅ supported |
+| Debian/Ubuntu `.deb` | 0.2.1 | ✅ supported; install/remove clean |
+| Fedora `.rpm` / spec | 0.2.1 | ✅ supported; `rpmlint`/`dnf` |
+| Nix flake | 0.2.1 | ✅ supported; `nix flake check`/`nix build` |
 | nixpkgs | — | ⏸ deferred |
+| Debian official source package | 0.2.1 | 🧪 experimental; sponsorship pending |
+| Arch/AUR | 0.2.1 | 🧪 experimental recipe; not published |
+| Alpine `.apk` | 0.2.1 | 🧪 experimental artifact |
+| openSUSE / Gentoo / Void / SlackBuilds / ALT | 0.2.1 | 🧪 experimental recipes |
+
+See [packaging](docs/PACKAGING.md) for the dependency matrix, install layout,
+service files, and per-distro commands.
 
 ## Use
 

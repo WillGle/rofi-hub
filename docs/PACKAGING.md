@@ -255,37 +255,39 @@ See `packaging/void/template`, `packaging/slackbuilds/`, and
 
 ## Packaging status
 
+**Supported install paths:** `install.sh` tarball, Debian/Ubuntu `.deb`, Fedora
+`.rpm`, and the Nix flake. These are the targets covered by release support and
+the primary CI gates.
+
 | Target | Version | Status | Maintainer | Validation |
 |---|---|---|---|---|
-| Arch/AUR source | 0.2.1 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Arch/AUR `-bin` | 0.2.1 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Arch/AUR `-git` | 0.2.1 | ✅ validated; AUR push pending | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
-| Debian/Ubuntu `.deb` | 0.2.1 | ✅ rebuilt in Debian 12; install/remove clean | WillGle | `dpkg-deb`/`dpkg -i` |
-| Debian official | 0.2.1 | ✅ binary lintian-clean; sponsorship pending | WillGle | `dpkg-buildpackage`/`lintian` |
-| Fedora `.spec` | 0.2.1 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
-| Alpine `APKBUILD` | 0.2.1 | ✅ validated | WillGle | `abuild -r`/`apk add`/`apk del` |
-| Gentoo GURU | 0.2.1 | ✅ pkgcheck-clean; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |
-| openSUSE | 0.2.1 | ✅ validated | WillGle | `rpmlint`/`rpmbuild`/`zypper install`/`remove` |
-| Void | 0.2.1 | ✅ validated | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
-| SlackBuilds | 0.2.1 | ✅ validated | WillGle | `SlackBuild`/`installpkg`/`removepkg` |
-| ALT Sisyphus | 0.2.1 | ✅ validated (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
-| Nix flake | 0.2.1 | ✅ | WillGle | `nix flake check`/`nix build`/smoke |
+| `install.sh` tarball | 0.2.1 | ✅ supported | WillGle | signed bundle/upgrade/rollback |
+| Debian/Ubuntu `.deb` | 0.2.1 | ✅ supported; install/remove clean | WillGle | `dpkg-deb`/`dpkg -i` |
+| Fedora `.rpm` / spec | 0.2.1 | ✅ supported | WillGle | `rpmlint`/`rpmbuild`/`dnf install`/`remove` |
+| Nix flake | 0.2.1 | ✅ supported | WillGle | `nix flake check`/`nix build`/smoke |
 | nixpkgs | — | ⏸ deferred | — | — |
+| Debian official | 0.2.1 | 🧪 experimental; sponsorship pending | WillGle | `dpkg-buildpackage`/`lintian` |
+| Arch/AUR source | 0.2.1 | 🧪 experimental recipe; AUR not published | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Arch/AUR `-bin` | 0.2.1 | 🧪 experimental recipe; AUR not published | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Arch/AUR `-git` | 0.2.1 | 🧪 experimental recipe; AUR not published | WillGle | `makepkg`/`namcap`/`pacman -U`/`-Rns` |
+| Alpine `APKBUILD` / `.apk` | 0.2.1 | 🧪 experimental | WillGle | `abuild -r`/`apk add`/`apk del` |
+| Gentoo GURU | 0.2.1 | 🧪 experimental; GURU PR pending | WillGle | `pkgcheck scan`/`Manifest` |
+| openSUSE | 0.2.1 | 🧪 experimental | WillGle | `rpmlint`/`rpmbuild`/`zypper install`/`remove` |
+| Void | 0.2.1 | 🧪 experimental | WillGle | `xbps-src pkg`/`xbps-install`/`xbps-remove` |
+| SlackBuilds | 0.2.1 | 🧪 experimental | WillGle | `SlackBuild`/`installpkg`/`removepkg` |
+| ALT Sisyphus | 0.2.1 | 🧪 experimental (warnings only) | WillGle | `rpmbuild`/`rpmlint`/`rpm -U`/`-e` |
 | Flatpak/Snap/Scoop | — | ❌ N/A | — | — |
 
 ### Current release blockers
 
-- **AUR publication** requires the AUR SSH key. The three recipes and
-  `.SRCINFO` files are ready and validated in `archlinux:base-devel`, but
-  nothing has been pushed to `aur.archlinux.org`. `rofi-hub-bin` keeps `SKIP`
-  checksums until the matching GitHub release assets exist; run `updpkgsums`
-  after the first asset upload.
-- **GitHub release** requires `MINISIGN_SECRET_KEY`, a release token, and a
-  `v*` tag. The release job now gates on the distro matrix, builds and
-  smoke-tests `.deb`, `.rpm`, `.apk`, and the source asset, then signs
-  `SHA256SUMS` with the pinned minisign key.
-- **Repology** has no package to track until the AUR or another repository
-  actually publishes one.
+- **AUR publication is not a supported release gate.** The Arch/AUR recipes and
+  `.SRCINFO` files are ready for community use, but AUR is experimental and is
+  not claimed as supported. Publishing still needs an AUR SSH key.
+- **GitHub release** `v0.2.1` is published with `.deb`, `.rpm`, `.apk`, source,
+  tarballs, checksums, and minisign signatures. The `.apk` and source assets are
+  validation artifacts; only the four supported paths above are promised.
+- **Repology** has no supported package to track until a distro repository (not
+  just GitHub release assets) publishes one.
 
 The Repology badge is already wired in the README and starts reporting once at
 least one package outside the flake is published:

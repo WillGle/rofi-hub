@@ -51,24 +51,30 @@ packaging/
 
 ## Recipes
 
-| Target | Recipe | Local build |
-|---|---|---|
-| Arch/AUR | `arch/PKGBUILD`, `arch/rofi-hub-bin/PKGBUILD`, `arch/rofi-hub-git/PKGBUILD` | `makepkg -si`, `namcap` |
-| Debian/Ubuntu | `debian/` (official track), release `.deb` from `nfpm.yaml` | `dpkg-buildpackage`, `lintian` |
-| Fedora | `fedora/rofi-hub.spec` | `fedpkg mockbuild`, `rpmlint` |
-| Alpine | `alpine/APKBUILD` | `abuild -r`, `apkbuild-lint` |
-| Gentoo | `gentoo/rofi-hub-0.2.1.ebuild` | `pkgcheck scan`, `ebuild ... manifest` |
-| openSUSE | `opensuse/rofi-hub.spec` | `osc build`, `rpmlint` |
-| Void | `void/template` | `xbps-src pkg rofi-hub` |
-| Slackware | `slackbuilds/rofi-hub.SlackBuild` | `sbopkg` |
-| ALT | `alt/rofi-hub.spec` | `rpmbuild`, `rpmlint` |
+Official support currently covers `install.sh`, the Debian/Ubuntu `.deb`, the
+Fedora `.rpm`, and the Nix flake. Recipes below for other targets are
+experimental/community packaging, kept for future upstream work.
 
-Release `.deb`, `.rpm`, and `.apk` artifacts are produced by
+| Target | Recipe | Support | Local build |
+|---|---|---|---|
+| `install.sh` | repo installer + release tarball | ✅ supported | `scripts/test-bundle.sh` |
+| Debian/Ubuntu `.deb` | `nfpm.yaml` | ✅ supported | `dpkg-deb`, `dpkg -i` |
+| Fedora | `fedora/rofi-hub.spec` + `nfpm` `.rpm` | ✅ supported | `fedpkg mockbuild`, `rpmlint` |
+| Nix | `flake.nix` | ✅ supported | `nix flake check`, `nix build` |
+| Debian official | `debian/` | 🧪 experimental | `dpkg-buildpackage`, `lintian` |
+| Arch/AUR | `arch/PKGBUILD`, `-bin`, `-git` | 🧪 experimental | `makepkg`, `namcap` |
+| Alpine | `alpine/APKBUILD` | 🧪 experimental | `abuild -r`, `apkbuild-lint` |
+| Gentoo | `gentoo/rofi-hub-0.2.1.ebuild` | 🧪 experimental | `pkgcheck scan`, `ebuild ... manifest` |
+| openSUSE | `opensuse/rofi-hub.spec` | 🧪 experimental | `osc build`, `rpmlint` |
+| Void | `void/template` | 🧪 experimental | `xbps-src pkg rofi-hub` |
+| Slackware | `slackbuilds/rofi-hub.SlackBuild` | 🧪 experimental | `sbopkg` |
+| ALT | `alt/rofi-hub.spec` | 🧪 experimental | `rpmbuild`, `rpmlint` |
+
+Release `.deb` and `.rpm` artifacts are produced by
 `scripts/build-package-artifacts.sh` from the same staged tree and checked by
-`scripts/test-package-artifacts.sh`. The `.apk` that is published comes from
-`abuild` in `alpine:edge`; `nfpm` produces the `.deb` and `.rpm`. A tag also
-publishes `rofi-hub-<version>-source.tar.gz`, which the source recipes use, and
-a signed `SHA256SUMS` covering every asset.
+`scripts/test-package-artifacts.sh`. The `.apk` and source assets are also
+published for validation and community recipes, but are not part of the
+official support matrix.
 
 ## Validation
 
