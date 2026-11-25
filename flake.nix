@@ -349,6 +349,55 @@
           };
         };
 
+      # Standalone NixOS module: no Home Manager required.
+      nixosModules.default =
+        {
+          config,
+          lib,
+          pkgs,
+          ...
+        }:
+        let
+          cfg = config.services.rofi-hub;
+          system = pkgs.stdenv.hostPlatform.system;
+          defaultPackage = self.packages.${system}.default;
+        in
+        {
+          options.services.rofi-hub = {
+            enable = lib.mkEnableOption "Rofi Hub and its Screen Time user service";
+
+            package = lib.mkOption {
+              type = lib.types.package;
+              default = defaultPackage;
+              description = ''
+                The self-contained rofi-hub package (hub, apps, Screen Time,
+                providers, and themes). The default is the all-in-one package.
+              '';
+            };
+          };
+
+          config = lib.mkIf cfg.enable {
+            environment.systemPackages = [ cfg.package ];
+
+            systemd.user.services.screen-time = {
+              enable = true;
+              description = "Screen Time tracker";
+              after = [ "graphical-session.target" ];
+              partOf = [ "graphical-session.target" ];
+              wantedBy = [ "graphical-session.target" ];
+              serviceConfig = {
+                ExecStart = "${cfg.package}/bin/screen-time daemon";
+                Restart = "always";
+                RestartSec = "2s";
+                StateDirectory = "screen-time";
+                RuntimeDirectory = "screen-time";
+                NoNewPrivileges = true;
+                PrivateTmp = true;
+              };
+            };
+          };
+        };
+
       checks = forAllSystems (
         { pkgs }:
         let
@@ -361,6 +410,15 @@
             rofi-hub-only
             screen-time
             ;
+          nixos-module = pkgs.writeText "rofi-hub-nixos-module-check" (
+            (nixpkgs.lib.nixosSystem {
+              system = pkgs.stdenv.hostPlatform.system;
+              modules = [
+                self.nixosModules.default
+                { services.rofi-hub.enable = true; }
+              ];
+            }).config.systemd.user.services.screen-time.serviceConfig.ExecStart
+          );
         }
       );
     };
