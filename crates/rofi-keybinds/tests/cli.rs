@@ -3,7 +3,7 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use rofi_core::test_support::TestEnv;
+use rofi_dmenu::test_support::TestEnv;
 
 const BIN: &str = env!("CARGO_BIN_EXE_rofi-keybinds");
 

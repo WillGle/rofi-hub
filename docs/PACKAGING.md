@@ -1,169 +1,141 @@
-# Packaging
+# Packaging and releases
 
-> **Owner:** WillGle · **Baseline:** `v0.2.0` (`fc0e5aa`) · **Current:** `v0.2.1` · **Updated:** 2026-11-25
+Only two delivery channels exist:
 
-`rofi-hub` is primarily a **Nix product**: flake package, standalone NixOS
-module, and Home Manager module. `install.sh` is the secondary path for non-Nix
-distros. The Debian `.deb` and Fedora `.rpm` are additional release artifacts;
-other recipes are experimental.
+1. **Nix** — flake packages and modules (primary).
+2. **`install.sh`** — signed universal release for other distributions
+   (secondary).
 
-## Dependency matrix
+There are no distro packages: no `.deb`, `.rpm`, `.apk`, AUR, Debian official,
+Gentoo, openSUSE, Void, Slackware, ALT, or source asset for community recipes.
 
-| Component | Build | Runtime | Optional |
-|---|---|---|---|
-| `rofi-hub`, apps | Rust 1.89+, C compiler | `rofi >= 2.0` | — |
-| `rofi-keybinds` | — | `rofi`, Hyprland config | Hyprland |
-| `rofi-clipboard` | — | `rofi`, `cliphist`, `wl-clipboard` | Wayland |
-| `screen-time` | Rust, C compiler, `tzdata` for tests | `rofi`, Hyprland, systemd user, `tzdata` | systemd, Hyprland |
-| `install.sh` | `minisign` | `rofi`, systemd user | — |
+## Release layout
 
-SQLite is bundled by `rusqlite`; no system SQLite package is needed.
-
-## Install layout
-
-| Path | Content |
-|---|---|
-| `/usr/bin/` | `rofi-hub`, `rofi-calendar`, `rofi-keybinds`, `rofi-clipboard`, `screen-time`, `rofi-screen-time` |
-| `/usr/share/rofi-hub/providers/` | provider manifests |
-| `/usr/share/rofi-hub/themes/hub.rasi` | generated hub theme |
-| `/usr/share/rofi/screen-time.rasi` | Screen Time theme |
-| `/usr/share/screen-time/config.example.toml` | config example |
-| `/usr/lib/systemd/user/screen-time.service` | user unit |
-| `/usr/share/{applications,icons,metainfo,man,doc,licenses}/` | desktop integration |
-| `/usr/share/rofi-hub/contrib/{openrc,runit}/` | non-systemd examples |
-
-```bash
-DESTDIR=/tmp/root PREFIX=/usr packaging/install-tree.sh --all
-DESTDIR=/tmp/root PREFIX=/usr packaging/install-tree.sh --without apps
-packaging/install-tree.sh --dry-run
-```
-
-Overrides: `PREFIX`, `DESTDIR`, `BINDIR`, `DATADIR`, `SYSTEMD_USERUNITDIR`,
-`MANDIR`, `LICENSEDIR`, `DOCDIR`, `DESKTOPDIR`, `ICONDIR`, `APPDATADIR`,
-`BASHCOMPLETIONSDIR`, `ZSHCOMPLETIONSDIR`, `FISHCOMPLETIONSDIR`, `CONTRIBDIR`.
-
-## Split packages
-
-| Package | Content | Dependency |
-|---|---|---|
-| `rofi-hub` | hub, calendar, keybinds, clipboard, providers | `rofi` |
-| `rofi-hub-screen-time` | tracker, wrapper, provider, theme, unit | `rofi-hub` |
-| `rofi-hub-bin` / `-git` (AUR) | binary / git build | `rofi` |
-
-## Service managers
-
-- **systemd user:** `screen-time.service` runs `@BINDIR@/screen-time daemon`,
-  with `StateDirectory`/`RuntimeDirectory` and `ProtectSystem=strict`.
-- **OpenRC/runit:** examples in `/usr/share/rofi-hub/contrib/`; run as the
-  desktop user.
-- Verify: `systemd-analyze verify /usr/lib/systemd/user/screen-time.service`.
-
-## Provider and theme resolution
+`scripts/package-release.sh` builds a `dist/` directory:
 
 ```text
-Providers: ROFI_HUB_PROVIDER_DIR
-  > $XDG_DATA_HOME/rofi-hub/providers
-  > $XDG_DATA_DIRS/rofi-hub/providers
-  > /usr/share/rofi-hub/providers
-
-Apps: ROFI_THEME
-  > ROFI_HUB_THEME_FILE
-  > $XDG_CONFIG_HOME/rofi/<app>.rasi
-  > $XDG_DATA_DIRS/rofi/<app>.rasi
-  > generated theme
-
-Screen Time: ROFI_THEME
-  > ROFI_HUB_THEME_FILE / ROFI_HUB_THEME
-  > $XDG_DATA_HOME/screen-time/rofi/screen-time.rasi
-  > $XDG_DATA_DIRS/screen-time/rofi/screen-time.rasi
-  > /usr/share/rofi/screen-time.rasi
+dist/
+  index.json
+  rofi-calendar-1.2.0-x86_64.tar.gz
+  rofi-clipboard-0.8.0-x86_64.tar.gz
+  rofi-keybinds-1.0.0-x86_64.tar.gz
+  rofi-network-0.3.0-x86_64.tar.gz
+  screen-time-0.5.0-x86_64.tar.gz
+  rofi-hub-menu-0.3.0-x86_64.tar.gz   # optional app
+  SHA256SUMS
+  install.sh
+  uninstall.sh
+  minisign.pub
 ```
 
-`auto` resolves `matugen > static.env > Gruvbox`. `ROFI_THEME` remains an
-explicit escape hatch.
+`index.json` follows `installer/index.schema.json`:
 
-## Release binary baseline
+```json
+{
+  "schema": 1,
+  "installer": { "version": "0.3.0" },
+  "apps": [
+    {
+      "id": "calendar",
+      "version": "1.2.0",
+      "url": "rofi-calendar-1.2.0-x86_64.tar.gz",
+      "sha256": "...",
+      "requires": ["rofi"]
+    }
+  ]
+}
+```
 
-Release tarballs build in `debian:12` (glibc 2.36); current binaries require at
-most `GLIBC_2.34`. The musl path is validated in `alpine:edge` with
-`cargo test --workspace` and `test-install-tree.sh`; Alpine/distro packages build
-from source. Nix uses nixpkgs' glibc.
+Each tarball contains one app payload:
+
+```text
+app.toml
+bin/<binary>
+share/rofi/<id>.rasi
+share/rofi-apps/providers/<id>.toml
+share/rofi-apps/apps/<id>/app.toml
+```
+
+Screen Time adds `bin/rofi-screen-time`, `systemd/screen-time.service`, and
+`share/screen-time/config.example.toml`. The service unit is shipped by the
+app, not by the installer or the menu.
+
+## Signing
+
+Use the offline minisign key:
 
 ```bash
-ldd --version | head -n1
-objdump -T target/release/rofi-hub | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
+MINISIGN_SECRET_KEY=/secure/minisign.key scripts/sign-release.sh dist
 ```
 
-## Release artifacts
+This signs `index.json`, every `*.tar.gz`, and `SHA256SUMS`. The installer
+verifies `index.json.minisig` and `<tarball>.minisig` by default. Unsigned
+artifacts are rejected unless `--allow-unsigned` is passed for a local test.
 
-A `v0.2.x` tag publishes:
+## Install paths
 
-- `rofi-hub-<arch>-linux.tar.gz` + `install.sh`/`uninstall.sh`;
-- `rofi-hub_<version>_<arch>.deb`, `rofi-hub-<version>-1.<arch>.rpm`;
-- experimental `.apk` and source asset for community recipes;
-- signed `SHA256SUMS`.
+```text
+~/.local/bin/<binary>
+~/.local/share/rofi/<id>.rasi
+~/.local/share/rofi-apps/providers/<id>.toml
+~/.local/share/rofi-apps/apps/<id>/app.toml
+~/.config/systemd/user/<id>.service     # only when app.toml service = true
+~/.local/state/rofi-apps/installed/<id>
+~/.local/state/rofi-apps/version
+```
 
-`.deb`/`.rpm` build in Debian 12. The published `.apk` comes from `abuild`, not
-`nfpm`. Validate:
+`--prefix` changes the binary prefix. State, data, and config stay in the XDG
+directories. `--no-service` installs files without installing or enabling a
+unit.
+
+## Installer guarantees
+
+- Reads `index.json` and `app.toml`; there is no hardcoded app list.
+- `--list`, `--app`, `--all`, `--update`, `--uninstall`, `--no-service`.
+- Prerequisite check is `command -v`; nothing is installed automatically.
+- Checksum and signature verification are mandatory by default.
+- Preflight checks every selected app before changing any file.
+- A failed install restores the previous files.
+- Per-app state; update/uninstall one app without touching another.
+- No theme/config writes, no `ROFI_HUB_*`, no `PATH` wrapper.
+- Rejects Nix-managed paths.
+- Rejects absolute paths, `..` components, links, and devices in tarballs.
+- State directory 0700, state files 0600.
+
+## Nix packages
 
 ```bash
-scripts/test-package-artifacts.sh dist/*.deb dist/*.rpm dist/*.apk
-scripts/test-bundle.sh dist/rofi-hub-x86_64-linux.tar.gz
-minisign -Vm dist/SHA256SUMS -p minisign.pub
+nix build .#rofi-calendar
+nix build .#rofi-clipboard
+nix build .#rofi-keybinds
+nix build .#rofi-network
+nix build .#screen-time
+nix build .#rofi-hub-menu
+nix build .#rofi-hub-installer
 ```
 
-## Per-distro commands
+Each app package installs only that app. Runtime dependencies are wrapped on
+the app's own `PATH`; the package does not carry the menu, installer, or
+another app. `packages.rofi-hub-apps` is a compatibility bundle only.
 
-**Supported**
+aarch64 artifacts are built natively on the aarch64 CI runner
+(`ubuntu-24.04-arm`). The flake also exposes cross-built packages on x86_64
+(`nix build .#rofi-calendar-aarch64`), which is useful for local verification;
+these pull the target GTK/Rofi stack and can take a while. A direct cross
+`cargo build --target aarch64-unknown-linux-gnu` is enough to check the Rust
+binaries without rebuilding the GUI stack. The release path itself always
+builds natively on the arm64 runner.
+
+## Verification
 
 ```bash
-# Debian / Ubuntu
-sudo dpkg -i rofi-hub_<version>_amd64.deb && sudo apt-get remove rofi-hub
-
-# Fedora
-rpmlint packaging/fedora/rofi-hub.spec
-sudo dnf install ./rofi-hub-<version>-1.x86_64.rpm
-
-# Nix
-nix flake check && nix build .#
+scripts/test-release-index.sh dist   # schema, versions, checksums, payloads
+scripts/test-bundle.sh dist          # install.sh end-to-end
+scripts/test-installer.sh            # install/update/failure injection
+scripts/test-nix.sh                  # per-app closures and modules
+scripts/test-install-matrix.sh       # Debian/Ubuntu/Arch/Fedora containers
+scripts/test-performance.sh          # app startup and theme-cache budget
 ```
 
-**Experimental**
-
-```bash
-cd packaging/arch && makepkg -si --noconfirm && namcap PKGBUILD
-cd packaging/alpine && abuild -r && apkbuild-lint APKBUILD
-cd packaging/opensuse && rpmlint rofi-hub.spec
-cd packaging/gentoo && pkgcheck scan
-cd packaging/void && xbps-src pkg rofi-hub
-cd packaging/slackbuilds && ./rofi-hub.SlackBuild
-cd packaging/alt && rpmlint rofi-hub.spec
-```
-
-## Packaging status
-
-| Target | Version | Status | Validation |
-|---|---|---|---|
-| Nix flake / NixOS / Home Manager | 0.2.1 | ✅ primary | `nix flake check`/`nix build` |
-| `install.sh` tarball (non-Nix) | 0.2.1 | ✅ secondary | bundle/upgrade/rollback |
-| Debian/Ubuntu `.deb` | 0.2.1 | ➕ additional artifact | `dpkg-deb`/`dpkg -i` |
-| Fedora `.rpm` / spec | 0.2.1 | ➕ additional artifact | `rpmlint`/`dnf` |
-| nixpkgs | — | ⏸ deferred | — |
-| Debian official | 0.2.1 | 🧪 experimental | `dpkg-buildpackage`/`lintian` |
-| Arch/AUR | 0.2.1 | 🧪 experimental | `makepkg`/`namcap` |
-| Alpine `.apk` | 0.2.1 | 🧪 experimental | `abuild`/`apk add` |
-| openSUSE/Gentoo/Void/SlackBuilds/ALT | 0.2.1 | 🧪 experimental | distro lint/build |
-
-AUR is not a supported release gate. Publication needs an AUR SSH key.
-Repology has no supported repository package yet: https://repology.org/project/rofi-hub/versions
-
-## Release checklist
-
-- [ ] bump version and `CHANGELOG.md`
-- [ ] `cargo test --workspace --locked`, `test-installer.sh`, `test-install-tree.sh`
-- [ ] `package-source.sh` + `update-source-checksums.py`
-- [ ] build and test artifacts
-- [ ] tag `vX.Y.Z`; sign and publish
-- [ ] update experimental recipes only if shipping them
-- [ ] update status table/README
-- [ ] check Repology after a repository package exists
+Tag builds require all checks, build x86_64 and aarch64 artifacts, sign the
+index and tarballs, verify them, and only then publish the GitHub release.

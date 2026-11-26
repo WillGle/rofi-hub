@@ -1,0 +1,7 @@
+id = "hub-menu"
+version = "0.3.0"
+bin = "rofi-hub-menu"
+provider = ""
+requires = ["rofi"]
+optional_requires = []
+service = false

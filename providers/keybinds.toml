@@ -1,8 +1,0 @@
-id = "keybinds"
-name = "Keyboard Shortcuts"
-description = "Browse Hyprland bindings and run app shortcuts"
-category = "System"
-icon = "preferences-desktop-keyboard"
-keywords = ["keybind", "shortcut", "hotkey", "hyprland"]
-exec = ["rofi-keybinds"]
-version = "0.2.1"

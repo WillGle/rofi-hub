@@ -3,7 +3,7 @@ use crate::sessions::{display_label, display_name};
 use crate::theme::Theme;
 use crate::timeutil::{self, SLOT_COUNT};
 use crate::view::{APP_PAGE_SIZE, AppRow, DayView, DetailView, OtherRow, TOP_APPS};
-use rofi_core::{Category, ui};
+use rofi_dmenu::{Category, ui};
 
 const NAME_WIDTH: usize = 16;
 const PREFIX_WIDTH: usize = 24;
@@ -824,7 +824,7 @@ pub(crate) fn render_detail_with_theme(
 }
 
 fn escape_markup(value: &str) -> String {
-    rofi_core::escape_markup(value)
+    rofi_dmenu::escape_markup(value)
 }
 
 fn markup_text(value: &str, mode: OutputMode) -> String {
@@ -888,7 +888,7 @@ fn footer_hint(keys: &[(&str, &str)], theme: &Theme, mode: OutputMode) -> String
 /// Display width for our small Pango markup subset. Tags add no columns and
 /// entities such as `&amp;` count as one character.
 fn visible_len(value: &str) -> usize {
-    rofi_core::ui::display_width(value)
+    rofi_dmenu::ui::display_width(value)
 }
 
 fn ruler(width: usize) -> String {

@@ -1,519 +1,367 @@
 #!/usr/bin/env bash
-# Installer integration and fault-injection tests in a temp HOME.
+# Installer integration and fault-injection tests in a temporary HOME.
 #
-# Everything runs as the current user with stub systemctl/rofi/notify-send/
-# hyprctl commands. No real service, timer, or user state directory is touched.
+# Covers per-app install, update/uninstall independence, prerequisite failure,
+# checksum/signature rejection, path traversal, state permissions, services,
+# optional menu handling, and rollback.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-stable}"
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/rofi-hub-installer-test.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/rofi-apps-installer.XXXXXX")"
+KEEP="${KEEP_TEST_WORK:-0}"
+cleanup() {
+    if [[ "$KEEP" = 1 ]]; then
+        printf 'test workdir kept at %s\n' "$WORK" >&2
+    else
+        rm -rf -- "$WORK"
+    fi
+}
+trap cleanup EXIT INT TERM
 PASS=0
 FAIL=0
 
-cleanup() {
-    if [ "${KEEP_TEST_WORK:-0}" = "1" ]; then
-        printf 'test workdir kept at %s\n' "$WORK" >&2
-        return 0
-    fi
-    chmod -R u+rwX "$WORK" 2>/dev/null || true
-    rm -rf -- "$WORK"
-}
-trap cleanup EXIT INT TERM
-
-pass() {
-    PASS=$((PASS + 1))
-    printf 'ok   %s\n' "$1"
-}
-
-fail() {
-    FAIL=$((FAIL + 1))
-    printf 'FAIL %s\n' "$1" >&2
-    printf 'FAIL %s\n' "$1" >>"${FAIL_LOG:-/dev/null}"
-}
-
-die() {
-    printf 'test-installer.sh: %s\n' "$*" >&2
-    exit 1
-}
-
-assert_eq() {
-    local expected="$1" actual="$2" label="$3"
-    if [ "$expected" = "$actual" ]; then
-        pass "$label"
-    else
-        fail "$label (expected '$expected', got '$actual')"
-    fi
-}
+pass() { PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"; }
+fail() { FAIL=$((FAIL + 1)); printf 'FAIL %s\n' "$1" >&2; }
 
 assert_file() {
-    if [ -e "$1" ]; then
-        pass "$2"
+    if [[ -e "$1" ]]; then pass "$2"; else fail "$2 (missing $1)"; fi
+}
+assert_no_file() {
+    if [[ ! -e "$1" ]]; then pass "$2"; else fail "$2 (unexpected $1)"; fi
+}
+assert_eq() {
+    if [[ "$1" = "$2" ]]; then pass "$3"; else fail "$3 (expected '$1', got '$2')"; fi
+}
+assert_mode() {
+    local expected="$1" path="$2" label="$3" actual
+    actual="$(stat -c '%a' "$path" 2>/dev/null || printf missing)"
+    assert_eq "$expected" "$actual" "$label"
+}
+assert_contains() {
+    local needle="$1" file="$2" label="$3"
+    if grep -qF -- "$needle" "$file" 2>/dev/null; then
+        pass "$label"
     else
-        fail "$2 (missing $1)"
+        fail "$label (missing '$needle' in $file)"
     fi
 }
-
-assert_not_file() {
-    if [ ! -e "$1" ]; then
-        pass "$2"
-    else
-        fail "$2 (unexpected $1)"
-    fi
-}
-
 assert_success() {
-    local label="$1"
+    local label="$1"; shift
     local output
-    shift
     if output="$("$@" 2>&1)"; then
         pass "$label"
     else
-        fail "$label (command failed)"
+        fail "$label"
         printf '%s\n' "$output" | tail -n 12 >&2
     fi
 }
-
 assert_failure() {
-    local label="$1"
-    shift
-    if "$@"; then
-        fail "$label (command unexpectedly succeeded)"
-    else
-        pass "$label"
-    fi
+    local label="$1"; shift
+    if "$@" >/dev/null 2>&1; then fail "$label (unexpected success)"; else pass "$label"; fi
 }
 
-assert_mode() {
-    local expected="$1" path="$2" label="$3" actual
-    actual="$(stat -c '%a' "$path" 2>/dev/null || printf 'missing')"
-    assert_eq "$expected" "$actual" "$label"
-}
+command -v minisign >/dev/null 2>&1 || { printf 'minisign is required\n' >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { printf 'python3 is required\n' >&2; exit 1; }
 
-sha() {
-    sha256sum "$1" | awk '{print $1}'
-}
+DIST="$WORK/dist"
+DIST="$DIST" "$ROOT/scripts/package-release.sh" >/dev/null
 
-# ---------------------------------------------------------------------------
-# Environment and stubs
-# ---------------------------------------------------------------------------
-
-command -v minisign >/dev/null 2>&1 || die "minisign is required for installer tests"
-command -v flock >/dev/null 2>&1 || die "flock is required"
-command -v jq >/dev/null 2>&1 || die "jq is required"
-
-mkdir -p "$WORK/bin" "$WORK/home" "$WORK/state" "$WORK/config" "$WORK/data" \
-    "$WORK/run" "$WORK/systemctl" "$WORK/tmp"
-chmod 700 "$WORK/run" "$WORK/state"
-export HOME="$WORK/home"
-export XDG_STATE_HOME="$WORK/state"
-export XDG_CONFIG_HOME="$WORK/config"
-export XDG_DATA_HOME="$WORK/data"
-export XDG_RUNTIME_DIR="$WORK/run"
-export HYPRLAND_INSTANCE_SIGNATURE="installer-test"
-export SYSTEMCTL_STATE="$WORK/systemctl"
-export PATH="$WORK/bin:$PATH"
-export TMPDIR="$WORK/tmp"
-export SCREEN_TIME_DISABLE_IDLE=1
-export SCREEN_TIME_DISABLE_SLEEP=1
-
-cat >"$WORK/bin/systemctl" <<'EOF'
-#!/usr/bin/env bash
-state="${SYSTEMCTL_STATE:?}"
-[ "${1:-}" = "--user" ] && shift
-case "${1:-}" in
-    is-active)
-        if [ -f "$state/active" ]; then printf 'active\n'; else printf 'inactive\n'; exit 3; fi
-        ;;
-    start|enable) touch "$state/active" ;;
-    stop|disable) rm -f "$state/active" ;;
-    show-environment|daemon-reload) exit 0 ;;
-    *) exit 0 ;;
-esac
-EOF
-chmod +x "$WORK/bin/systemctl"
-
-cat >"$WORK/bin/rofi" <<'EOF'
-#!/usr/bin/env bash
-printf 'rofi 2.0.0\n'
-EOF
-chmod +x "$WORK/bin/rofi"
-
-cat >"$WORK/bin/hyprctl" <<'EOF'
-#!/usr/bin/env bash
-printf 'Hyprland, 0.45.0\n'
-EOF
-chmod +x "$WORK/bin/hyprctl"
-
-cat >"$WORK/bin/notify-send" <<'EOF'
-#!/usr/bin/env bash
-printf '%s\n' "$*" >>"${NOTIFY_LOG:-/dev/null}"
-EOF
-chmod +x "$WORK/bin/notify-send"
-export NOTIFY_LOG="$WORK/notifications.log"
-: >"$NOTIFY_LOG"
-
-HUB_BIN="$HOME/.local/bin/rofi-hub"
-SC_BIN="$HOME/.local/bin/screen-time"
-SC_WRAPPER="$HOME/.local/bin/rofi-screen-time"
-CAL_BIN="$HOME/.local/bin/rofi-calendar"
-KEYBINDS_BIN="$HOME/.local/bin/rofi-keybinds"
-CLIPBOARD_BIN="$HOME/.local/bin/rofi-clipboard"
-HUB_THEME="$XDG_DATA_HOME/rofi-hub/themes/hub.rasi"
-PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/screen-time.toml"
-CAL_PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/calendar.toml"
-KEYBINDS_PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/keybinds.toml"
-CLIPBOARD_PROVIDER="$XDG_DATA_HOME/rofi-hub/providers/clipboard.toml"
-SC_THEME="$XDG_DATA_HOME/screen-time/rofi/screen-time.rasi"
-SC_THEME_STATE="$XDG_CONFIG_HOME/rofi-hub/theme"
-SC_CONFIG="$XDG_CONFIG_HOME/screen-time/config.toml"
-UNIT="$XDG_CONFIG_HOME/systemd/user/screen-time.service"
-STATE="$XDG_STATE_HOME/rofi-hub"
-SC_STATE="$XDG_STATE_HOME/screen-time"
-BACKUPS="$STATE/backups/updates"
-VERSION_FILE="$STATE/installed-version"
-COMPONENTS_FILE="$STATE/components"
-DB="$SC_STATE/screen-time.db"
-
-# Build once. The installer always installs release-shaped tarballs.
-(cd "$ROOT" && cargo build --locked --package rofi-hub --package rofi-calendar \
-    --package rofi-keybinds --package rofi-clipboard --package screen-time)
-
-make_bundle() {
-    local out="$1" version="$2"
-    local stage dir
-    stage="$(mktemp -d "$WORK/release.XXXXXX")"
-    dir="$(dirname "$out")"
-    mkdir -p "$stage/bin" "$stage/share/rofi-hub/providers" "$stage/share/rofi-hub/themes" \
-        "$stage/share/rofi" "$stage/share/screen-time" "$stage/systemd" "$dir"
-    install -m 755 "$ROOT/target/debug/rofi-hub" "$stage/bin/rofi-hub"
-    install -m 755 "$ROOT/target/debug/rofi-calendar" "$stage/bin/rofi-calendar"
-    install -m 755 "$ROOT/target/debug/rofi-keybinds" "$stage/bin/rofi-keybinds"
-    install -m 755 "$ROOT/target/debug/rofi-clipboard" "$stage/bin/rofi-clipboard"
-    install -m 755 "$ROOT/target/debug/screen-time" "$stage/bin/screen-time"
-    install -m 755 "$ROOT/crates/screen-time/share/rofi-screen-time" "$stage/bin/rofi-screen-time"
-    install -m 644 "$ROOT/themes/hub.rasi" "$stage/share/rofi-hub/themes/hub.rasi"
-    install -m 644 "$ROOT/providers/calendar.toml" \
-        "$stage/share/rofi-hub/providers/calendar.toml"
-    install -m 644 "$ROOT/providers/keybinds.toml" \
-        "$stage/share/rofi-hub/providers/keybinds.toml"
-    install -m 644 "$ROOT/providers/clipboard.toml" \
-        "$stage/share/rofi-hub/providers/clipboard.toml"
-    install -m 644 "$ROOT/providers/screen-time.toml" "$stage/share/rofi-hub/providers/screen-time.toml"
-    install -m 644 "$ROOT/crates/screen-time/share/rofi/screen-time.rasi" "$stage/share/rofi/screen-time.rasi"
-    install -m 644 "$ROOT/crates/screen-time/share/screen-time/config.example.toml" "$stage/share/screen-time/config.example.toml"
-    install -m 644 "$ROOT/crates/screen-time/systemd/screen-time.service" "$stage/systemd/screen-time.service"
-    printf '%s\n' "$version" >"$stage/VERSION"
-    install -m 644 "$ROOT/LICENSE" "$ROOT/README.md" "$ROOT/CHANGELOG.md" "$stage/"
-    tar -czf "$out" -C "$stage" .
-    (cd "$dir" && sha256sum "$(basename "$out")" >SHA256SUMS)
-    rm -rf -- "$stage"
-}
-
-make_fixture() {
-    local dir="$1" tag="$2" bundle="$3" key="$4"
-    mkdir -p "$dir/$tag"
-    cp "$bundle" "$dir/$tag/rofi-hub-x86_64-linux.tar.gz"
-    install -m 755 "$ROOT/install.sh" "$dir/$tag/install.sh"
-    install -m 755 "$ROOT/uninstall.sh" "$dir/$tag/uninstall.sh"
-    install -m 644 "$ROOT/minisign.pub" "$dir/$tag/minisign.pub"
-    (
-        cd "$dir/$tag"
-        sha256sum rofi-hub-x86_64-linux.tar.gz install.sh uninstall.sh minisign.pub >SHA256SUMS
-        rm -f -- SHA256SUMS.minisig install.sh.minisig
-        minisign -Sm SHA256SUMS -s "$key" -x SHA256SUMS.minisig >/dev/null
-        minisign -Sm install.sh -s "$key" -x install.sh.minisig >/dev/null
-    )
-}
-
-run_install() {
-    bash "$ROOT/install.sh" --tarball "$BUNDLE" --allow-unsigned "$@"
-}
-
-seed_database() {
-    timeout 3 "$SC_BIN" daemon >/dev/null 2>&1 || true
-    python3 - "$DB" <<'PY'
-import sqlite3, sys
-path = sys.argv[1]
-db = sqlite3.connect(path)
-db.execute("INSERT INTO apps(key, first_seen_ts, last_seen_ts) VALUES('Code', 1000, 2000) ON CONFLICT(key) DO NOTHING")
-db.execute("INSERT INTO sessions(date, app, start_ts, end_ts, seconds, state, confidence) VALUES('2026-11-20', 'Code', 1000, 1300, 300, 'closed', 'high')")
-db.execute("INSERT INTO daily_app(date, app, seconds, sessions, first_ts, last_ts) VALUES('2026-11-20', 'Code', 300, 1, 1000, 1300)")
-db.execute("INSERT INTO daily_slots(date, app, slot, seconds) VALUES('2026-11-20', 'Code', 1, 300)")
-db.commit()
-db.close()
-PY
-}
-
-doctor_json() {
-    "$SC_BIN" doctor --json --no-runtime
-}
-
-# ---------------------------------------------------------------------------
-# Core install, theme, data safety, and backups
-# ---------------------------------------------------------------------------
-
-TEST_VERSION="$(sed -n '/^\[workspace.package\]/,/^\[/p' "$ROOT/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)"
-[ -n "$TEST_VERSION" ] || die "cannot read workspace version"
-TEST_TAG="v${TEST_VERSION}"
-BUNDLE="$WORK/release/rofi-hub-x86_64-linux.tar.gz"
-make_bundle "$BUNDLE" "$TEST_VERSION"
-
-STALE_INSTALL="$TMPDIR/rofi-hub-install.stale-test"
-STALE_CHECK="$TMPDIR/rofi-hub-check.stale-test"
-RECENT_STAGE="$TMPDIR/rofi-hub-install.recent-test"
-mkdir -p "$STALE_INSTALL" "$STALE_CHECK" "$RECENT_STAGE"
-touch -d '2 hours ago' "$STALE_INSTALL" "$STALE_CHECK"
-
-assert_success "first install with theme" run_install --theme nord
-assert_not_file "$STALE_INSTALL" "install removes stale staging"
-assert_not_file "$STALE_CHECK" "install removes stale check staging"
-assert_file "$RECENT_STAGE" "recent staging is kept"
-rm -rf -- "$RECENT_STAGE"
-
-assert_file "$HUB_BIN" "hub binary installed"
-assert_file "$SC_BIN" "screen-time binary installed"
-assert_file "$SC_WRAPPER" "screen-time wrapper installed"
-assert_file "$CAL_BIN" "calendar binary installed"
-assert_file "$KEYBINDS_BIN" "keybinds binary installed"
-assert_file "$CLIPBOARD_BIN" "clipboard binary installed"
-assert_file "$HUB_THEME" "hub fallback theme installed"
-assert_file "$PROVIDER" "provider manifest installed"
-assert_file "$CAL_PROVIDER" "calendar provider installed"
-assert_file "$KEYBINDS_PROVIDER" "keybinds provider installed"
-assert_file "$CLIPBOARD_PROVIDER" "clipboard provider installed"
-assert_file "$SC_THEME" "screen-time theme installed"
-assert_file "$UNIT" "screen-time unit installed"
-assert_eq "nord" "$(cat "$SC_THEME_STATE")" "hub theme choice is recorded"
-assert_eq "nord" "$(sed -n '/^\[theme\]/,/^\[/p' "$SC_CONFIG" | sed -n 's/^mode = "\(.*\)"/\1/p' | head -n1)" "screen-time config is seeded from --theme"
-assert_eq "$TEST_VERSION" "$(cat "$VERSION_FILE")" "installed version is recorded"
-assert_eq "calendar clipboard hub keybinds screen-time" "$(tr '\n' ' ' <"$COMPONENTS_FILE" | sed 's/ $//')" "component selection is recorded"
-assert_file "$SYSTEMCTL_STATE/active" "service starts on first install"
-hub_registry="$(env ROFI_HUB_PROVIDER_DIR="$XDG_DATA_HOME/rofi-hub/providers" "$HUB_BIN" list --json)"
-for app in screen-time calendar keybinds clipboard; do
-    if printf '%s' "$hub_registry" | jq -e --arg id "$app" 'any(.[]; .id == $id and .available)' >/dev/null; then
-        pass "hub registry exposes $app"
-    else
-        fail "hub registry exposes $app"
-    fi
+# Test signing key. Production releases pin minisign.pub instead.
+minisign -G -W -p "$WORK/pub" -s "$WORK/sec" >/dev/null 2>&1
+for file in "$DIST"/index.json "$DIST"/*.tar.gz; do
+    minisign -Sm "$file" -s "$WORK/sec" -x "$file.minisig" >/dev/null
 done
 
-seed_database
-before="$(doctor_json)"
-before_sessions="$(printf '%s' "$before" | jq -r '.fingerprint.session_seconds')"
-before_events="$(printf '%s' "$before" | jq -r '.fingerprint.counts.events')"
-assert_eq "300" "$before_sessions" "seeded session seconds are visible"
-config_sha="$(sha "$SC_CONFIG")"
-
-assert_success "reinstall with data" run_install
-after="$(doctor_json)"
-assert_eq "$config_sha" "$(sha "$SC_CONFIG")" "config.toml is unchanged"
-assert_eq "$before_sessions" "$(printf '%s' "$after" | jq -r '.fingerprint.session_seconds')" "session seconds survive an update"
-assert_eq "$before_events" "$(printf '%s' "$after" | jq -r '.fingerprint.counts.events')" "event count survives an update"
-assert_eq "ok" "$(printf '%s' "$after" | jq -r '.quick_check')" "database quick_check is ok"
-
-backup="$(find "$BACKUPS" -mindepth 1 -maxdepth 1 -type d | sort | tail -n1)"
-[ -n "$backup" ] || die "no update backup was created"
-assert_file "$backup/manifest.json" "backup manifest exists"
-assert_eq "verified" "$(jq -r '.status' "$backup/manifest.json")" "successful backup is verified"
-assert_eq "300" "$(jq -r '.snapshot.fingerprint.session_seconds' "$backup/manifest.json")" "backup records the fingerprint"
-assert_eq "hub calendar clipboard keybinds screen-time" "$(jq -r '.components | join(" ")' "$backup/manifest.json")" "backup records components"
-assert_mode 700 "$backup" "backup directory is private"
-assert_mode 600 "$backup/manifest.json" "backup manifest is private"
-assert_mode 600 "$backup/db/screen-time.db" "backup database is private"
-
-REFERENCE="$WORK/reference-snapshot"
-cp -a "$backup/db" "$REFERENCE"
-
-# ---------------------------------------------------------------------------
-# Fault injection and interrupted updates
-# ---------------------------------------------------------------------------
-
-for stage in hub hub-theme app-calendar app-keybinds app-clipboard binary wrapper theme unit version data-check doctor; do
-    assert_failure "fault after $stage rolls back" \
-        env ROFI_HUB_INSTALLER_FAIL_AFTER="$stage" bash "$ROOT/install.sh" --tarball "$BUNDLE" --allow-unsigned >/dev/null 2>&1
-    assert_eq "$TEST_VERSION" "$(cat "$VERSION_FILE")" "version restored after fault at $stage"
-    assert_eq "300" "$("$SC_BIN" check-data --against "$REFERENCE" --json | jq -r '.actual_fingerprint.session_seconds')" "data restored after fault at $stage"
-    assert_file "$SYSTEMCTL_STATE/active" "service restored after fault at $stage"
+mkdir -p "$WORK/tools"
+for tool in python3 tar sha256sum awk cut find sed basename dirname readlink \
+    mktemp cp mv rm mkdir chmod cat sort head minisign flock wc tr env bash gzip grep; do
+    path="$(command -v "$tool" 2>/dev/null || true)"
+    [[ -n "$path" ]] && ln -sf "$path" "$WORK/tools/$tool"
 done
 
-for stage in snapshot hub binary; do
-    set +e
-    env ROFI_HUB_INSTALLER_KILL_AFTER="$stage" bash "$ROOT/install.sh" --tarball "$BUNDLE" --allow-unsigned >/dev/null 2>&1
-    kill_status=$?
-    set -e
-    assert_eq "137" "$kill_status" "simulated kill after $stage"
-    assert_file "$STATE/updates/update-in-progress.json" "interrupted update ($stage) leaves in-progress state"
-    assert_success "next run recovers interrupted update ($stage)" run_install
-    assert_not_file "$STATE/updates/update-in-progress.json" "recovery ($stage) clears in-progress state"
-    assert_eq "300" "$("$SC_BIN" check-data --against "$REFERENCE" --json | jq -r '.actual_fingerprint.session_seconds')" "data intact after interrupted recovery ($stage)"
-done
+ENV_N=0
+new_env() {
+    ENV_N=$((ENV_N + 1))
+    E="$WORK/env$ENV_N"
+    mkdir -p "$E/home" "$E/bin" "$E/state" "$E/config" "$E/data" "$E/run"
+    cat >"$E/bin/rofi" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" >"${ROFI_LOG:-/dev/null}"
+env | grep -E '^ROFI_HUB_' >"${ROFI_ENV_LOG:-/dev/null}" || true
+exit "${ROFI_STATUS:-1}"
+EOF
+    for tool in cliphist wl-copy nmcli; do
+        cat >"$E/bin/$tool" <<EOF
+#!/bin/sh
+exit 0
+EOF
+        chmod 755 "$E/bin/$tool"
+    done
+    cat >"$E/bin/systemctl" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"${SYSTEMCTL_LOG:-/dev/null}"
+exit 0
+EOF
+    chmod 755 "$E/bin/rofi" "$E/bin/systemctl"
+    export ROFI_LOG="$E/rofi.args"
+    export ROFI_ENV_LOG="$E/rofi.env"
+    export SYSTEMCTL_LOG="$E/systemctl.log"
+}
 
-# Protected user files.
-printf '\n/* user edit */\n' >>"$SC_THEME"
-assert_failure "modified theme refuses update" run_install >/dev/null 2>&1
-assert_success "modified theme accepts --force" run_install --force
-sed -i 's|^ExecStart=.*|ExecStart=/bin/true|' "$UNIT"
-assert_failure "custom unit ExecStart refuses update" run_install >/dev/null 2>&1
-if find "$STATE/backups/units" -type f -print -quit 2>/dev/null | grep -q .; then
-    pass "custom unit edit is backed up"
+in_env() {
+    env HOME="$E/home" \
+        XDG_STATE_HOME="$E/state" \
+        XDG_CONFIG_HOME="$E/config" \
+        XDG_DATA_HOME="$E/data" \
+        XDG_RUNTIME_DIR="$E/run" \
+        PATH="$E/bin:$WORK/tools" \
+        ROFI_LOG="${ROFI_LOG:-}" \
+        ROFI_ENV_LOG="${ROFI_ENV_LOG:-}" \
+        SYSTEMCTL_LOG="${SYSTEMCTL_LOG:-}" \
+        "$@"
+}
+
+install_app() {
+    in_env "$ROOT/install.sh" --index "$DIST/index.json" --pubkey "$WORK/pub" "$@"
+}
+
+# ---------------------------------------------------------------------------
+# INS-01, INS-12, INS-13, APP-01/02/06: one app, no hub, no dependencies
+# ---------------------------------------------------------------------------
+new_env
+assert_success "INS-01 install calendar" install_app --app calendar
+assert_file "$E/home/.local/bin/rofi-calendar" "INS-01 binary installed"
+assert_file "$E/data/rofi-apps/providers/calendar.toml" "INS-01 provider installed"
+assert_file "$E/data/rofi/calendar.rasi" "INS-01 layout fallback installed"
+assert_mode 700 "$E/state/rofi-apps" "INS-13 state root is 0700"
+assert_mode 600 "$E/state/rofi-apps/installed/calendar" "INS-13 state file is 0600"
+assert_no_file "$E/home/.local/bin/rofi-hub" "INS-01 no hub binary"
+assert_no_file "$E/home/.local/bin/rofi-hub-menu" "INS-01 no menu binary"
+assert_no_file "$E/home/.local/bin/cliphist" "INS-12 no cliphist"
+assert_no_file "$E/home/.local/bin/wl-copy" "INS-12 no wl-copy"
+assert_no_file "$E/config/rofi-hub" "INS-01 no hub theme state"
+assert_no_file "$E/config/rofi-hub-menu" "INS-01 no menu state"
+
+# The app resolves its own theme and does not read hub variables.
+assert_success "APP-01 calendar runs with fake rofi" in_env "$E/home/.local/bin/rofi-calendar"
+assert_contains "-theme" "$E/rofi.args" "APP-01 app passes a resolved theme"
+assert_contains "$E/run/rofi/theme-calendar.rasi" "$E/rofi.args" "APP-01 app-scoped runtime theme"
+if [[ -s "$E/rofi.env" ]]; then
+    fail "APP-06 app saw ROFI_HUB_* variables"
 else
-    fail "custom unit edit is backed up"
+    pass "APP-06 app saw no ROFI_HUB_* variables"
 fi
-sed -i "s|^ExecStart=.*|ExecStart=${SC_BIN} daemon|" "$UNIT"
-assert_success "reinstall after restoring the unit" run_install --force
 
-# Legacy timer takeover.
-touch "$XDG_CONFIG_HOME/systemd/user/screen-time-update-check.timer"
-touch "$XDG_CONFIG_HOME/systemd/user/screen-time-update-check.service"
-assert_success "install removes legacy update timers" run_install --no-service
-assert_not_file "$XDG_CONFIG_HOME/systemd/user/screen-time-update-check.timer" "legacy check timer removed"
-assert_not_file "$XDG_CONFIG_HOME/systemd/user/screen-time-update-check.service" "legacy check service removed"
+# Remove the optional hub/menu entirely; the app must still run.
+rm -f "$E/home/.local/bin/rofi-hub" "$E/home/.local/bin/rofi-hub-menu"
+rm -rf "$E/data/rofi-hub"
+assert_success "APP-02 calendar still runs without hub" in_env "$E/home/.local/bin/rofi-calendar"
 
 # ---------------------------------------------------------------------------
-# Hub-only, app-only, and selection persistence
+# INS-10 / INS-11: unknown app and invalid schema
 # ---------------------------------------------------------------------------
+new_env
+assert_failure "INS-10 unknown app is rejected" install_app --app unknown-app
+assert_no_file "$E/home/.local/bin/unknown-app" "INS-10 nothing installed"
 
-assert_success "uninstall all components" bash "$ROOT/install.sh" --uninstall --yes
-assert_not_file "$HUB_BIN" "uninstall removes the hub"
-assert_not_file "$SC_BIN" "uninstall removes screen-time"
-assert_not_file "$CAL_BIN" "uninstall removes calendar"
-assert_not_file "$KEYBINDS_BIN" "uninstall removes keybinds"
-assert_not_file "$CLIPBOARD_BIN" "uninstall removes clipboard"
-assert_not_file "$CAL_PROVIDER" "uninstall removes the calendar provider"
-assert_not_file "$KEYBINDS_PROVIDER" "uninstall removes the keybinds provider"
-assert_not_file "$CLIPBOARD_PROVIDER" "uninstall removes the clipboard provider"
-assert_not_file "$COMPONENTS_FILE" "uninstall clears the component list"
-assert_file "$DB" "uninstall keeps the database"
+# The installer must refuse Nix-managed paths instead of corrupting a profile.
+new_env
+if env HOME="$E/home" \
+    XDG_STATE_HOME="$E/state" XDG_CONFIG_HOME="$E/config" \
+    XDG_DATA_HOME="$E/data" PATH="$E/bin:$WORK/tools" \
+    "$ROOT/install.sh" --index "$DIST/index.json" --pubkey "$WORK/pub" \
+    --prefix /nix/store/rofi-apps-refusal-test --app calendar >/dev/null 2>&1; then
+    fail "refuses Nix-managed prefix"
+else
+    pass "refuses Nix-managed prefix"
+fi
+assert_no_file "$E/data/rofi-apps/providers/calendar.toml" "Nix-refusal installed no files"
 
-assert_success "hub-only install" run_install --hub-only --no-service
-assert_file "$HUB_BIN" "hub-only installs the hub"
-assert_not_file "$SC_BIN" "hub-only does not install screen-time"
-assert_not_file "$CAL_BIN" "hub-only does not install calendar"
-assert_not_file "$KEYBINDS_BIN" "hub-only does not install keybinds"
-assert_not_file "$CLIPBOARD_BIN" "hub-only does not install clipboard"
-assert_not_file "$UNIT" "hub-only does not install the tracker unit"
-assert_not_file "$PROVIDER" "hub-only does not install a provider"
-assert_eq "hub" "$(cat "$COMPONENTS_FILE")" "hub-only records the selection"
-assert_eq "$TEST_VERSION" "$(cat "$VERSION_FILE")" "hub-only records the version"
-
-assert_success "bare reinstall preserves hub-only" run_install --no-service
-assert_not_file "$SC_BIN" "bare reinstall stays hub-only"
-assert_eq "hub" "$(cat "$COMPONENTS_FILE")" "bare reinstall keeps the recorded selection"
-
-# The uninstall.sh wrapper delegates to install.sh.
-WRAPPER_DIR="$WORK/uninstall-wrapper"
-mkdir -p "$WRAPPER_DIR"
-install -m 755 "$ROOT/install.sh" "$WRAPPER_DIR/install.sh"
-install -m 755 "$ROOT/uninstall.sh" "$WRAPPER_DIR/uninstall.sh"
-assert_success "uninstall.sh dry-run delegates" bash "$WRAPPER_DIR/uninstall.sh" --dry-run
-assert_file "$HUB_BIN" "uninstall.sh dry-run leaves files in place"
+BAD="$WORK/bad-schema"
+cp -a "$DIST" "$BAD"
+python3 - "$BAD/index.json" <<'PY'
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path))
+del data["apps"][0]["sha256"]
+json.dump(data, open(path, "w"))
+PY
+minisign -Sm "$BAD/index.json" -s "$WORK/sec" -x "$BAD/index.json.minisig" >/dev/null
+assert_failure "INS-11 invalid index schema is rejected" \
+    in_env "$ROOT/install.sh" --index "$BAD/index.json" --pubkey "$WORK/pub" --app calendar
 
 # ---------------------------------------------------------------------------
-# Signed releases, updates, and checks
+# INS-04: missing prerequisite aborts before any install
 # ---------------------------------------------------------------------------
-
-KEY1="$WORK/key1.key"
-KEY2="$WORK/key2.key"
-minisign -G -W -p "$WORK/key1.pub" -s "$KEY1" >/dev/null
-minisign -G -W -p "$WORK/key2.pub" -s "$KEY2" >/dev/null
-PUB1="$(tail -n1 "$WORK/key1.pub")"
-
-FIXTURE="$WORK/fixture"
-NEW_BUNDLE="$WORK/release-0.2/rofi-hub-x86_64-linux.tar.gz"
-LATEST_BUNDLE="$WORK/release-0.3/rofi-hub-x86_64-linux.tar.gz"
-make_bundle "$NEW_BUNDLE" "0.2.2"
-make_bundle "$LATEST_BUNDLE" "0.3.0"
-make_fixture "$FIXTURE" "$TEST_TAG" "$BUNDLE" "$KEY1"
-make_fixture "$FIXTURE" "v0.2.2" "$NEW_BUNDLE" "$KEY1"
-make_fixture "$FIXTURE" "v0.3.0" "$LATEST_BUNDLE" "$KEY1"
-
-export ROFI_HUB_TRUSTED_KEYS="test-key-1:$PUB1"
-export ROFI_HUB_RELEASES_BASE="file://$FIXTURE"
-
-assert_success "signed hub-only update" \
-    env ROFI_HUB_LATEST_TAG=v0.2.2 bash "$ROOT/install.sh" --update --no-service
-assert_eq "0.2.2" "$(cat "$VERSION_FILE")" "update records the new version"
-assert_not_file "$SC_BIN" "hub-only update does not add screen-time"
-assert_eq "hub" "$(cat "$COMPONENTS_FILE")" "hub-only update keeps the selection"
-
-set +e
-ROFI_HUB_LATEST_TAG=v0.2.2 bash "$ROOT/install.sh" --check --json >"$WORK/check-current.json"
-current_status=$?
-set -e
-assert_eq "0" "$current_status" "check exits 0 when current"
-assert_eq "test-key-1" "$(jq -r '.signature_key_id' "$WORK/check-current.json")" "check verifies the signed release"
-assert_eq "0.2.2" "$(jq -r '.installed_version' "$WORK/check-current.json")" "check reports the installed version"
-
-set +e
-ROFI_HUB_LATEST_TAG=v0.3.0 bash "$ROOT/install.sh" --check --json >"$WORK/check-new.json"
-new_status=$?
-set -e
-assert_eq "10" "$new_status" "check reports an available update"
-assert_eq "0.3.0" "$(jq -r '.latest_version' "$WORK/check-new.json")" "check reports the latest version"
-
-# Up to date must exit before any download.
-assert_success "up-to-date update makes no download" \
-    env ROFI_HUB_LATEST_TAG=v0.2.2 ROFI_HUB_RELEASES_BASE="file://$WORK/missing" \
-    bash "$ROOT/install.sh" --update --no-service
-
-# Tampered asset and wrong key fail closed.
-TAMPERED="$WORK/tampered"
-cp -a "$FIXTURE" "$TAMPERED"
-printf 'tampered' >>"$TAMPERED/v0.3.0/rofi-hub-x86_64-linux.tar.gz"
-assert_failure "tampered asset is refused" \
-    env ROFI_HUB_LATEST_TAG=v0.3.0 ROFI_HUB_RELEASES_BASE="file://$TAMPERED" \
-    bash "$ROOT/install.sh" --version v0.3.0 --no-service >/dev/null 2>&1
-
-WRONGKEY="$WORK/wrongkey"
-make_fixture "$WRONGKEY" "v0.3.0" "$LATEST_BUNDLE" "$KEY2"
-assert_failure "wrong signing key is refused" \
-    env ROFI_HUB_LATEST_TAG=v0.3.0 ROFI_HUB_RELEASES_BASE="file://$WRONGKEY" \
-    bash "$ROOT/install.sh" --version v0.3.0 --no-service >/dev/null 2>&1
+NO_ROFI="$WORK/tools-no-rofi"
+mkdir -p "$NO_ROFI"
+for tool in python3 tar sha256sum awk cut find sed basename dirname readlink \
+    mktemp cp mv rm mkdir chmod cat sort head minisign flock wc tr env bash gzip grep; do
+    path="$(command -v "$tool" 2>/dev/null || true)"
+    [[ -n "$path" ]] && ln -sf "$path" "$NO_ROFI/$tool"
+done
+new_env
+assert_failure "INS-04 missing rofi aborts" \
+    env HOME="$E/home" XDG_STATE_HOME="$E/state" XDG_CONFIG_HOME="$E/config" \
+        XDG_DATA_HOME="$E/data" PATH="$NO_ROFI" \
+        "$ROOT/install.sh" --index "$DIST/index.json" --pubkey "$WORK/pub" --app calendar
+assert_no_file "$E/home/.local/bin/rofi-calendar" "INS-04 no partial install"
 
 # ---------------------------------------------------------------------------
-# App-only install and uninstall/purge
+# INS-05 / SEC-01: checksum and unsigned rejection
 # ---------------------------------------------------------------------------
+BAD2="$WORK/bad-checksum"
+cp -a "$DIST" "$BAD2"
+printf '\0' >>"$BAD2/rofi-calendar-1.2.0-x86_64.tar.gz"
+assert_failure "INS-05 bad checksum is rejected" \
+    in_env "$ROOT/install.sh" --index "$BAD2/index.json" --pubkey "$WORK/pub" --app calendar
 
-assert_success "uninstall hub only" bash "$ROOT/install.sh" --uninstall --hub-only --yes
-assert_not_file "$HUB_BIN" "hub-only uninstall removes the hub"
-
-assert_success "app-only install" run_install --app screen-time --no-hub --no-service
-assert_file "$SC_BIN" "app-only installs screen-time"
-assert_file "$PROVIDER" "app-only installs the provider manifest"
-assert_not_file "$HUB_BIN" "app-only does not install the hub"
-assert_eq "screen-time" "$(cat "$COMPONENTS_FILE")" "app-only records the selection"
-
-assert_success "bare reinstall preserves app-only" run_install --no-service
-assert_not_file "$HUB_BIN" "bare reinstall stays app-only"
-
-assert_success "app-only uninstall keeps the database" bash "$ROOT/install.sh" --uninstall --no-hub --app screen-time --yes
-assert_not_file "$SC_BIN" "app-only uninstall removes screen-time"
-assert_file "$DB" "app-only uninstall keeps the database"
-
-assert_success "reinstall app-only for purge" run_install --app screen-time --no-hub --no-service
-assert_success "purge removes state and history" bash "$ROOT/install.sh" --uninstall --no-hub --app screen-time --purge --yes
-assert_not_file "$DB" "purge removes the database"
-assert_not_file "$STATE" "purge removes hub update state"
+new_env
+UNSIGNED="$WORK/unsigned"
+cp -a "$DIST" "$UNSIGNED"
+rm -f "$UNSIGNED/index.json.minisig"
+assert_failure "SEC-01 unsigned index is rejected" \
+    in_env "$ROOT/install.sh" --index "$UNSIGNED/index.json" --app calendar
+assert_success "INS-01 --allow-unsigned permits local testing" \
+    in_env "$ROOT/install.sh" --index "$UNSIGNED/index.json" --allow-unsigned --app calendar
 
 # ---------------------------------------------------------------------------
-# Built-in app-only installs
+# SEC-02: path traversal
 # ---------------------------------------------------------------------------
+new_env
+EVIL="$WORK/evil"
+mkdir -p "$EVIL/stage/bin"
+cp "$ROOT/crates/rofi-calendar/app.toml" "$EVIL/stage/app.toml"
+printf '#!/bin/sh\nexit 0\n' >"$EVIL/stage/bin/rofi-calendar"
+python3 - "$EVIL/stage" "$EVIL/evil.tar.gz" <<'PY'
+import io, sys, tarfile
+from pathlib import Path
+stage = Path(sys.argv[1])
+out = sys.argv[2]
+with tarfile.open(out, "w:gz") as tar:
+    for path in sorted(stage.rglob("*")):
+        tar.add(path, arcname=str(path.relative_to(stage)))
+    data = b"escape\n"
+    info = tarfile.TarInfo("../escape")
+    info.size = len(data)
+    tar.addfile(info, io.BytesIO(data))
+PY
+sha="$(sha256sum "$EVIL/evil.tar.gz" | awk '{print $1}')"
+python3 - "$DIST/index.json" "$EVIL/index.json" "$sha" <<'PY'
+import json, sys
+index = json.load(open(sys.argv[1]))
+for app in index["apps"]:
+    if app["id"] == "calendar":
+        app["url"] = "evil.tar.gz"
+        app["sha256"] = sys.argv[3]
+json.dump(index, open(sys.argv[2], "w"))
+PY
+# Build a dedicated index directory so relative URLs resolve to the evil tar.
+EVIL_DIR="$WORK/evil-index"
+mkdir -p "$EVIL_DIR"
+cp "$EVIL/evil.tar.gz" "$EVIL_DIR/evil.tar.gz"
+cp "$EVIL/index.json" "$EVIL_DIR/index.json"
+minisign -Sm "$EVIL_DIR/index.json" -s "$WORK/sec" -x "$EVIL_DIR/index.json.minisig" >/dev/null
+minisign -Sm "$EVIL_DIR/evil.tar.gz" -s "$WORK/sec" -x "$EVIL_DIR/evil.tar.gz.minisig" >/dev/null
+assert_failure "SEC-02 path traversal is rejected" \
+    in_env "$ROOT/install.sh" --index "$EVIL_DIR/index.json" --pubkey "$WORK/pub" --app calendar
+assert_no_file "$E/escape" "SEC-02 no escaped file"
 
-assert_success "calendar-only install" run_install --app calendar --no-hub
-assert_file "$CAL_BIN" "calendar-only installs the calendar binary"
-assert_file "$CAL_PROVIDER" "calendar-only installs the provider"
-assert_not_file "$HUB_BIN" "calendar-only does not install the hub"
-assert_not_file "$SC_BIN" "calendar-only does not install screen-time"
-assert_eq "calendar" "$(cat "$COMPONENTS_FILE")" "calendar-only records the selection"
-assert_success "add keybinds to the calendar install" run_install --app calendar --app keybinds --no-hub
-assert_file "$KEYBINDS_BIN" "adding keybinds installs the binary"
-assert_file "$KEYBINDS_PROVIDER" "adding keybinds installs the provider"
-assert_eq "calendar keybinds" "$(tr '\n' ' ' <"$COMPONENTS_FILE" | sed 's/ $//')" "adding an app updates the selection"
-assert_success "calendar-only uninstall" bash "$ROOT/install.sh" --uninstall --no-hub --app calendar --app keybinds --yes
-assert_not_file "$CAL_BIN" "calendar-only uninstall removes the binary"
-assert_not_file "$CAL_PROVIDER" "calendar-only uninstall removes the provider"
-assert_not_file "$KEYBINDS_BIN" "multi-app uninstall removes keybinds"
+# ---------------------------------------------------------------------------
+# INS-08/09: update and uninstall are per-app
+# ---------------------------------------------------------------------------
+new_env
+assert_success "install calendar + clipboard" install_app --app calendar,clipboard
+clipboard_state_before="$(sha256sum "$E/state/rofi-apps/installed/clipboard" | awk '{print $1}')"
+assert_success "INS-08 update calendar only" install_app --update calendar
+clipboard_state_after="$(sha256sum "$E/state/rofi-apps/installed/clipboard" | awk '{print $1}')"
+assert_eq "$clipboard_state_before" "$clipboard_state_after" "INS-08 clipboard state unchanged"
+assert_file "$E/home/.local/bin/rofi-clipboard" "INS-08 clipboard binary still present"
+
+assert_success "INS-09 uninstall calendar" install_app --uninstall calendar
+assert_no_file "$E/home/.local/bin/rofi-calendar" "INS-09 calendar removed"
+assert_no_file "$E/state/rofi-apps/installed/calendar" "INS-09 calendar state removed"
+assert_file "$E/home/.local/bin/rofi-clipboard" "INS-09 clipboard still present"
+assert_file "$E/state/rofi-apps/installed/clipboard" "INS-09 clipboard state intact"
+
+# ---------------------------------------------------------------------------
+# INS-07: failed update restores the previous install
+# ---------------------------------------------------------------------------
+new_env
+assert_success "rollback: initial install" install_app --app calendar
+if in_env env ROFI_APPS_INJECT_FAILURE=after-bin \
+    "$ROOT/install.sh" --index "$DIST/index.json" --pubkey "$WORK/pub" --update calendar >/dev/null 2>&1; then
+    fail "INS-07 injected failure aborts update"
+else
+    pass "INS-07 injected failure aborts update"
+fi
+assert_file "$E/home/.local/bin/rofi-calendar" "INS-07 previous binary remains"
+assert_no_file "$E/state/rofi-apps/installed/.in-progress-calendar" "INS-07 no in-progress state"
+assert_eq "1.2.0" "$(sed -n 's/^version=//p' "$E/state/rofi-apps/installed/calendar")" "INS-07 state version untouched"
+assert_success "INS-07 app still runs after rollback" in_env "$E/home/.local/bin/rofi-calendar"
+
+# ---------------------------------------------------------------------------
+# INS-03 / INS-14: app-owned service and --no-service
+# ---------------------------------------------------------------------------
+new_env
+assert_success "install screen-time without service" install_app --app screen-time --no-service
+assert_no_file "$E/config/systemd/user/screen-time.service" "INS-03 --no-service installs no unit"
+assert_no_file "$E/systemctl.log" "INS-03 --no-service does not call systemctl"
+assert_file "$E/home/.local/bin/screen-time" "screen-time binary installed"
+assert_file "$E/home/.local/bin/rofi-screen-time" "screen-time wrapper installed"
+
+new_env
+assert_success "install screen-time with service" install_app --app screen-time
+assert_file "$E/config/systemd/user/screen-time.service" "INS-14 unit comes from app package"
+assert_contains "enable --now screen-time.service" "$E/systemctl.log" "INS-14 unit enabled"
+
+# ---------------------------------------------------------------------------
+# INS-02: --all installs every non-optional app and skips the menu
+# ---------------------------------------------------------------------------
+new_env
+assert_success "INS-02 install all" install_app --all
+for bin in rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time; do
+    assert_file "$E/home/.local/bin/$bin" "INS-02 $bin installed"
+done
+assert_no_file "$E/home/.local/bin/rofi-hub-menu" "INS-02 optional menu skipped"
+assert_no_file "$E/home/.local/bin/rofi-hub" "INS-02 no hub binary"
+for provider in calendar clipboard keybinds network screen-time; do
+    assert_file "$E/data/rofi-apps/providers/$provider.toml" "INS-02 provider $provider"
+done
+
+# --list reports installed state.
+new_env
+assert_success "install calendar for --list" install_app --app calendar
+if in_env "$ROOT/install.sh" --index "$DIST/index.json" --pubkey "$WORK/pub" --list >"$WORK/list.txt" 2>&1; then
+    pass "--list exits zero"
+else
+    fail "--list exits zero"
+fi
+assert_contains "calendar" "$WORK/list.txt" "--list includes calendar"
+assert_contains "installed" "$WORK/list.txt" "--list reports installed"
+
+# ---------------------------------------------------------------------------
+# SEC-03: menu manifests use argv, never a shell
+# ---------------------------------------------------------------------------
+TRANSCRIPT="$WORK/transcript"
+cat >"$WORK/shell-probe.sh" <<EOF
+#!/bin/sh
+printf 'ran' >"$TRANSCRIPT"
+EOF
+chmod 755 "$WORK/shell-probe.sh"
+PROVIDER_ROOT="$WORK/provider-root"
+mkdir -p "$PROVIDER_ROOT/rofi-apps/providers"
+cat >"$PROVIDER_ROOT/rofi-apps/providers/probe.toml" <<EOF
+id = "probe"
+name = "Probe"
+description = "shell metachar test"
+exec = ["$WORK/shell-probe.sh", "; touch $WORK/pwned"]
+EOF
+rm -f "$WORK/pwned"
+env HOME="$WORK/home" XDG_CONFIG_HOME="$WORK/config" XDG_DATA_HOME="$PROVIDER_ROOT" \
+    PATH="$E/bin:$WORK/tools" "$ROOT/target/release/rofi-hub-menu" probe >/dev/null 2>&1 || true
+sleep 0.2
+assert_no_file "$WORK/pwned" "SEC-03 exec is argv, not shell interpolation"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
-[ "$FAIL" -eq 0 ]
+((FAIL == 0))

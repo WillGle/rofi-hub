@@ -9,7 +9,7 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate, Weekday};
-use rofi_core::{Item, Level, Outcome, Rofi, Theme, app, escape_markup, ui};
+use rofi_dmenu::{Item, Level, Outcome, Rofi, Theme, app, escape_markup, ui};
 
 const BTN_PREV: &str = "◀ Prev";
 const BTN_TODAY: &str = "Today";

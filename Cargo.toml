@@ -3,22 +3,24 @@ resolver = "3"
 members = [
   "crates/rofi-calendar",
   "crates/rofi-clipboard",
-  "crates/rofi-core",
-  "crates/rofi-hub",
+  "crates/rofi-dmenu",
+  "crates/rofi-hub-menu",
   "crates/rofi-keybinds",
+  "crates/rofi-network",
   "crates/screen-time",
 ]
 default-members = [
   "crates/rofi-calendar",
   "crates/rofi-clipboard",
-  "crates/rofi-core",
-  "crates/rofi-hub",
+  "crates/rofi-dmenu",
+  "crates/rofi-hub-menu",
   "crates/rofi-keybinds",
+  "crates/rofi-network",
   "crates/screen-time",
 ]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.89"
 license = "MIT"

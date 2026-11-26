@@ -1,170 +1,157 @@
 #!/usr/bin/env bash
-# Verify a release-shaped bundle (tarball or extracted directory).
+# End-to-end release bundle check through install.sh.
 #
-# Checks the VERSION file, every provider manifest, provider binaries, the
-# hub's `list --json` registry, and the Screen Time support files.
+# Builds or accepts a dist directory, signs it with a throwaway key, installs
+# every non-optional app into a temporary HOME, runs each app against fake
+# runtime tools, then uninstalls everything.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-BUNDLE="${1:-}"
-if [ -z "$BUNDLE" ]; then
-    printf 'usage: %s <bundle.tar.gz|extracted-dir>\n' "$0" >&2
-    exit 64
-fi
-[ -e "$BUNDLE" ] || { printf 'test-bundle.sh: not found: %s\n' "$BUNDLE" >&2; exit 66; }
-
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/rofi-hub-bundle.XXXXXX")"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/rofi-apps-bundle.XXXXXX")"
 trap 'rm -rf -- "$WORK"' EXIT INT TERM
-if [ -d "$BUNDLE" ]; then
-    cp -a -- "$BUNDLE/." "$WORK/"
+PASS=0
+FAIL=0
+
+pass() { PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"; }
+fail() { FAIL=$((FAIL + 1)); printf 'FAIL %s\n' "$1" >&2; }
+assert_file() { if [[ -e "$1" ]]; then pass "$2"; else fail "$2 (missing $1)"; fi; }
+assert_no_file() { if [[ ! -e "$1" ]]; then pass "$2"; else fail "$2 (unexpected $1)"; fi; }
+
+command -v minisign >/dev/null 2>&1 || { printf 'minisign is required\n' >&2; exit 1; }
+
+DIST="${1:-$WORK/dist}"
+if [[ -z "${1:-}" ]]; then
+    DIST="$DIST" "$ROOT/scripts/package-release.sh" >/dev/null
+fi
+[[ -f "$DIST/index.json" ]] || { printf 'test-bundle: missing %s/index.json\n' "$DIST" >&2; exit 1; }
+
+minisign -G -W -p "$WORK/pub" -s "$WORK/sec" >/dev/null 2>&1
+for file in "$DIST"/index.json "$DIST"/*.tar.gz; do
+    minisign -Sm "$file" -s "$WORK/sec" -x "$file.minisig" >/dev/null
+done
+
+E="$WORK/env"
+mkdir -p "$E/home" "$E/bin" "$E/state" "$E/config" "$E/data" "$E/run"
+cat >"$E/bin/rofi" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" >"${ROFI_LOG:-/dev/null}"
+cat >/dev/null || true
+exit "${ROFI_STATUS:-1}"
+EOF
+cat >"$E/bin/cliphist" <<'EOF'
+#!/bin/sh
+case "$1" in
+    list) printf '1\tfirst entry\n2\tsecond entry\n' ;;
+    decode) printf 'decoded value\n' ;;
+esac
+exit 0
+EOF
+cat >"$E/bin/wl-copy" <<'EOF'
+#!/bin/sh
+cat >/dev/null || true
+exit 0
+EOF
+cat >"$E/bin/nmcli" <<'EOF'
+#!/bin/sh
+case "$*" in
+    'radio wifi') echo enabled ;;
+    *DEVICE,TYPE,STATE*) printf 'wlan0:wifi:connected\n' ;;
+    *IN-USE,SSID,SIGNAL,SECURITY,FREQ*) printf '*:Home:80:WPA2:5180\n' ;;
+    *GENERAL.CONNECTION*) printf 'GENERAL.CONNECTION:Home\n' ;;
+esac
+exit 0
+EOF
+cat >"$E/bin/systemctl" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >>"${SYSTEMCTL_LOG:-/dev/null}"
+exit 0
+EOF
+mkdir -p "$E/config/hypr"
+cat >"$E/config/hypr/hyprland.conf" <<'EOF'
+$mainMod = SUPER
+# --- Windows ---
+bind = $mainMod, Q, killactive,
+bind = $mainMod, Return, exec, rofi -show drun
+EOF
+chmod 755 "$E/bin/rofi" "$E/bin/cliphist" "$E/bin/wl-copy" "$E/bin/nmcli" "$E/bin/systemctl"
+
+run_env() {
+    env HOME="$E/home" \
+        XDG_STATE_HOME="$E/state" \
+        XDG_CONFIG_HOME="$E/config" \
+        XDG_DATA_HOME="$E/data" \
+        XDG_RUNTIME_DIR="$E/run" \
+        PATH="$E/bin:$PATH" \
+        ROFI_LOG="${ROFI_LOG:-}" \
+        SYSTEMCTL_LOG="${SYSTEMCTL_LOG:-}" \
+        TZ=UTC \
+        "$@"
+}
+
+export ROFI_LOG="$E/rofi.args"
+export SYSTEMCTL_LOG="$E/systemctl.log"
+
+if run_env "$ROOT/install.sh" --index "$DIST/index.json" --pubkey "$WORK/pub" --all; then
+    pass "install.sh --all installs the bundle"
 else
-    tar -xzf "$BUNDLE" -C "$WORK"
+    fail "install.sh --all installs the bundle"
 fi
 
-VERSION="$(sed -n '/^\[workspace.package\]/,/^\[/p' "$ROOT/Cargo.toml" \
-    | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)"
-[ -n "$VERSION" ] || { printf 'test-bundle.sh: cannot read workspace version\n' >&2; exit 1; }
-ACTUAL="$(cat "$WORK/VERSION" 2>/dev/null || true)"
-[ "$ACTUAL" = "$VERSION" ] || {
-    printf 'test-bundle.sh: VERSION is %q, expected %q\n' "$ACTUAL" "$VERSION" >&2
-    exit 1
-}
+for bin in rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time rofi-screen-time; do
+    assert_file "$E/home/.local/bin/$bin" "bundle installs $bin"
+done
+assert_no_file "$E/home/.local/bin/rofi-hub" "bundle does not install the old hub"
+assert_no_file "$E/home/.local/bin/rofi-hub-menu" "bundle does not install the optional menu"
+assert_no_file "$E/config/rofi-hub" "bundle does not write hub theme state"
+assert_file "$E/config/systemd/user/screen-time.service" "bundle installs the app service unit"
 
-python3 - "$WORK" "$ROOT" <<'PY'
-import json
-import os
-import subprocess
-import sys
-import tomllib
-from pathlib import Path
+# Each app must run with its own runtime tools and no hub.
+for app in rofi-calendar rofi-clipboard rofi-keybinds rofi-network; do
+    rm -f "$E/rofi.args"
+    if run_env "$E/home/.local/bin/$app" >/dev/null 2>&1; then
+        pass "$app runs with fake rofi"
+    else
+        fail "$app runs with fake rofi"
+    fi
+    assert_file "$E/rofi.args" "$app invoked rofi"
+    if grep -q -- "-theme" "$E/rofi.args"; then
+        pass "$app passed an app theme"
+    else
+        fail "$app passed an app theme"
+    fi
+done
 
-stage = Path(sys.argv[1])
-root = Path(sys.argv[2])
-providers_dir = stage / "share/rofi-hub/providers"
-hub = stage / "bin/rofi-hub"
+# Screen Time's wrapper needs the sibling daemon and a working renderer.
+rm -f "$E/rofi.args"
+status=0
+run_env "$E/home/.local/bin/rofi-screen-time" >/dev/null 2>&1 || status=$?
+if ((status == 0 || status == 1)); then
+    pass "rofi-screen-time runs with fake rofi"
+else
+    fail "rofi-screen-time runs with fake rofi (status $status)"
+fi
+assert_file "$E/rofi.args" "rofi-screen-time invoked rofi"
+if grep -q -- "-show" "$E/rofi.args" && grep -q -- "-theme" "$E/rofi.args"; then
+    pass "rofi-screen-time passed its own theme and mode"
+else
+    fail "rofi-screen-time passed its own theme and mode"
+fi
 
-assert hub.is_file() and os.access(hub, os.X_OK), f"missing executable {hub}"
-assert (stage / "share/rofi-hub/themes/hub.rasi").is_file(), "missing hub theme"
-for name in ("LICENSE", "README.md", "CHANGELOG.md"):
-    assert (stage / name).is_file(), f"missing {name}"
-for name in (
-    "docs/ARCHITECTURE.md",
-    "docs/MIGRATING.md",
-    "docs/PACKAGING.md",
-    "packaging/install-tree.sh",
-    "packaging/rofi-hub.desktop",
-    "packaging/rofi-hub.svg",
-    "packaging/rofi-hub.metainfo.xml",
-    "packaging/systemd/screen-time.service.in",
-    "packaging/openrc/screen-time",
-    "packaging/runit/screen-time/run",
-):
-    assert (stage / name).is_file(), f"missing {name}"
-assert os.access(stage / "packaging/install-tree.sh", os.X_OK), "install-tree.sh is not executable"
-for name in (
-    "rofi-hub.1",
-    "rofi-calendar.1",
-    "rofi-keybinds.1",
-    "rofi-clipboard.1",
-    "screen-time.1",
-    "rofi-screen-time.1",
-):
-    assert (stage / "packaging/man" / name).is_file(), f"missing man page {name}"
-for name in ("rofi-hub.bash", "_rofi-hub", "rofi-hub.fish", "screen-time.bash", "_screen-time", "screen-time.fish"):
-    assert (stage / "packaging/completions" / name).is_file(), f"missing completion {name}"
+# Release payload must not contain distro artifacts.
+if find "$DIST" -maxdepth 1 \( -name '*.deb' -o -name '*.rpm' -o -name '*.apk' \) | grep -q .; then
+    fail "release contains no distro artifacts"
+else
+    pass "release contains no distro artifacts"
+fi
 
-bundle_providers = {}
-for path in sorted(providers_dir.glob("*.toml")):
-    data = tomllib.loads(path.read_text())
-    provider_id = data["id"]
-    assert path.stem == provider_id, f"{path} does not match id {provider_id}"
-    assert provider_id not in bundle_providers, f"duplicate provider {provider_id}"
-    program = data["exec"][0]
-    binary = stage / "bin" / program
-    assert binary.is_file(), f"provider {provider_id} missing binary {binary}"
-    assert os.access(binary, os.X_OK), f"provider {provider_id} binary is not executable"
-    bundle_providers[provider_id] = data
+if run_env "$ROOT/install.sh" --uninstall; then
+    pass "install.sh --uninstall removes installed apps"
+else
+    fail "install.sh --uninstall removes installed apps"
+fi
+assert_no_file "$E/home/.local/bin/rofi-calendar" "uninstall removed calendar"
+assert_no_file "$E/home/.local/bin/rofi-screen-time" "uninstall removed screen-time wrapper"
+assert_no_file "$E/state/rofi-apps/installed/calendar" "uninstall removed calendar state"
 
-assert bundle_providers, "bundle has no providers"
-repo_providers = {
-    path.stem: tomllib.loads(path.read_text())
-    for path in sorted((root / "providers").glob("*.toml"))
-}
-assert set(bundle_providers) == set(repo_providers), (
-    f"bundle providers {sorted(bundle_providers)} do not match "
-    f"repo providers {sorted(repo_providers)}"
-)
-for provider_id, data in repo_providers.items():
-    bundled = bundle_providers[provider_id]
-    assert bundled["version"] == data["version"], (
-        f"{provider_id} version {bundled['version']} != repo {data['version']}"
-    )
-    assert bundled["exec"] == data["exec"], (
-        f"{provider_id} exec {bundled['exec']} != repo {data['exec']}"
-    )
-
-env = os.environ.copy()
-env["ROFI_HUB_PROVIDER_DIR"] = str(providers_dir)
-listed = subprocess.run(
-    [str(hub), "list", "--json"],
-    capture_output=True,
-    text=True,
-    env=env,
-)
-assert listed.returncode == 0, f"rofi-hub list failed: {listed.stderr}"
-registry = {item["id"]: item for item in json.loads(listed.stdout)}
-assert set(registry) == set(bundle_providers), (
-    f"registry {sorted(registry)} != providers {sorted(bundle_providers)}"
-)
-for provider_id, data in bundle_providers.items():
-    item = registry[provider_id]
-    assert item["exec"] == data["exec"]
-    assert item["available"] is True, f"{provider_id} is not available: {item}"
-
-version_line = subprocess.run(
-    [str(hub), "--version"], capture_output=True, text=True, env=env
-)
-assert version_line.returncode == 0
-assert version_line.stdout.strip() == f"rofi-hub {(stage / 'VERSION').read_text().strip()}"
-
-if "screen-time" in bundle_providers:
-    tracker = stage / "bin/screen-time"
-    assert tracker.is_file() and os.access(tracker, os.X_OK), "missing screen-time"
-    tracker_version = subprocess.run(
-        [str(tracker), "--version"], capture_output=True, text=True, env=env
-    )
-    assert tracker_version.returncode == 0
-    assert tracker_version.stdout.strip() == (
-        f"screen-time {bundle_providers['screen-time']['version']}"
-    )
-    for relative in (
-        "share/rofi/screen-time.rasi",
-        "share/screen-time/config.example.toml",
-        "systemd/screen-time.service",
-    ):
-        assert (stage / relative).is_file(), f"missing {relative}"
-
-print(f"bundle ok: {len(bundle_providers)} providers ({', '.join(sorted(bundle_providers))})")
-PY
-
-# A release tarball must install itself through packaging/install-tree.sh. This
-# is the path used by rofi-hub-bin packages, separate from install.sh.
-INSTALL_ROOT="$WORK/install-root"
-DESTDIR="$INSTALL_ROOT" PREFIX=/usr "$WORK/packaging/install-tree.sh" --all
-find "$INSTALL_ROOT" -type f | sed "s|^${INSTALL_ROOT}||" | sort >"$WORK/installed-files"
-awk 'NF && $1 !~ /^#/ {print $2}' "$WORK/packaging/MANIFEST" | sort >"$WORK/manifest-files"
-diff -u "$WORK/manifest-files" "$WORK/installed-files" ||
-    { printf 'test-bundle.sh: release install tree differs from MANIFEST\n' >&2; exit 1; }
-ROFI_HUB_PROVIDER_DIR="$INSTALL_ROOT/usr/share/rofi-hub/providers" \
-    "$INSTALL_ROOT/usr/bin/rofi-hub" list --json >"$WORK/installed-list.json"
-python3 - "$WORK/installed-list.json" <<'PY'
-import json
-import sys
-
-listed = {item["id"]: item for item in json.load(open(sys.argv[1], encoding="utf-8"))}
-assert set(listed) == {"calendar", "clipboard", "keybinds", "screen-time"}, listed
-assert all(item["available"] for item in listed.values()), listed
-print("release install-tree ok:", ", ".join(sorted(listed)))
-PY
-"$INSTALL_ROOT/usr/bin/screen-time" --version >/dev/null
-printf 'test-bundle.sh: release install tree ok\n'
+printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
+((FAIL == 0))

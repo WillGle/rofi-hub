@@ -1,325 +1,261 @@
-# rofi-hub
+# rofi-apps
 
-A small Rust workspace for Rofi desktop tools. The `rofi-hub` launcher shows
-installed sub-apps in one keyboard-driven menu, remembers your theme, and
-starts the selected app. The bundle ships **Screen Time** (a local Hyprland
-tracker), **Calendar**, **Keyboard Shortcuts**, and **Clipboard History**.
+Independent Rofi apps and an optional launcher menu. Every app has its own
+binary, provider manifest, release, version, and runtime dependencies. The
+hub is no longer a runtime dependency: it only installs and manages app
+packages.
 
-One signed bundle contains the hub and every app. The installer can install the
-all-in-one hub, only selected apps, or only the launcher.
+Apps in this workspace:
+
+| App | Version | Runtime tools it owns |
+|---|---|---|
+| `rofi-calendar` | 1.2.0 | Rofi |
+| `rofi-clipboard` | 0.8.0 | Rofi, `cliphist`, `wl-copy` |
+| `rofi-keybinds` | 1.0.0 | Rofi |
+| `rofi-network` | 0.3.0 | Rofi, NetworkManager (`nmcli`) |
+| `screen-time` | 0.5.0 | Rofi; owns its own user service |
+| `rofi-hub-menu` | 0.3.0 | Optional provider menu |
+
+`rofi-dmenu` is the shared library (`0.3.0`) used by the apps. It contains the
+dmenu protocol, theme resolution, paths, and UI helpers. No app depends on the
+optional menu or the installer.
 
 > **Project status:** `screen-time-rofi` is retired and archived. This
-> repository is the canonical home for Screen Time and future Rofi apps. See
+> repository is the canonical home for Screen Time and the Rofi apps. See
 > [migrating an existing install](docs/MIGRATING.md).
-
-[![Memory and fast-switch coverage across UI-capable Linux trackers](crates/screen-time/docs/charts/memory-coverage.svg)](crates/screen-time/docs/EVALUATION.md)
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/rofi-hub.svg)](https://repology.org/project/rofi-hub/versions)
 
 ## UI
 
-Every native app shares one Gruvbox Dark design language: the same palette,
-header/section/row grammar, selection strip, and footer hints. The screenshots
-below are real Rofi captures (not mockups).
+Every native app uses the same design language: zoned cards, 1px borders, a
+shared palette, and an accent strip on the active row. The screenshots below
+are real Rofi captures.
 
-| Hub | Screen Time | Calendar |
+| Menu | Screen Time | Calendar |
 |---|---|---|
-| <img src="docs/screenshots/ui/hub-gruvbox.png?v=3" width="360" alt="Hub in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-gruvbox.png?v=3" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-gruvbox.png?v=3" width="360" alt="Calendar in Gruvbox Dark"> |
+| <img src="docs/screenshots/ui/hub-gruvbox.png?v=3" width="360" alt="Menu in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-gruvbox.png?v=3" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-gruvbox.png?v=3" width="360" alt="Calendar in Gruvbox Dark"> |
 
 | Clipboard | Keybinds | Network |
 |---|---|---|
 | <img src="docs/screenshots/ui/clipboard-gruvbox.png?v=3" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png?v=3" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png?v=4" width="360" alt="Network in Gruvbox Dark"> |
 
-[Full 6 app × 4 mode screenshot matrix](docs/screenshots/ui/README.md) ·
-[UI style guide](docs/UI_STYLE.md) · `rofi-hub theme dump --app <app>`
+[Full screenshot matrix](docs/screenshots/ui/README.md) ·
+[UI style guide](docs/UI_STYLE.md)
 
 ## Install
 
-**Nix is the primary installation path.** It is self-contained: hub, apps,
-Screen Time, providers, themes, and the user service. No local checkout or
-`install.sh` is required.
+Only two channels are supported:
 
-### NixOS server (recommended)
+1. **Nix** — flake packages and modules (primary).
+2. **`install.sh`** — signed universal release (secondary, non-Nix distros).
 
-Add the flake input to `/etc/nixos/flake.nix`:
+No `.deb`, `.rpm`, `.apk`, AUR, distro recipe, or source asset is published.
 
-```nix
-inputs.rofi-hub.url = "github:WillGle/rofi-hub";
-outputs = { nixpkgs, home-manager, rofi-hub, ... }@inputs: # add rofi-hub
-```
+### NixOS
 
-Import the standalone NixOS module and enable it:
+Add the flake input:
 
 ```nix
-imports = [ inputs.rofi-hub.nixosModules.default ];
-
-services.rofi-hub.enable = true;
+inputs.rofi-apps.url = "github:WillGle/rofi-hub";
 ```
 
-Rebuild:
+Import the umbrella module and enable only the apps you want:
 
-```bash
-sudo nixos-rebuild switch --flake /etc/nixos#<host>
-rofi-hub --version
-rofi-hub list --json
-systemctl --user status screen-time
+```nix
+imports = [ inputs.rofi-apps.nixosModules.default ];
+
+services.rofi-apps.calendar.enable = true;
+services.rofi-apps.clipboard.enable = true;
+services.rofi-apps.screen-time.enable = true;
+services.rofi-apps.menu.enable = false; # optional
 ```
 
-No Home Manager is required. The module installs the all-in-one package and the
-`screen-time` user service.
+Each option installs only that app package and the app's own dependencies.
+`screen-time` owns its user service; the other apps do not install services.
+The old `services.rofi-hub.enable` option is kept as a deprecated alias that
+maps the selected apps to `services.rofi-apps.<app>.enable`.
 
-### Nix profile (other Nix machines)
-
-```bash
-nix profile add github:WillGle/rofi-hub
-rofi-hub --version
-```
-
-Or run without installing:
-
-```bash
-nix run github:WillGle/rofi-hub -- --version
-```
+Individual modules are available as `nixosModules.rofi-calendar`,
+`nixosModules.rofi-clipboard`, `nixosModules.rofi-keybinds`,
+`nixosModules.rofi-network`, `nixosModules.screen-time`, and
+`nixosModules.rofi-hub-menu`.
 
 ### Home Manager
 
 ```nix
 {
-  inputs.rofi-hub.url = "github:WillGle/rofi-hub";
-  imports = [ inputs.rofi-hub.homeManagerModules.default ];
+  imports = [ inputs.rofi-apps.homeManagerModules.default ];
 
-  services.rofi-hub = {
-    enable = true;
-    apps = [ "screen-time" "calendar" "keybinds" "clipboard" ];
-  };
+  services.rofi-apps.calendar.enable = true;
+  services.rofi-apps.screen-time.enable = true;
 }
 ```
 
-`apps = []` installs only the hub; `apps = [ "screen-time" ]` installs the hub
-and tracker.
+The equivalent module names are under `homeManagerModules.*`. The deprecated
+`homeManagerModules.rofi-hub` alias maps `services.rofi-hub.*` to the per-app
+options and prints a warning.
 
-### Other Linux distributions (secondary: `install.sh`)
+### Nix profile
 
-On a non-Nix distro with Hyprland, Rofi 2.x, minisign, and a systemd user
-session, install the signed bundle as your desktop user:
+```bash
+nix profile add github:WillGle/rofi-hub#rofi-calendar
+nix profile add github:WillGle/rofi-hub#rofi-clipboard
+nix profile add github:WillGle/rofi-hub#rofi-network
+nix profile add github:WillGle/rofi-hub#screen-time
+nix profile add github:WillGle/rofi-hub#rofi-hub-menu   # optional
+```
+
+`nix build .#rofi-calendar` builds exactly one app; its closure does not
+contain the menu, the installer, or another app.
+
+### Other Linux distributions
+
+Install the signed per-app release as your desktop user. Rofi must already be
+installed; `install.sh` only checks prerequisites, it never installs them.
 
 ```bash
 base=https://github.com/WillGle/rofi-hub/releases/latest/download
 curl -fsSLO https://raw.githubusercontent.com/WillGle/rofi-hub/main/minisign.pub
 curl -fsSLO "$base/install.sh" "$base/install.sh.minisig"
 minisign -Vm install.sh -p minisign.pub   # key id F1A59235D536DB40
-bash install.sh
-~/.local/bin/rofi-hub
+bash install.sh --app calendar
 ```
 
-`install.sh` installs the hub and every app by default. Select components with
-`--app screen-time`, `--app calendar,keybinds,clipboard`, or `--list-apps`.
-
-Updates are signed and opt-in:
+Commands:
 
 ```bash
-bash install.sh --check
-bash install.sh --update
-bash install.sh --rollback
-bash uninstall.sh
+bash install.sh --list                  # index + installed state
+bash install.sh --app calendar          # one app
+bash install.sh --app calendar,clipboard
+bash install.sh --all                   # every non-optional app
+bash install.sh --update calendar       # one app
+bash install.sh --uninstall calendar    # one app
+bash install.sh --app screen-time --no-service
 ```
 
-## Packaging
-
-**Nix is the primary product path**: flake package, standalone NixOS module, and
-Home Manager module. **`install.sh` is the secondary path** for non-Nix distros.
-The Debian `.deb` and Fedora `.rpm` are additional release artifacts, not the
-primary installation method.
-
-- **Nix** — flake, `nixosModules.default`, `homeManagerModules.default`.
-- **`install.sh`** — signed release tarball, user-local install/update/rollback.
-- **Additional artifacts** — Debian/Ubuntu `.deb`, Fedora `.rpm`.
-- **Experimental** — Arch/AUR, Alpine `.apk`, openSUSE, Gentoo, Void,
-  Slackware, ALT, and the extra source asset.
-
-| Target | Version | Status |
-|---|---|---|
-| Nix flake / NixOS / Home Manager | 0.2.1 | ✅ primary |
-| `install.sh` tarball (non-Nix) | 0.2.1 | ✅ secondary |
-| Debian/Ubuntu `.deb` | 0.2.1 | ➕ additional artifact |
-| Fedora `.rpm` / spec | 0.2.1 | ➕ additional artifact |
-| nixpkgs | — | ⏸ deferred |
-| Debian official source package | 0.2.1 | 🧪 experimental; sponsorship pending |
-| Arch/AUR | 0.2.1 | 🧪 experimental recipe; not published |
-| Alpine `.apk` | 0.2.1 | 🧪 experimental artifact |
-| openSUSE / Gentoo / Void / SlackBuilds / ALT | 0.2.1 | 🧪 experimental recipes |
-
-See [packaging](docs/PACKAGING.md) for the dependency matrix, install layout,
-service files, and per-distro commands.
+State is per app under `~/.local/state/rofi-apps/installed/<id>`. Update or
+uninstall one app without touching another. The installer refuses Nix-managed
+paths, verifies checksums and minisign signatures by default, rejects path
+traversal, and never writes themes, `ROFI_HUB_*` variables, or `PATH` wrappers.
 
 ## Use
 
-Every native app shares one design language: Gruvbox Dark by default, zoned
-cards with 1px borders, the same palette roles, and an accent strip on the
-active row. Direct launches generate the same profile-aware theme, so the look
-stays consistent without starting the hub first. See
-[UI style](docs/UI_STYLE.md).
-
-### Hub
-
-- `↑` / `↓` selects an app, `Enter` opens it, and `Esc` closes the menu.
-- Type to filter.
-- `Alt+1` Nord, `Alt+2` Solarized Light, `Alt+3` Gruvbox Dark, `Alt+4` Auto.
-  The choice is saved under `~/.config/rofi-hub/theme`.
-- `rofi-hub --theme nord` overrides the theme for one run.
-- `rofi-hub theme list`, `rofi-hub theme set nord`, and `rofi-hub theme show`
-  manage the saved theme from a terminal.
-- `rofi-hub theme dump --app hub` (or `screen-time`, `calendar`, `clipboard`,
-  `keybinds`, `network`) prints the generated `.rasi` for that profile.
-- `rofi-hub screen-time` opens one app directly.
-
-The old `rofi app manager` command surface is kept as aliases in
-`rofi-hub`:
+Direct launch works without the menu:
 
 ```bash
-rofi-hub launcher    # rofi -show drun
-rofi-hub window      # rofi -show window
-rofi-hub calc        # rofi-calc plugin
-rofi-hub emoji       # rofi-emoji plugin
-rofi-hub power       # rofi-power-menu
-rofi-hub calendar    # Calendar provider
-rofi-hub clipboard   # Clipboard provider
-rofi-hub keybinds    # Keyboard Shortcuts provider
-rofi-hub show drun   # raw Rofi mode with the shared theme
+rofi-calendar
+rofi-clipboard
+rofi-keybinds
+rofi-network
+rofi-screen-time
 ```
 
-`rofi-hub network` opens a NetworkManager menu. The top bar shows the active
-SSID, signal/band/security, interface, IP, and gateway. The zoned list adds
-subnet, broadcast, DNS, MAC, quick actions, nearby Wi-Fi networks, wired
-interfaces, edit-saved, rescan, and radio toggle. It does not list every saved
-profile; use **Edit saved network** when you need one. It requires `nmcli`.
+The optional menu reads provider manifests and execs apps with your normal
+environment:
 
-### Configuration
+```bash
+rofi-hub-menu list
+rofi-hub-menu calendar
+rofi-hub-menu --theme nord
+```
 
-Optional `~/.config/rofi-hub/config.toml`; start from
-[`config.example.toml`](docs/config.example.toml):
+Removing `rofi-hub-menu` never breaks an app.
+
+### Theme
+
+Theme ownership is split into three layers:
+
+| Layer | Owner | File |
+|---|---|---|
+| Base theme | user / theme module | `~/.config/rofi/theme.rasi` or `ROFI_THEME` |
+| App layout | app package | `$XDG_DATA_DIRS/rofi/<app>.rasi` |
+| App override | user | `~/.config/rofi/<app>.rasi` |
+| Menu theme | optional menu | `share/rofi/hub-menu.rasi` + `~/.config/rofi-hub-menu/theme` |
+
+Resolution order for every app:
+
+1. `~/.config/rofi/<app>.rasi`
+2. `ROFI_THEME`
+3. `~/.config/rofi/theme.rasi` + app layout
+4. packaged `$XDG_DATA_DIRS/rofi/<app>.rasi`
+5. built-in fallback
+
+### Environment
+
+| Variable | Effect |
+|---|---|
+| `ROFI_BIN` | Rofi executable used by the apps and the Screen Time wrapper. |
+| `ROFI_CONFIG` | Rofi config passed with `-config`. |
+| `ROFI_THEME` | Full global theme override. |
+| `ROFI_APPS_INDEX` | Default release index for `install.sh`. |
+| `ROFI_APPS_PREFIX` | Default install prefix for `install.sh`. |
+| `ROFI_APPS_PUBKEY` | minisign public key for `install.sh`. |
+
+`ROFI_HUB_THEME`, `ROFI_HUB_THEME_FILE`, `ROFI_HUB_PROVIDER`, and
+`ROFI_HUB_PROVIDER_DIR` are removed from the app path.
+
+### Menu configuration
+
+Optional `~/.config/rofi-hub-menu/config.toml`:
 
 ```toml
 [ui]
-# prompt = "Rofi Hub"
-# font = "JetBrainsMono Nerd Font"
-# font_size = 12
+prompt = "Rofi Hub"
 
 [theme]
-# mode = "gruvbox" # auto | nord | solarized | gruvbox | /path/to/theme.rasi
+mode = "gruvbox" # auto | nord | solarized | gruvbox | /path/to/theme.rasi
 
 [launcher]
-columns = 3 # 1..6; only `rofi-hub launcher` (drun)
-lines = 10  # 1..40
+columns = 3
+lines = 10
 ```
 
-Text-heavy apps stay single-column. `launcher.columns` and `launcher.lines`
-are applied as per-run Rofi theme overrides, so they do not change Clipboard,
-Network, Calendar, or Screen Time.
-
-### Calendar
-
-- Enter on the sheet opens today; type `15`, `15/3`, `3/2027`,
-  `15/3/2027`, or `2027-03-15` to jump.
-- `←` / `→` browse months and `Ctrl+t` returns to today.
-
-### Keyboard Shortcuts
-
-- Sections come from `# --- Name ---` comments in `hyprland.conf`.
-- `Enter` runs a shortcut whose dispatcher is `exec`; other rows are
-  reference only.
-
-### Clipboard History
-
-- Lists `cliphist` entries with type/metadata and a `HISTORY` section.
-- `Enter` copies; `Alt+d` deletes one entry; `Alt+x` clears with confirmation;
-  `Alt+r` refreshes.
-
-### Screen Time
-
-- `←` / `→` browse days, `T` returns to today, and `R` refreshes.
-- `↑` / `↓` selects an app, `Enter` opens its details, and `Backspace` returns.
-- `Alt+1` through `Alt+3` select Nord, Solarized Light, or Gruvbox Dark;
-  `Alt+4` clears the saved choice and restores the configured theme.
-
-See the [Screen Time user guide](crates/screen-time/docs/USER_GUIDE.md) for
-distro dependencies, configuration, retention, and troubleshooting.
-
-## Privacy and data
-
-Screen Time stores app-level history only. Window titles are parsed just far
-enough to find the event separator and are never persisted or rendered. Idle
-and suspend gaps are excluded. The database lives at
-`~/.local/state/screen-time/screen-time.db`; updates and backups live at
-`~/.local/state/rofi-hub/`.
+The menu owns this state. Apps never read it.
 
 ## Repository layout
 
 ```
-crates/rofi-core/       provider manifests, Rofi dmenu, themes, paths
-crates/rofi-hub/        the hub launcher
-crates/rofi-calendar/   month sheet with date search
-crates/rofi-keybinds/   Hyprland shortcut reference
-crates/rofi-clipboard/  cliphist picker
-crates/screen-time/     the Screen Time tracker and its Rofi UI
-providers/              provider manifests shipped in the bundle
-themes/                 fallback hub theme
-install.sh              signed bundle installer/updater
-flake.nix               packages and the Home Manager module
+crates/rofi-dmenu/       shared dmenu/theme/path/UI library
+crates/rofi-calendar/    app.toml, provider, layout, source
+crates/rofi-clipboard/
+crates/rofi-keybinds/
+crates/rofi-network/
+crates/screen-time/      tracker, Rofi UI, and its user service
+crates/rofi-hub-menu/    optional provider menu
+installer/               release index schema
+modules/nixos/           per-app NixOS modules
+modules/home-manager/    per-app Home Manager modules
+install.sh               signed per-app installer
+uninstall.sh             thin uninstall wrapper
+flake.nix                packages and modules
+scripts/                 release, test, and dependency guards
 ```
-
-## Environment
-
-| Variable | Effect |
-| --- | --- |
-| `ROFI_BIN` | Rofi executable used by the hub and the Screen Time wrapper. |
-| `ROFI_CONFIG` | Extra Rofi config passed with `-config`; both UIs honor it. |
-| `ROFI_THEME` | Base theme used by the hub's `auto` mode and the Screen Time fallback. |
-| `ROFI_HUB_THEME` | One-run theme override; does not change the saved choice. |
-| `ROFI_HUB_PROVIDER_DIR` | Extra provider directories, colon-separated. |
-| `ROFI_HUB_PROVIDER`, `ROFI_HUB_THEME`, `ROFI_HUB_THEME_FILE` | Set for the launched provider. |
-
-Providers are resolved from `PATH`, then from the directory containing the
-`rofi-hub` binary, so a `~/.local/bin` install works even when the graphical
-session does not include that directory in `PATH`. The hub never kills other
-Rofi processes; each app owns its PID file.
-
-`rofi-hub list --json` is the stable registry for desktop integrations
-(Hyprland, Waybar, keybind menus): read ids, names, commands, and availability
-from it instead of hardcoding labels.
-
-See [architecture](docs/ARCHITECTURE.md) for the provider contract and update
-model, and [migration notes](docs/MIGRATING.md) if you used the retired
-`screen-time-rofi` repository.
 
 ## Development
 
 ```bash
 nix develop
-python3 scripts/check-app-sync.py
 cargo fmt --check --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --locked
-shellcheck install.sh uninstall.sh scripts/*.sh
+python3 scripts/check-deps.py
+python3 scripts/check-app-sync.py
+scripts/test-apps.sh
+scripts/test-theme.sh
 scripts/test-installer.sh
 scripts/package-release.sh
-scripts/test-bundle.sh dist/rofi-hub-$(uname -m)-linux.tar.gz
+scripts/test-bundle.sh dist
+scripts/test-release-index.sh dist
+scripts/test-migration.sh
 nix flake check
-nix build .#
 ```
 
-`check-app-sync.py` treats `providers/*.toml` as the canonical app list and
-fails when the workspace, installer, Nix outputs, release package, or installer
-fixture drift. `test-bundle.sh` unpacks a release bundle, runs
-`rofi-hub list --json`, and checks every provider binary, version, and Screen
-Time support file. The app crates also have integration tests with a fake Rofi
-(`crates/*/tests/cli.rs`).
-
-The CI pipeline runs lint, workspace tests, the MSRV (Rust 1.89), installer
-fault injection, the install tree on x86_64 and aarch64, bundle smoke tests,
-the five-distro build matrix, and Nix flake checks. Tag builds build the
-`.deb`, `.rpm`, `.apk`, and source assets, smoke-test them in clean containers,
-then sign `SHA256SUMS` and upload the complete set to the GitHub release.
+`check-deps.py` enforces the one-way dependency graph: apps may depend on
+`rofi-dmenu`, never on the menu or installer. `test-apps.sh` and
+`test-theme.sh` run apps against a fake Rofi in a temporary XDG environment.
+`test-installer.sh` covers installation, update/uninstall independence,
+missing prerequisites, bad checksums, unsigned releases, path traversal,
+permissions, rollback, services, and the optional menu. `test-nix.sh` verifies
+per-app closures and module ownership.
 
 ## License
 

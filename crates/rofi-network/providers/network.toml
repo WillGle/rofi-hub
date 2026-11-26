@@ -1,0 +1,8 @@
+id = "network"
+name = "Network"
+description = "NetworkManager Wi-Fi and Ethernet menu"
+category = "System"
+icon = "network-wireless"
+keywords = ["wifi", "network", "ethernet", "nmcli", "connection"]
+exec = ["rofi-network"]
+version = "0.3.0"

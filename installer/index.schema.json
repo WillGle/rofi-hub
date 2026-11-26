@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/WillGle/rofi-hub/installer/index.schema.json",
+  "title": "rofi-apps release index",
+  "description": "Signed index of independent rofi-app tarballs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "installer", "apps"],
+  "properties": {
+    "schema": {
+      "const": 1,
+      "description": "Index schema version."
+    },
+    "installer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "apps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "url", "sha256"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[0-9A-Za-z.+-]+$"
+          },
+          "url": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relative path (preferred) or https URL to the per-app tarball."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "requires": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Prerequisite executables checked with command -v. Never installed."
+          },
+          "optional": {
+            "type": "boolean",
+            "default": false,
+            "description": "Optional apps (such as the menu) are skipped by --all."
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,0 @@
-id = "clipboard"
-name = "Clipboard History"
-description = "Pick an entry from cliphist and copy it again"
-category = "Utilities"
-icon = "edit-paste"
-keywords = ["clipboard", "copy", "paste", "history", "cliphist"]
-exec = ["rofi-clipboard"]
-version = "0.2.1"

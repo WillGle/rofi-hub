@@ -1,6 +1,6 @@
 [package]
 name = "rofi-clipboard"
-version.workspace = true
+version = "0.8.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -14,8 +14,8 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
-rofi-core = { path = "../rofi-core" }
+rofi-dmenu = { path = "../rofi-dmenu", default-features = false, features = ["category"] }
 
 [dev-dependencies]
-rofi-core = { path = "../rofi-core", features = ["test-support"] }
+rofi-dmenu = { path = "../rofi-dmenu", default-features = false, features = ["category", "test-support"] }
 tempfile = "3"

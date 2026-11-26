@@ -1,0 +1,7 @@
+id = "clipboard"
+version = "0.8.0"
+bin = "rofi-clipboard"
+provider = "providers/clipboard.toml"
+requires = ["rofi", "cliphist", "wl-copy"]
+optional_requires = []
+service = false

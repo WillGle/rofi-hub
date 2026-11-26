@@ -1,0 +1,8 @@
+id = "screen-time"
+version = "0.5.0"
+bin = "rofi-screen-time"
+provider = "providers/screen-time.toml"
+requires = ["rofi"]
+optional_requires = []
+service = true
+service_unit = "systemd/screen-time.service"

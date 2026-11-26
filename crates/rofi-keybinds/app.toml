@@ -1,0 +1,7 @@
+id = "keybinds"
+version = "1.0.0"
+bin = "rofi-keybinds"
+provider = "providers/keybinds.toml"
+requires = ["rofi"]
+optional_requires = ["hyprctl"]
+service = false

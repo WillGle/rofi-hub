@@ -1,5 +1,5 @@
-# Optional user configuration. Copy to:
-#   ~/.config/rofi-hub/config.toml
+# Optional configuration for the optional menu. Copy to:
+#   ~/.config/rofi-hub-menu/config.toml
 
 [ui]
 # prompt = "Rofi Hub"
@@ -11,7 +11,7 @@
 # mode = "gruvbox"
 
 [launcher]
-# Columns and visible rows for `rofi-hub launcher` (drun).
+# Columns and visible rows for `rofi-hub-menu launcher` (drun).
 # columns is clamped to 1..=6; lines is clamped to 1..=40.
 columns = 3
 lines = 10

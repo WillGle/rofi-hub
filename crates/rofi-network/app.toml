@@ -1,0 +1,7 @@
+id = "network"
+version = "0.3.0"
+bin = "rofi-network"
+provider = "providers/network.toml"
+requires = ["rofi", "nmcli"]
+optional_requires = []
+service = false

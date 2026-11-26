@@ -1,15 +1,15 @@
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
-use rofi_core::theme::font_from_static;
-use rofi_core::{ChromeProfile, Theme as CoreTheme};
+use rofi_dmenu::theme::font_from_static;
+use rofi_dmenu::{ChromeProfile, Theme as CoreTheme};
 
 use crate::config::{Config, ThemeMode};
 
 pub const DEFAULT_FAMILY: &str = "JetBrainsMono Nerd Font";
 pub const DEFAULT_SIZE: u8 = 12;
 
-pub use rofi_core::theme::valid_color;
+pub use rofi_dmenu::theme::valid_color;
 
 /// Screen Time keeps the Rofi chrome path next to the shared core palette.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,11 +41,8 @@ impl Theme {
 
     pub(crate) fn load_with_mode(mode: Option<&str>) -> Self {
         let mut config = Config::load_default().unwrap_or_default();
-        // Hub wins; then the shared global state; the old Screen Time
-        // `theme-choice` file is read only as a migration fallback.
-        if let Some(mode) = hub_mode() {
-            config.theme.mode = Some(mode.as_str().to_owned());
-        } else if let Some(mode) = mode {
+        // Screen Time owns its own theme choice. There is no hub state.
+        if let Some(mode) = mode {
             config.theme.mode = Some(mode.to_owned());
         }
         Self::resolve(&config)
@@ -267,13 +264,6 @@ element-text {{
     }
 }
 
-fn hub_mode() -> Option<rofi_core::Mode> {
-    std::env::var("ROFI_HUB_THEME")
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
-        .or_else(rofi_core::theme::saved_mode)
-}
-
 fn apply_explicit_colors(colors: &mut CoreTheme, config: &Config) {
     let supplied = config.explicit_colors();
     let values: Vec<&str> = supplied.iter().filter_map(|value| *value).collect();
@@ -329,21 +319,16 @@ fn apply_explicit_colors(colors: &mut CoreTheme, config: &Config) {
 }
 
 fn chrome_theme_path(config: &Config, home: &Path) -> Option<PathBuf> {
-    for variable in ["ROFI_HUB_THEME_FILE", "ROFI_THEME"] {
-        let Some(raw) = std::env::var_os(variable) else {
-            continue;
-        };
-        let path = PathBuf::from(raw);
+    if config.theme.rofi_theme.is_some() {
+        let path = config.rofi_theme_path(home);
         if path.is_file() {
             return Some(path);
         }
     }
-    config
-        .theme
-        .rofi_theme
-        .as_ref()
-        .map(|_| config.rofi_theme_path(home))
-        .filter(|path| path.is_file())
+    // The user/theme-module base theme is layered under the Screen Time
+    // layout. Screen Time does not read any hub theme state.
+    let base = home.join(".config/rofi/theme.rasi");
+    base.is_file().then_some(base)
 }
 
 fn escape_rasi(value: &str) -> String {

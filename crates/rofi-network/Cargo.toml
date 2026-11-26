@@ -1,0 +1,21 @@
+[package]
+name = "rofi-network"
+version = "0.3.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Standalone NetworkManager Wi-Fi and Ethernet menu for Rofi"
+publish = false
+
+[[bin]]
+name = "rofi-network"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+rofi-dmenu = { path = "../rofi-dmenu", default-features = false, features = ["category"] }
+
+[dev-dependencies]
+tempfile = "3"

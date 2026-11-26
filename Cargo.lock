@@ -722,26 +722,26 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 
 [[package]]
 name = "rofi-calendar"
-version = "0.2.1"
+version = "1.2.0"
 dependencies = [
  "anyhow",
  "chrono",
- "rofi-core",
+ "rofi-dmenu",
  "tempfile",
 ]
 
 [[package]]
 name = "rofi-clipboard"
-version = "0.2.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
- "rofi-core",
+ "rofi-dmenu",
  "tempfile",
 ]
 
 [[package]]
-name = "rofi-core"
-version = "0.2.1"
+name = "rofi-dmenu"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -752,12 +752,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "rofi-hub"
-version = "0.2.1"
+name = "rofi-hub-menu"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
- "rofi-core",
+ "rofi-dmenu",
  "serde",
  "serde_json",
  "tempfile",
@@ -766,11 +766,20 @@ dependencies = [
 
 [[package]]
 name = "rofi-keybinds"
-version = "0.2.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
- "rofi-core",
- "serde_json",
+ "rofi-dmenu",
+ "tempfile",
+]
+
+[[package]]
+name = "rofi-network"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "rofi-dmenu",
  "tempfile",
 ]
 
@@ -825,7 +834,7 @@ dependencies = [
  "chrono",
  "clap",
  "libc",
- "rofi-core",
+ "rofi-dmenu",
  "rusqlite",
  "serde",
  "serde_json",

@@ -9,7 +9,7 @@ use std::fs;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{Item, Outcome, Rofi, Theme, app, paths, ui};
+use rofi_dmenu::{Item, Outcome, Rofi, Theme, app, paths, ui};
 
 fn main() -> ExitCode {
     match run() {

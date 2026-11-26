@@ -1,5 +1,5 @@
 {
-  description = "Rofi Hub: a small Rust launcher for screen-time and future Rofi sub-apps";
+  description = "rofi-apps: independent Rofi apps, an optional menu, and an installer";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -20,25 +20,9 @@
             pkgs = import nixpkgs { inherit system; };
           }
         );
-      workspaceVersion = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
-      screenTimeVersion = (builtins.fromTOML (builtins.readFile ./crates/screen-time/Cargo.toml)).package.version;
-      rofiWithPlugins =
-        pkgs:
-        pkgs.rofi.override {
-          plugins = [
-            pkgs.rofi-calc
-            pkgs.rofi-emoji
-          ];
-        };
-      runtimePackagesFor =
-        pkgs:
-        [
-          (rofiWithPlugins pkgs)
-          pkgs.rofi-power-menu
-          pkgs.wl-clipboard
-          pkgs.cliphist
-          pkgs.networkmanager
-        ];
+      crateVersion =
+        crate: (builtins.fromTOML (builtins.readFile (./crates + "/${crate}/Cargo.toml"))).package.version;
+      installerVersion = "0.3.0";
     in
     {
       packages = forAllSystems (
@@ -57,389 +41,443 @@
                 "dist"
                 ".git"
                 ".direnv"
+                "result"
               ]);
           };
-          common = {
-            inherit src;
-            cargoLock.lockFile = ./Cargo.lock;
-            nativeBuildInputs = [
-              pkgs.makeWrapper
-              pkgs.tzdata
-            ];
-            doCheck = true;
-          };
-          # Rofi without plugins cannot load `calc` or `emoji`; the all-in-one
-          # wrapper must carry the plugin-enabled build instead of plain rofi.
-          rofi = rofiWithPlugins pkgs;
-          runtimePackages = runtimePackagesFor pkgs;
-          runtimePath = lib.makeBinPath runtimePackages;
 
-          rofiHub = pkgs.rustPlatform.buildRustPackage (
-            common
-            // {
-              pname = "rofi-hub";
-              version = workspaceVersion;
-              cargoBuildFlags = [ "--package" "rofi-hub" ];
-              cargoTestFlags = [ "--package" "rofi-hub" ];
-              postInstall = ''
-                mkdir -p "$out/share/rofi-hub/themes"
-                install -m 644 themes/hub.rasi "$out/share/rofi-hub/themes/hub.rasi"
-              '';
-              meta = {
-                description = "Rofi launcher for screen-time and future sub-apps";
-                license = lib.licenses.mit;
-                mainProgram = "rofi-hub";
-                platforms = systems;
-              };
-            }
-          );
+          # Build one app as an independent package. The package carries only
+          # its own binary, provider manifest, layout fallback, and declared
+          # runtime dependencies. `targetPkgs` is the (possibly cross) pkgs
+          # set, so the same builder produces the aarch64 release artifacts.
+          mkApp =
+            targetPkgs:
+            {
+              crate,
+              id,
+              bin,
+              extraRuntime ? [ ],
+              hasProvider ? true,
+              hasLayout ? true,
+              hasAppToml ? true,
+              extraInstall ? "",
+              description,
+            }:
+            let
+              runtime = [ targetPkgs.rofi ] ++ extraRuntime;
+            in
+            targetPkgs.rustPlatform.buildRustPackage ({
+              pname = bin;
+              version = crateVersion crate;
+              inherit src;
 
-          rofiApps = pkgs.rustPlatform.buildRustPackage (
-            common
-            // {
-              pname = "rofi-hub-apps";
-              version = workspaceVersion;
+              cargoLock.lockFile = ./Cargo.lock;
               cargoBuildFlags = [
                 "--package"
-                "rofi-calendar"
-                "--package"
-                "rofi-keybinds"
-                "--package"
-                "rofi-clipboard"
+                "${crate}"
               ];
               cargoTestFlags = [
                 "--package"
-                "rofi-calendar"
-                "--package"
-                "rofi-keybinds"
-                "--package"
-                "rofi-clipboard"
+                "${crate}"
               ];
-              postInstall = ''
-                mkdir -p "$out/share/rofi-hub/providers"
-                install -m 644 providers/calendar.toml providers/keybinds.toml \
-                  providers/clipboard.toml "$out/share/rofi-hub/providers/"
-              '';
-              meta = {
-                description = "Built-in Rofi apps: calendar, keybinds, and clipboard";
-                license = lib.licenses.mit;
-                platforms = systems;
-              };
-            }
-          );
 
-          screenTime = pkgs.rustPlatform.buildRustPackage (
-            common
-            // {
-              pname = "screen-time";
-              version = screenTimeVersion;              cargoBuildFlags = [ "--package" "screen-time" ];
-              cargoTestFlags = [ "--package" "screen-time" ];
+              nativeBuildInputs = [ targetPkgs.makeWrapper ];
               preCheck = ''
                 export TZ=UTC
-                export TZDIR=${pkgs.tzdata}/share/zoneinfo
+                export TZDIR=${targetPkgs.tzdata}/share/zoneinfo
               '';
+
               postInstall = ''
-                mkdir -p "$out/share/rofi" "$out/share/screen-time" \
-                  "$out/share/rofi-hub/providers" "$out/systemd"
-                install -m 644 crates/screen-time/share/rofi/screen-time.rasi \
-                  "$out/share/rofi/screen-time.rasi"
-                install -m 644 crates/screen-time/share/screen-time/config.example.toml \
-                  "$out/share/screen-time/config.example.toml"
-                install -m 644 providers/screen-time.toml \
-                  "$out/share/rofi-hub/providers/screen-time.toml"
-                install -m 644 crates/screen-time/systemd/screen-time.service \
-                  "$out/systemd/screen-time.service"
-                install -m 755 crates/screen-time/share/rofi-screen-time "$out/bin/rofi-screen-time"
-                wrapProgram "$out/bin/rofi-screen-time" \
-                  --set SCREEN_TIME_THEME "$out/share/rofi/screen-time.rasi"
-                substituteInPlace "$out/systemd/screen-time.service" \
-                  --replace-fail "ExecStart=%h/.local/bin/screen-time daemon" \
-                  "ExecStart=$out/bin/screen-time daemon"
+                ${lib.optionalString hasProvider ''
+                  install -Dm644 crates/${crate}/providers/${id}.toml \
+                    "$out/share/rofi-apps/providers/${id}.toml"
+                ''}
+                ${lib.optionalString hasLayout ''
+                  install -Dm644 crates/${crate}/share/rofi/${id}.rasi \
+                    "$out/share/rofi/${id}.rasi"
+                ''}
+                ${lib.optionalString hasAppToml ''
+                  install -Dm644 crates/${crate}/app.toml \
+                    "$out/share/rofi-apps/apps/${id}/app.toml"
+                ''}
+                ${extraInstall}
               '';
+
+              postFixup = ''
+                wrapProgram "$out/bin/${bin}" \
+                  --prefix PATH : "${lib.makeBinPath runtime}"
+                ${lib.optionalString (bin == "screen-time") ''
+                  wrapProgram "$out/bin/rofi-screen-time" \
+                    --prefix PATH : "${lib.makeBinPath runtime}"
+                ''}
+              '';
+
               meta = {
-                description = "Local, per-user screen-time tracker with a static Rofi day timeline";
+                inherit description;
                 license = lib.licenses.mit;
-                mainProgram = "screen-time";
+                mainProgram = bin;
                 platforms = systems;
               };
-            }
-          );
+            });
 
-          hubWithApps = pkgs.symlinkJoin {
-            name = "rofi-hub-with-apps-${workspaceVersion}";
-            paths = [
-              rofiHub
-              rofiApps
+          rofiCalendar = mkApp pkgs {
+            crate = "rofi-calendar";
+            id = "calendar";
+            bin = "rofi-calendar";
+            description = "Month sheet with a date search box for Rofi";
+          };
+
+          rofiClipboard = mkApp pkgs {
+            crate = "rofi-clipboard";
+            id = "clipboard";
+            bin = "rofi-clipboard";
+            extraRuntime = [
+              pkgs.cliphist
+              pkgs.wl-clipboard
             ];
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-            postBuild = ''
-              wrapProgram "$out/bin/rofi-hub" \
-                --prefix PATH : "${rofiApps}/bin:${runtimePath}" \
-                --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers"
+            description = "Clipboard history picker for cliphist and wl-copy";
+          };
+
+          rofiKeybinds = mkApp pkgs {
+            crate = "rofi-keybinds";
+            id = "keybinds";
+            bin = "rofi-keybinds";
+            description = "Hyprland keyboard shortcut reference for Rofi";
+          };
+
+          rofiNetwork = mkApp pkgs {
+            crate = "rofi-network";
+            id = "network";
+            bin = "rofi-network";
+            extraRuntime = [ pkgs.networkmanager ];
+            description = "NetworkManager Wi-Fi and Ethernet menu for Rofi";
+          };
+
+          screenTime = mkApp pkgs {
+            crate = "screen-time";
+            id = "screen-time";
+            bin = "screen-time";
+            description = "Local, per-user screen-time tracker with a Rofi timeline";
+            extraInstall = ''
+              install -Dm755 crates/screen-time/share/rofi-screen-time \
+                "$out/bin/rofi-screen-time"
+              install -Dm644 crates/screen-time/systemd/screen-time.service \
+                "$out/systemd/screen-time.service"
             '';
-            meta = rofiHub.meta // {
-              mainProgram = "rofi-hub";
+          };
+
+          mkMenu =
+            targetPkgs:
+            targetPkgs.rustPlatform.buildRustPackage {
+              pname = "rofi-hub-menu";
+              version = crateVersion "rofi-hub-menu";
+              inherit src;
+
+              cargoLock.lockFile = ./Cargo.lock;
+              cargoBuildFlags = [
+                "--package"
+                "rofi-hub-menu"
+              ];
+              cargoTestFlags = [
+                "--package"
+                "rofi-hub-menu"
+              ];
+
+              nativeBuildInputs = [ targetPkgs.makeWrapper ];
+
+              postInstall = ''
+                install -Dm644 crates/rofi-hub-menu/share/rofi/hub-menu.rasi \
+                  "$out/share/rofi/hub-menu.rasi"
+              '';
+
+              postFixup = ''
+                # Append, not prepend: a session may provide a plugin-enabled
+                # Rofi (calc, emoji). Plain rofi is only a fallback so the menu
+                # stays self-contained without shadowing the user build.
+                wrapProgram "$out/bin/rofi-hub-menu" \
+                  --suffix PATH : "${targetPkgs.rofi}/bin"
+              '';
+
+              meta = {
+                description = "Optional Rofi menu that lists and launches installed rofi-apps";
+                license = lib.licenses.mit;
+                mainProgram = "rofi-hub-menu";
+                platforms = systems;
+              };
             };
+
+          rofiHubMenu = mkMenu pkgs;
+
+          # Cross-build outputs: the aarch64 release artifacts can be produced
+          # on an x86_64 host without emulation. The aarch64 CI runner still
+          # builds natively for the published release.
+          crossAarch64 = pkgs.pkgsCross.aarch64-multiplatform;
+          crossApps =
+            if pkgs.stdenv.hostPlatform.isx86_64 then
+              {
+                rofi-calendar-aarch64 = mkApp crossAarch64 {
+                  crate = "rofi-calendar";
+                  id = "calendar";
+                  bin = "rofi-calendar";
+                  description = "Month sheet with a date search box for Rofi (aarch64 cross-build)";
+                };
+                rofi-clipboard-aarch64 = mkApp crossAarch64 {
+                  crate = "rofi-clipboard";
+                  id = "clipboard";
+                  bin = "rofi-clipboard";
+                  extraRuntime = [
+                    crossAarch64.cliphist
+                    crossAarch64.wl-clipboard
+                  ];
+                  description = "Clipboard history picker for cliphist and wl-copy (aarch64 cross-build)";
+                };
+                rofi-keybinds-aarch64 = mkApp crossAarch64 {
+                  crate = "rofi-keybinds";
+                  id = "keybinds";
+                  bin = "rofi-keybinds";
+                  description = "Hyprland keyboard shortcut reference for Rofi (aarch64 cross-build)";
+                };
+                rofi-network-aarch64 = mkApp crossAarch64 {
+                  crate = "rofi-network";
+                  id = "network";
+                  bin = "rofi-network";
+                  extraRuntime = [ crossAarch64.networkmanager ];
+                  description = "NetworkManager Wi-Fi and Ethernet menu for Rofi (aarch64 cross-build)";
+                };
+                screen-time-aarch64 = mkApp crossAarch64 {
+                  crate = "screen-time";
+                  id = "screen-time";
+                  bin = "screen-time";
+                  description = "Local, per-user screen-time tracker with a Rofi timeline (aarch64 cross-build)";
+                  extraInstall = ''
+                    install -Dm755 crates/screen-time/share/rofi-screen-time \
+                      "$out/bin/rofi-screen-time"
+                    install -Dm644 crates/screen-time/systemd/screen-time.service \
+                      "$out/systemd/screen-time.service"
+                  '';
+                };
+                rofi-hub-menu-aarch64 = mkMenu crossAarch64;
+              }
+            else
+              { };
+
+          rofiHubInstaller = pkgs.runCommandLocal "rofi-hub-installer-${installerVersion}" { } ''
+            mkdir -p "$out/bin" "$out/share/rofi-hub-installer"
+            install -m755 ${./install.sh} "$out/bin/rofi-hub-install"
+            install -m755 ${./uninstall.sh} "$out/bin/rofi-hub-uninstall"
+            install -m644 ${./minisign.pub} "$out/share/rofi-hub-installer/minisign.pub"
+            install -Dm644 ${./installer/index.schema.json} \
+              "$out/share/rofi-hub-installer/index.schema.json"
+          '';
+
+          # Compatibility bundle: independent apps joined into one profile.
+          # No app depends on this derivation.
+          rofiHubApps = pkgs.symlinkJoin {
+            name = "rofi-hub-apps-${crateVersion "rofi-calendar"}";
+            paths = [
+              rofiCalendar
+              rofiClipboard
+              rofiKeybinds
+              rofiNetwork
+              screenTime
+            ];
+            meta.description = "Compatibility bundle of every rofi-app";
           };
 
           allInOne = pkgs.symlinkJoin {
-            name = "rofi-hub-all-in-one-${workspaceVersion}";
+            name = "rofi-hub-all-in-one-${crateVersion "rofi-hub-menu"}";
             paths = [
-              rofiHub
-              rofiApps
-              screenTime
+              rofiHubMenu
+              rofiHubApps
             ];
-            nativeBuildInputs = [ pkgs.makeWrapper ];
-            postBuild = ''
-              wrapProgram "$out/bin/rofi-hub" \
-                --prefix PATH : "${rofiApps}/bin:${screenTime}/bin:${runtimePath}" \
-                --set-default ROFI_HUB_PROVIDER_DIR "${rofiApps}/share/rofi-hub/providers:${screenTime}/share/rofi-hub/providers"
-            '';
-            meta = rofiHub.meta // {
-              mainProgram = "rofi-hub";
-            };
+            meta.description = "Compatibility bundle: optional menu plus every app";
           };
         in
         {
-          default = allInOne;
-          rofi-hub = allInOne;
-          rofi-hub-only = rofiHub;
-          rofi-hub-apps = hubWithApps;
-          rofi-apps = rofiApps;
+          default = rofiHubMenu;
+          inherit
+            rofiCalendar
+            rofiClipboard
+            rofiKeybinds
+            rofiNetwork
+            screenTime
+            rofiHubMenu
+            rofiHubInstaller
+            rofiHubApps
+            ;
+          rofi-calendar = rofiCalendar;
+          rofi-clipboard = rofiClipboard;
+          rofi-keybinds = rofiKeybinds;
+          rofi-network = rofiNetwork;
           screen-time = screenTime;
+          rofi-hub-menu = rofiHubMenu;
+          rofi-hub-installer = rofiHubInstaller;
+          rofi-hub-apps = rofiHubApps;
+          rofi-apps = rofiHubApps;
+          rofi-hub = allInOne;
+          rofi-hub-only = rofiHubMenu;
+          rofi-hub-all-in-one = allInOne;
         }
+        // crossApps
       );
 
       devShells = forAllSystems (
         { pkgs }: {
           default = pkgs.mkShell {
             packages = with pkgs; [
-              appstream
-              binutils
               cargo
               clippy
-              desktop-file-utils
-              dpkg
-              gzip
               jq
-              man-db
               minisign
-              nfpm
               python3
               rofi
-              rpm
               rustc
               rustfmt
               shellcheck
               util-linux
-              zsh
             ];
           };
         }
       );
 
-      homeManagerModules.default =
-        {
-          config,
-          lib,
-          pkgs,
-          ...
-        }:
-        let
-          cfg = config.services.rofi-hub;
-          system = pkgs.stdenv.hostPlatform.system;
-          allInOne = self.packages.${system}.default;
-          hubOnly = self.packages.${system}.rofi-hub-only;
-          hubWithApps = self.packages.${system}.rofi-hub-apps;
-          screenTime = self.packages.${system}.screen-time;
-          withScreenTime = builtins.elem "screen-time" cfg.apps;
-          withBundledApps = builtins.any (app: app != "screen-time") cfg.apps;
-          package = if cfg.package != null then cfg.package else if withScreenTime then allInOne else if withBundledApps then hubWithApps else hubOnly;
-        in
-        {
-          options.services.rofi-hub = {
-            enable = lib.mkEnableOption "the Rofi Hub launcher";
-
-            package = lib.mkOption {
-              type = lib.types.nullOr lib.types.package;
-              default = null;
-              description = ''
-                The rofi-hub package to install. The default installs every
-                selected app; with an empty `apps` list it installs only the
-                hub launcher.
-              '';
-            };
-
-            apps = lib.mkOption {
-              type = lib.types.listOf (lib.types.enum [
-                "screen-time"
-                "calendar"
-                "keybinds"
-                "clipboard"
-              ]);
-              default = [ "screen-time" ];
-              description = ''
-                Sub-apps to install with the hub. The screen-time tracker
-                service is enabled when `screen-time` is selected. Calendar,
-                keybinds, and clipboard are built-in apps, so selecting any of
-                them installs the hub with the built-in app set.
-              '';
-            };
-
-            providerDirs = lib.mkOption {
-              type = lib.types.listOf lib.types.str;
-              default = [ ];
-              description = ''
-                Extra directories to scan for provider manifests. The hub
-                already scans the standard XDG data directories.
-              '';
-            };
-          };
-
-          config = lib.mkIf cfg.enable {
-            home.packages = [ package ] ++ runtimePackagesFor pkgs;
-
-            home.sessionVariables = lib.mkIf (cfg.providerDirs != [ ]) {
-              ROFI_HUB_PROVIDER_DIR = lib.concatStringsSep ":" cfg.providerDirs;
-            };
-
-            systemd.user.services = lib.mkIf withScreenTime {
-              screen-time = {
-                Unit = {
-                  Description = "Screen Time tracker";
-                  After = [ "graphical-session.target" ];
-                  PartOf = [ "graphical-session.target" ];
-                };
-
-                Service = {
-                  ExecStart = "${package}/bin/screen-time daemon";
-                  Restart = "always";
-                  RestartSec = "2s";
-                  StateDirectory = "screen-time";
-                  RuntimeDirectory = "screen-time";
-                };
-
-                Install.WantedBy = [ "graphical-session.target" ];
-              };
-            };
-          };
+      nixosModules = {
+        rofi-calendar = import ./modules/nixos/app.nix {
+          inherit self;
+          app = "calendar";
+          package = "rofi-calendar";
         };
-
-      # Kept for users migrating from the standalone screen-time flake.
-      homeManagerModules.screen-time =
-        {
-          config,
-          lib,
-          pkgs,
-          ...
-        }:
-        let
-          cfg = config.services.screen-time;
-          package = self.packages.${pkgs.stdenv.hostPlatform.system}.screen-time;
-        in
-        {
-          options.services.screen-time = {
-            enable = lib.mkEnableOption "the Screen Time tracker";
-
-            package = lib.mkOption {
-              type = lib.types.package;
-              default = package;
-              description = "The screen-time package to install.";
-            };
-          };
-
-          config = lib.mkIf cfg.enable {
-            home.packages = [ cfg.package ];
-
-            systemd.user.services.screen-time = {
-              Unit = {
-                Description = "Screen Time tracker";
-                After = [ "graphical-session.target" ];
-                PartOf = [ "graphical-session.target" ];
-              };
-
-              Service = {
-                ExecStart = "${cfg.package}/bin/screen-time daemon";
-                Restart = "always";
-                RestartSec = "2s";
-                StateDirectory = "screen-time";
-                RuntimeDirectory = "screen-time";
-              };
-
-              Install.WantedBy = [ "graphical-session.target" ];
-            };
-          };
+        rofi-clipboard = import ./modules/nixos/app.nix {
+          inherit self;
+          app = "clipboard";
+          package = "rofi-clipboard";
         };
-
-      # Standalone NixOS module: no Home Manager required.
-      nixosModules.default =
-        {
-          config,
-          lib,
-          pkgs,
-          ...
-        }:
-        let
-          cfg = config.services.rofi-hub;
-          system = pkgs.stdenv.hostPlatform.system;
-          defaultPackage = self.packages.${system}.default;
-        in
-        {
-          options.services.rofi-hub = {
-            enable = lib.mkEnableOption "Rofi Hub and its Screen Time user service";
-
-            package = lib.mkOption {
-              type = lib.types.package;
-              default = defaultPackage;
-              description = ''
-                The self-contained rofi-hub package (hub, apps, Screen Time,
-                providers, and themes). The default is the all-in-one package.
-              '';
-            };
-          };
-
-          config = lib.mkIf cfg.enable {
-            environment.systemPackages = [ cfg.package ] ++ runtimePackagesFor pkgs;
-
-            systemd.user.services.screen-time = {
-              enable = true;
-              description = "Screen Time tracker";
-              after = [ "graphical-session.target" ];
-              partOf = [ "graphical-session.target" ];
-              wantedBy = [ "graphical-session.target" ];
-              serviceConfig = {
-                ExecStart = "${cfg.package}/bin/screen-time daemon";
-                Restart = "always";
-                RestartSec = "2s";
-                StateDirectory = "screen-time";
-                RuntimeDirectory = "screen-time";
-                NoNewPrivileges = true;
-                PrivateTmp = true;
-              };
-            };
-          };
+        rofi-keybinds = import ./modules/nixos/app.nix {
+          inherit self;
+          app = "keybinds";
+          package = "rofi-keybinds";
         };
+        rofi-network = import ./modules/nixos/app.nix {
+          inherit self;
+          app = "network";
+          package = "rofi-network";
+        };
+        screen-time = import ./modules/nixos/screen-time.nix { inherit self; };
+        rofi-hub-menu = import ./modules/nixos/menu.nix { inherit self; };
+        rofi-apps = import ./modules/nixos/default.nix { inherit self; };
+        default = import ./modules/nixos/default.nix { inherit self; };
+        # Deprecated aliases: map services.rofi-hub.* to per-app options.
+        rofi-hub = {
+          imports = [
+            self.nixosModules.rofi-apps
+            (import ./modules/nixos/compat.nix { inherit self; })
+          ];
+        };
+      };
+
+      homeManagerModules = {
+        rofi-calendar = import ./modules/home-manager/app.nix {
+          inherit self;
+          app = "calendar";
+          package = "rofi-calendar";
+        };
+        rofi-clipboard = import ./modules/home-manager/app.nix {
+          inherit self;
+          app = "clipboard";
+          package = "rofi-clipboard";
+        };
+        rofi-keybinds = import ./modules/home-manager/app.nix {
+          inherit self;
+          app = "keybinds";
+          package = "rofi-keybinds";
+        };
+        rofi-network = import ./modules/home-manager/app.nix {
+          inherit self;
+          app = "network";
+          package = "rofi-network";
+        };
+        screen-time = import ./modules/home-manager/screen-time.nix { inherit self; };
+        rofi-hub-menu = import ./modules/home-manager/menu.nix { inherit self; };
+        rofi-apps = import ./modules/home-manager/default.nix { inherit self; };
+        default = import ./modules/home-manager/default.nix { inherit self; };
+        rofi-hub = {
+          imports = [
+            self.homeManagerModules.rofi-apps
+            (import ./modules/home-manager/compat.nix { inherit self; })
+          ];
+        };
+      };
 
       checks = forAllSystems (
         { pkgs }:
         let
           packages = self.packages.${pkgs.stdenv.hostPlatform.system};
-        in
-        {
-          default = packages.default;
-          inherit (packages)
-            rofi-hub
-            rofi-hub-only
-            screen-time
-            ;
-          nixos-module = pkgs.writeText "rofi-hub-nixos-module-check" (
+          moduleFor =
+            module: settings:
             (nixpkgs.lib.nixosSystem {
               system = pkgs.stdenv.hostPlatform.system;
               modules = [
-                self.nixosModules.default
-                { services.rofi-hub.enable = true; }
+                module
+                settings
+                { system.stateVersion = "26.05"; }
               ];
-            }).config.systemd.user.services.screen-time.serviceConfig.ExecStart
+            }).config;
+          nixos = moduleFor self.nixosModules.rofi-apps {
+            services.rofi-apps.calendar.enable = true;
+            services.rofi-apps.screen-time.enable = true;
+            services.rofi-apps.menu.enable = true;
+          };
+          calendarOnly = moduleFor self.nixosModules.rofi-calendar {
+            services.rofi-apps.calendar.enable = true;
+          };
+          screenTimeOnly = moduleFor self.nixosModules.screen-time {
+            services.rofi-apps.screen-time.enable = true;
+          };
+          menuOnly = moduleFor self.nixosModules.rofi-hub-menu {
+            services.rofi-apps.menu.enable = true;
+          };
+          compat = nixpkgs.lib.nixosSystem {
+            system = pkgs.stdenv.hostPlatform.system;
+            modules = [
+              self.nixosModules.rofi-hub
+              {
+                services.rofi-hub.enable = true;
+                services.rofi-hub.apps = [ "calendar" ];
+              }
+            ];
+          };
+        in
+        {
+          default = packages.rofi-hub-menu;
+          inherit (packages)
+            rofi-calendar
+            rofi-clipboard
+            rofi-keybinds
+            rofi-network
+            screen-time
+            rofi-hub-menu
+            rofi-hub-installer
+            ;
+          module-eval = pkgs.writeText "rofi-apps-module-eval" (
+            builtins.concatStringsSep "\n" (map (package: package.outPath) nixos.environment.systemPackages)
+          );
+          module-calendar-eval = pkgs.writeText "rofi-apps-calendar-eval" (
+            builtins.concatStringsSep "\n" (
+              map (package: package.outPath) calendarOnly.environment.systemPackages
+            )
+          );
+          module-screen-time-eval = pkgs.writeText "rofi-apps-screen-time-eval" (
+            builtins.concatStringsSep "\n" (
+              map (package: package.outPath) screenTimeOnly.environment.systemPackages
+            )
+            + "\n"
+            + screenTimeOnly.systemd.user.services.screen-time.serviceConfig.ExecStart
+          );
+          module-menu-eval = pkgs.writeText "rofi-apps-menu-eval" (
+            builtins.concatStringsSep "\n" (map (package: package.outPath) menuOnly.environment.systemPackages)
+          );
+          compat-module-eval = pkgs.writeText "rofi-apps-compat-eval" (
+            builtins.concatStringsSep "\n" (
+              map (package: package.outPath) compat.config.environment.systemPackages
+            )
           );
         }
       );

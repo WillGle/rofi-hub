@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_core::{ChromeProfile, DmenuOptions, Item, Outcome, Rofi, Theme, app, ui, which};
+use rofi_dmenu::{ChromeProfile, DmenuOptions, Item, Outcome, Rofi, Theme, app, ui, which};
 
 const TITLE_WIDTH: usize = 72;
 

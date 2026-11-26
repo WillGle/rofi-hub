@@ -1,6 +1,6 @@
 //! End-to-end clipboard picker tests with stubbed `cliphist` and `wl-copy`.
 
-use rofi_core::test_support::TestEnv;
+use rofi_dmenu::test_support::TestEnv;
 
 const BIN: &str = env!("CARGO_BIN_EXE_rofi-clipboard");
 

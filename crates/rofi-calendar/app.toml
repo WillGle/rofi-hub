@@ -1,0 +1,7 @@
+id = "calendar"
+version = "1.2.0"
+bin = "rofi-calendar"
+provider = "providers/calendar.toml"
+requires = ["rofi"]
+optional_requires = []
+service = false

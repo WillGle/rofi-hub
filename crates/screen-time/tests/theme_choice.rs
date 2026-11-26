@@ -12,7 +12,7 @@ fn theme_background(fixture: &Fixture) -> String {
 }
 
 #[test]
-fn theme_shortcuts_persist_and_alt4_restores_config() {
+fn theme_shortcuts_persist_to_app_state_and_alt4_restores_config() {
     init_tz();
     let fixture = Fixture::new();
     fixture.write_config("[theme]\nmode = \"solarized\"\n");
@@ -39,17 +39,17 @@ fn theme_shortcuts_persist_and_alt4_restores_config() {
     assert_eq!(std::fs::read_to_string(&request_path).unwrap(), "reopen");
     assert_eq!(theme_background(&fixture), "background-color: #2e3440;");
 
+    // Screen Time owns its theme choice; no global/hub state is written.
+    assert!(
+        !fixture.config_home().join("rofi-hub/theme").exists(),
+        "screen-time must not write hub theme state"
+    );
+
     // A normal popup open resets the transient UI state, never the theme choice.
     fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
     assert_eq!(theme_background(&fixture), "background-color: #2e3440;");
 
-    // Migrate the legacy Screen Time choice once the shared global state is
-    // absent; after that the global state wins.
-    let global_path = fixture.config_home().join("rofi-hub").join("theme");
-    std::fs::remove_file(&global_path).unwrap();
-    std::fs::write(&choice_path, "gruvbox\n").unwrap();
-    assert_eq!(theme_background(&fixture), "background-color: #1d2021;");
-
+    // Alt+4 clears the app choice and returns to the configured theme.
     std::fs::write(&request_path, "").unwrap();
     fixture.render_env(
         &["render", "--format", "rofi"],
@@ -61,12 +61,8 @@ fn theme_shortcuts_persist_and_alt4_restores_config() {
     assert!(!choice_path.exists());
     assert_eq!(std::fs::read_to_string(&request_path).unwrap(), "reopen");
     assert_eq!(
-        std::fs::read_to_string(&global_path).unwrap().trim(),
-        "auto"
-    );
-    assert_eq!(theme_background(&fixture), "background-color: #1d2021;");
-    assert_eq!(
         std::fs::read_to_string(&config_path).unwrap(),
         config_before
     );
+    assert_eq!(theme_background(&fixture), "background-color: #fdf6e3;");
 }

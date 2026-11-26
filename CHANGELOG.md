@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.0
+
+- Split the runtime menu from the apps. `crates/rofi-hub-menu` is optional and
+  never injects theme, provider, config, or `PATH` variables into apps.
+- Rename `rofi-core` to `rofi-dmenu`, add feature gates, and remove all
+  `ROFI_HUB_*` handling and hub theme state from the app path.
+- Extract Network into `crates/rofi-network` with its own provider, layout,
+  release, and runtime dependency wrapper.
+- Publish independent per-app packages and versions:
+  calendar 1.2.0, clipboard 0.8.0, keybinds 1.0.0, network 0.3.0,
+  screen-time 0.5.0, rofi-hub-menu 0.3.0, rofi-dmenu 0.3.0.
+- Replace the bundle installer with a generic `index.json` + `app.toml`
+  installer: per-app state, update/uninstall one app, checksum/signature
+  verification, path-traversal rejection, rollback, and app-owned services.
+- Theme ownership moves to the user: app override, `ROFI_THEME`, base
+  `~/.config/rofi/theme.rasi`, packaged fallback, built-in fallback.
+- Replace Nix bundles with `packages.rofi-<app>` and per-app NixOS/Home
+  Manager modules under `services.rofi-apps`. Remove `runtimePackagesFor`.
+  `services.rofi-hub.enable` remains as a deprecated alias.
+- Remove `.deb`, `.rpm`, `.apk`, AUR, Debian official, Gentoo, openSUSE, Void,
+  Slackware, ALT, and all distro packaging scripts from delivery.
+- Add dependency, app, theme, installer, migration, release-index, and Nix
+  test suites plus cross-distro `install.sh` container tests.
+
 ## 0.2.1
 
 - Add multi-distro packaging: a `PREFIX`/`DESTDIR` install tree shared by every

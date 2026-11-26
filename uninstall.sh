@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
-# Remove rofi-hub, or selected components, by delegating to the same
-# conservative installer used for installs and updates.
+# Remove rofi-apps installed by install.sh. Keeps state semantics identical:
+# only files recorded for the named app are removed.
 set -Eeuo pipefail
 
-self="$(readlink -f -- "${BASH_SOURCE[0]}")"
-dir="$(dirname -- "$self")"
-installer=""
-for candidate in "${dir}/install.sh" \
-    "${XDG_STATE_HOME:-${HOME}/.local/state}/rofi-hub/install.sh"; do
-    if [ -f "$candidate" ]; then
-        installer="$candidate"
-        break
-    fi
-done
+SELF_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -z "$installer" ]; then
-    printf 'uninstall.sh: cannot find install.sh next to this script or in the rofi-hub state directory\n' >&2
-    printf 'Download install.sh from the release and run: bash install.sh --uninstall\n' >&2
-    exit 1
+if [[ -x "$SELF_DIR/install.sh" ]]; then
+    exec "$SELF_DIR/install.sh" --uninstall "$@"
+fi
+if [[ -x "$SELF_DIR/../install.sh" ]]; then
+    exec "$SELF_DIR/../install.sh" --uninstall "$@"
+fi
+if [[ -x "$SELF_DIR/rofi-hub-install" ]]; then
+    exec "$SELF_DIR/rofi-hub-install" --uninstall "$@"
 fi
 
-exec bash "$installer" --uninstall "$@"
+printf 'uninstall.sh: cannot find install.sh next to %s\n' "$SELF_DIR" >&2
+exit 1
