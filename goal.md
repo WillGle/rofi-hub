@@ -1,7 +1,7 @@
 # Goal — Các app Rofi cài đặt và chạy độc lập
 
-- **Trạng thái:** Đã chốt phạm vi phát hành tại §2. Các mục nghiệm thu còn mở ở §16.2.
-- **Ngày:** 2026-11-26
+- **Trạng thái:** Đã chốt goal ngày 2026-11-27. Phần code/CI hoàn tất tại PR [#1](https://github.com/WillGle/rofi-hub/pull/1); các bước còn lại là vận hành phát hành (merge, tag, ký release, cài trên host ARM).
+- **Ngày:** 2026-11-26 (chốt 2026-11-27)
 - **Repo:** `/mnt/vault/dev/rofi-hub`
 - **Liên quan:** tích hợp Nix tại `/etc/nixos` (flake input `rofi-hub`)
 
@@ -1232,11 +1232,14 @@ Các exit criteria của M1–M8 được chứng minh bằng `scripts/check-dep
 
 1. M0: review/chốt `goal.md` với stakeholder.
 2. **CON-05: đã đóng (2026-11-27).** Generation 1042 đang trỏ closure cũ `n4lbs…`; `rofi-hub 0.2.1` chạy được, `rofi-hub doctor` báo `status ok` với 4 provider, `screen-time.service` active; closure mới 1041 có `rofi-network`/`rofi-hub-menu` và không có `rofi-hub`.
-3. Release candidate ký bằng minisign key thật (key offline, không có trong repo).
-4. CI run: PR #1 / run 45865366745 pass `lint`, `test`, `MSRV`, `installer`,
+3. **Release mới chưa ký.** Secret `MINISIGN_SECRET_KEY` đã có trong GitHub
+   Actions (set 2026-11-24); release `v0.2.1` verify được bằng `minisign.pub`,
+   nên key thật đã sẵn sàng. Còn merge PR #1, tạo tag `v0.3.0` và chạy job
+   `release` để ký/publish; sau đó verify `index.json`, `*.tar.gz`,
+   `SHA256SUMS` bằng `minisign -Vm`.
+4. CI run: PR #1 / run 45867313267 pass `lint`, `test`, `MSRV`, `installer`,
    `bundle` (x86_64 + aarch64), `cross-distro`, `nix`, `NIX-07 native aarch64`;
-   required checks đã cấu hình. `release` skipped vì PR không phải tag; còn
-   chạy `release` job khi có tag/minisign key.
+   required checks đã cấu hình. `release` skipped vì PR không phải tag.
 5. Nix native: **đã có log**. Run 45865366745 job `NIX-07 native aarch64`
    build đủ sáu package trên `ubuntu-24.04-arm` (7m17s) và in closure.
 6. `install.sh`: **đã sửa**. `scripts/package-release.sh` xuất
