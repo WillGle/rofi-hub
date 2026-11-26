@@ -387,7 +387,7 @@ State:
 - [x] Thêm `providers/network.toml`.
 - [x] Thêm package/provider/module/install metadata.
 - [x] Xóa `network.rs` khỏi hub.
-- [ ] Hoặc chốt network là hub-only và ghi rõ lý do. _(không áp dụng — đã chốt tách `rofi-network`)_
+- [x] Hoặc chốt network là hub-only và ghi rõ lý do. _(không áp dụng — đã chốt tách `rofi-network`)_
 
 **Exit:** `rofi-network` cài/chạy độc lập; hub không cần cho network.
 
@@ -422,7 +422,7 @@ State:
 - [x] Kiểm tra chữ ký index/tarball và từ chối artifact thiếu chữ ký trong fixture.
 - [ ] Kiểm tra release đã ghép đủ hai kiến trúc: trên mỗi host, installer mặc định chọn đúng tarball cho từng app, xác minh chữ ký và chạy được binary đã cài. _(Đã có merge index + test chọn aarch64/x86_64; còn cài thật trên host ARM)_
 - [x] Không còn distro artifact.
-- [ ] Toàn bộ DoD 11.1–11.13 pass. _(CI run 45850184054 pass; còn CON-05 rollback và signed release key)_
+- [ ] Toàn bộ DoD 11.1–11.13 pass. _(CI run 45867313267 pass; CON-05 đã đóng; còn signed release key)_
 
 **Exit:** release candidate ký đầy đủ; test matrix xanh; không còn P0; rollback đã test.
 
@@ -830,7 +830,7 @@ Một phase chỉ được đánh dấu Done khi tất cả mục trong nhóm t�
 
 ### 11.3 Testing
 
-- [ ] Tất cả test ID `DEP-*`, `APP-*`, `THM-*`, `INS-*`, `NIX-*`, `CON-*`, `MENU-*`, `REL-*`, `SEC-*`, `MIG-*`, `DIST-*` pass. _(local pass; CI run 45850184054 pass; CON-05 rollback manual còn lại)_
+- [x] Tất cả test ID `DEP-*`, `APP-*`, `THM-*`, `INS-*`, `NIX-*`, `CON-*`, `MENU-*`, `REL-*`, `SEC-*`, `MIG-*`, `DIST-*` pass. _(local pass; CI run 45867313267 pass; CON-05 đã verify trên máy thật ngày 2026-11-27)_
 - [x] Có test negative/failure injection, không chỉ happy path.
 - [x] Có test app chạy khi không có hub/menu.
 - [x] Có test installer không cài dependency.
@@ -858,7 +858,7 @@ Một phase chỉ được đánh dấu Done khi tất cả mục trong nhóm t�
 - [x] Closure app không chứa hub/plugin/cliphist ngoài dependency app.
 - [x] Hỗ trợ x86_64 và aarch64.
 - [x] `/etc/nixos` build pass với per-app module.
-- [ ] Rollback generation cũ pass (CON-05). _(forward switch generation 1041 đã pass; rollback generation 1039 cần quyền sudo trên máy thật — xem §16.2)_
+- [x] Rollback generation cũ pass (CON-05). _(generation 1042 = closure cũ `n4lbs…` đang active; `rofi-hub 0.2.1 doctor` → `status ok`, 4 provider ok, `screen-time.service` active; generation 1041 có `rofi-network`/`rofi-hub-menu`, không có `rofi-hub` — log 2026-11-27)_
 
 **Evidence:** `nix path-info -rSh`; eval module; CI logs.
 
@@ -987,9 +987,9 @@ Một phase chỉ được đánh dấu Done khi tất cả mục trong nhóm t�
 Phase/PR chỉ Done khi:
 
 - [ ] Tất cả mục trong nhóm liên quan đã check. _(còn các mục external bên dưới)_
-- [ ] Test ID tương ứng pass trong CI. _(CI run 45850184054 pass các job test; CON-05 vẫn là kiểm tra manual trên máy thật)_
+- [x] Test ID tương ứng pass trong CI. _(CI run 45867313267 pass các job test; CON-05 đã verify manual trên máy thật)_
 - [x] Không còn TODO/P0 trong scope.
-- [x] Có evidence đính kèm PR/release. _(PR [#1](https://github.com/WillGle/rofi-hub/pull/1), CI run [45865366745](https://github.com/WillGle/rofi-hub/actions/runs/45865366745) pass toàn bộ job trừ `release` tag-only)_
+- [x] Có evidence đính kèm PR/release. _(PR [#1](https://github.com/WillGle/rofi-hub/pull/1), CI run [45867313267](https://github.com/WillGle/rofi-hub/actions/runs/45867313267) pass toàn bộ job trừ `release` tag-only)_
 - [x] Không làm hỏng app khác.
 - [x] `goal.md` không mâu thuẫn với implementation.
 - [x] Nếu thay đổi quyết định kiến trúc, cập nhật `goal.md` trước khi merge.
@@ -1222,16 +1222,16 @@ Các exit criteria của M1–M8 được chứng minh bằng `scripts/check-dep
   status checks bật. `release` là job tag-only nên không đưa vào required
   checks của pull request.
 - PR [#1](https://github.com/WillGle/rofi-hub/pull/1) / CI run
-  [45865366745](https://github.com/WillGle/rofi-hub/actions/runs/45865366745)
-  (commit `7636b5a`): pass `lint`, `test`, `MSRV (1.89)`, `installer`,
-  `cross-distro`, `bundle (x86_64)`, `bundle (aarch64)`, `nix` (11m8s) và
-  `NIX-07 native aarch64` (7m17s, đủ sáu package). `release` skipped vì PR
+  [45867313267](https://github.com/WillGle/rofi-hub/actions/runs/45867313267)
+  (commit `06a4ed5`): pass `lint`, `test`, `MSRV (1.89)`, `installer`,
+  `cross-distro`, `bundle (x86_64)`, `bundle (aarch64)`, `nix` (7m23s) và
+  `NIX-07 native aarch64` (7m34s, đủ sáu package). `release` skipped vì PR
   không phải tag.
 
 ### 16.2 Việc còn mở trong hai kênh phát hành
 
 1. M0: review/chốt `goal.md` với stakeholder.
-2. CON-05: generation 1042 hiện trỏ về closure cũ `/nix/store/n4lbs…`. Cần xác minh hoạt động của hệ thống sau rollback để đóng tiêu chí.
+2. **CON-05: đã đóng (2026-11-27).** Generation 1042 đang trỏ closure cũ `n4lbs…`; `rofi-hub 0.2.1` chạy được, `rofi-hub doctor` báo `status ok` với 4 provider, `screen-time.service` active; closure mới 1041 có `rofi-network`/`rofi-hub-menu` và không có `rofi-hub`.
 3. Release candidate ký bằng minisign key thật (key offline, không có trong repo).
 4. CI run: PR #1 / run 45865366745 pass `lint`, `test`, `MSRV`, `installer`,
    `bundle` (x86_64 + aarch64), `cross-distro`, `nix`, `NIX-07 native aarch64`;
@@ -1249,15 +1249,19 @@ Các exit criteria của M1–M8 được chứng minh bằng `scripts/check-dep
 
 ## 17. Thiết kế lại giao diện Calendar và Network
 
-**Trạng thái** · Đã triển khai cho hai binary độc lập `rofi-calendar` và
-`rofi-network`; ảnh trước/sau và kết quả lệnh ở §17.5. Các kích thước, nhãn
-tiếng Anh và cách bố trí bên dưới là quyết định đã chốt của người thiết kế.
+**Trạng thái** · Bản redesign đầu tiên của Calendar và Network đã được triển khai, với bằng chứng ở §17.5. Yêu cầu bổ sung ngày 2026-11-27 về điều khiển trực tiếp và đổi theme trong phiên đang chờ triển khai và nghiệm thu.
 
 ### 17.1. Mục tiêu và ranh giới
 
 Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt tìm một ngày trong tháng. Network cần giúp người dùng nhận biết kết nối hiện tại và chọn mạng từ lần nhìn đầu. Screen Time là tham chiếu cho cách đặt dữ liệu quan trọng vào trung tâm: trục giờ phục vụ việc so sánh thời gian. Lịch có trục tuần riêng, còn bộ chọn mạng cần danh sách dọc.
 
 Áp dụng quyền sở hữu theme và khả năng chạy độc lập trong [goal.md §3.6](goal.md). Dùng palette, font người dùng, màu chọn và cơ chế override hiện hành. Với hai app này, bố cục bên dưới thay cho mẫu header ba dòng và section band trong [UI_STYLE.md](docs/UI_STYLE.md). Screen Time, Hub, Clipboard và Keybinds nằm ngoài phạm vi. Dùng Rust, Rofi dmenu, Pango markup và RASI sẵn có. Chỉ đọc dữ liệu khi mở màn hình hoặc thực hiện thao tác cần nó. Tránh daemon, polling, trình duyệt nhúng và dependency giao diện mới.
+
+**Điều khiển và theme trong phiên (2026-11-27)**
+
+- Dùng Atomic Tasks làm tham chiếu cho thao tác: đặt phím ngay cạnh tên hành động, cho gõ ngay khi mở, hiển thị rõ mục đang chọn. Calendar giữ lưới tháng và ba nút điều hướng gọn ở dưới. Network đặt hai nút Scan và Manage ngoài danh sách lọc. Bấm nút hoặc dùng phím tương ứng đều kích hoạt cùng hành động. Hàng SSID đang chọn có nền tương phản phủ toàn chiều ngang, chữ và số vẫn đọc được ở cả theme sáng lẫn tối.
+- Mỗi app mở theo cấu hình theme hiện hành (§3.6). Hiện gợi ý ngắn `Alt+1–4 Theme`. Theo thứ tự phím của Screen Time, `Alt+1` chọn Nord, `Alt+2` Solarized Light, `Alt+3` Gruvbox Dark và `Alt+4` trở về Auto theo cấu hình người dùng. Áp dụng ngay trong app đang mở, kể cả các màn hình con mở tiếp. Chỉ giữ lựa chọn trong phiên của app. Đóng rồi mở lại sẽ dùng cấu hình ban đầu. Hub và các app khác có thể chạy độc lập với lựa chọn này.
+- Đổi màu giữ nguyên tác vụ. Calendar giữ tháng, ngày tra cứu, chuỗi đang gõ và thông báo hiện tại. Network giữ màn hình, bộ lọc và SSID đang chọn theo định danh, kể cả khi tên hiển thị bị rút gọn. Chuyển theme không kích hoạt scan, connect hay submit. Phân biệt trạng thái bằng cả hình thức và nội dung: ngày tra có gạch dưới, dòng mạng có nhãn Open/Secured.
 
 ### 17.2. Calendar · Đọc tháng rồi nhảy tới ngày
 
@@ -1274,7 +1278,7 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
     30
 
     Go to date   DD/MM/YYYY
-      ◀ Prev          Today          Next ▶
+    [Prev ←]     [Today Ctrl+t]     [Next →]
 ```
 
 - **Hình học.** Thứ tự widget cho Calendar là message chứa tháng và lưới, inputbar nhập ngày, rồi một hàng ba lựa chọn. Thử khoảng 44–48ch cho cửa sổ ở font mặc định, giới hạn theo màn hình. Căn giữa tiêu đề và cả khối lưới. Bảy cột monospace cùng độ rộng, số căn phải trong ô, tên thứ nằm trên tâm ô. Chữ số ngày ít nhất bằng cỡ chữ nội dung mặc định 12pt. Giữ khoảng cách dọc đều giữa các tuần và lề trái/phải đối xứng. Dùng số tuần thực của tháng, kể cả tháng có sáu tuần.
@@ -1289,6 +1293,7 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
 
 ```text
   Connected · Example WiFi
+  [Scan Alt+r]     [Manage Alt+m]
   Find network   …
 
   › Neighbor 5G                         92%    Secured
@@ -1297,7 +1302,7 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
     Cafe Open                           45%    Open
     Guest Network                       41%    Secured
 
-  Enter Connect     Alt+r Scan     Alt+m Manage
+  Enter Connect     Alt+1–4 Theme
 ```
 
 - **Thứ tự và kích thước.** Hiện SSID đang dùng một lần ở dòng trạng thái. Danh sách bên dưới dành cho các mạng có thể chuyển sang. Dùng kết quả gom SSID hiện có, loại SSID đang dùng khỏi danh sách kết nối, sắp tín hiệu giảm dần và dùng tên để phân xử khi bằng nhau. Chọn dòng đầu khả dụng. Dùng một cột dọc, khoảng 56–68ch ở font mặc định, tối đa 94% chiều rộng. Hiện đủ năm mạng khác trong fixture trên màn hình 1280×800. Danh sách dài cuộn riêng. Gợi ý phím nằm ngoài danh sách lọc và cuộn.
@@ -1315,6 +1320,12 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
 4. Đối chiếu [bộ sinh theme và ChromeProfile](crates/rofi-dmenu/src/theme.rs) với hai fallback [calendar.rasi](crates/rofi-calendar/share/rofi/calendar.rasi) và [network.rasi](crates/rofi-network/share/rofi/network.rasi). Đặt thay đổi widget order/geometry đúng app, đồng bộ theme sinh ra và fallback. Giữ thứ tự ưu tiên theme trong goal.md. Dùng lại helper khi đáp ứng bố cục.
 5. Chạy kiểm tra hiện có từ root: `cargo test -p rofi-calendar -p rofi-network -p rofi-dmenu` và `bash scripts/test-theme.sh`. Nếu assertion cũ khóa một bố cục đã được thay thế, đối chiếu với hành vi mới trước khi cập nhật. Chạy trực tiếp entry point của hai app để kiểm tra tương tác.
 6. Nghiệm thu bằng ảnh Rofi thật ở 1280×800, cùng font và scale cho cặp trước/sau. Xem Gruvbox, Nord, Solarized Light và Auto theo quy trình repo. Với Calendar, ảnh chính phải đọc rõ bảy cột và hôm nay, ảnh nhập ngày phải phân biệt ngày tìm được. Với Network, ảnh fixture phải hiện kết nối hiện tại và năm lựa chọn, ảnh Manage/details phải đọc được giá trị dài. Thu hẹp màn hình để kiểm tra cuộn, cắt SSID và mép phải lưới lịch. Ghi riêng kết quả quan sát và ca chưa chạy. Ảnh ở nhiều theme chỉ xác minh màu sắc khi chưa thử hành vi bàn phím.
+
+**Nghiệm thu bổ sung trong Rofi thật** (đang mở)
+
+- [ ] Calendar: chuyển sang tháng khác, tra một ngày rồi đổi theme. Kiểm tra tháng, ngày tra và dấu gạch dưới. Gõ tiếp một ngày khác, đổi theme trước Enter rồi xác nhận đúng chuỗi đã nhập. Thử cả ba nút bằng chuột và bằng phím ghi trên nút.
+- [ ] Network: dùng fixture có ít nhất hai SSID cùng khớp bộ lọc. Gõ lọc, chọn dòng thứ hai, đổi theme rồi Enter. Kiểm tra bộ lọc, nền chọn và log của nmcli giả: đúng SSID ban đầu, chỉ phát sinh yêu cầu kết nối sau Enter. Thử Scan và Manage bằng chuột lẫn phím khi danh sách đang lọc.
+- [ ] Cả hai app: thử đủ bốn phím theme, mở màn hình con của Network rồi quay lại. Mở đồng thời hai app, đổi theme ở một app và kiểm tra app kia. Đóng, mở lại và đối chiếu cấu hình theme cùng giao diện ban đầu. Ghi kết quả thao tác cạnh ảnh Rofi trước/sau của cùng một trạng thái.
 
 ### 17.5. Kết quả triển khai (2026-11-26)
 
