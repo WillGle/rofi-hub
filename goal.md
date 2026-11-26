@@ -1354,6 +1354,7 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
 cargo fmt --check --all                                  pass
 cargo clippy --workspace --all-targets -- -D warnings    pass
 cargo test --workspace --locked                          pass
+MSRV 1.89 cargo check --workspace --locked --all-targets pass
 scripts/test-apps.sh                                     31/0
 scripts/test-theme.sh                                    14/0
 scripts/test-installer.sh                                70/0
