@@ -70,7 +70,8 @@ impl FromStr for Mode {
 }
 
 /// Layout chrome for one native app. Palette and typography come from
-/// [`Theme`]; the profile only controls geometry and icon visibility.
+/// [`Theme`]; the profile only controls geometry, widget order, and icon
+/// visibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChromeProfile {
     pub width_ch: usize,
@@ -78,6 +79,18 @@ pub struct ChromeProfile {
     pub show_icons: bool,
     pub header_pt: u8,
     pub prompt: bool,
+    /// Number of listview columns. Calendar uses three compact action
+    /// buttons in one row; the other apps use a single column.
+    pub columns: usize,
+    /// Entry placeholder for the app's primary input box.
+    pub placeholder: &'static str,
+    /// `true` puts the message above the input (calendar sheet, network
+    /// status); `false` keeps Rofi's default input-then-message order.
+    pub message_first: bool,
+    /// Calendar's button row has no card, border, or full-width selection.
+    pub compact_list: bool,
+    /// Center message text (month title and calendar grid).
+    pub centered_message: bool,
 }
 
 impl ChromeProfile {
@@ -88,16 +101,34 @@ impl ChromeProfile {
             show_icons,
             header_pt,
             prompt: true,
+            columns: 1,
+            placeholder: "Type to filter",
+            message_first: false,
+            compact_list: false,
+            centered_message: false,
         }
     }
 
     pub fn for_app(app: &str) -> Self {
         match app {
             "screen-time" => Self::new(144, 18, false, 26),
-            "calendar" => Self::new(64, 12, false, 20),
+            "calendar" => {
+                let mut profile = Self::new(46, 1, false, 16);
+                profile.columns = 3;
+                profile.placeholder = "DD/MM/YYYY";
+                profile.message_first = true;
+                profile.compact_list = true;
+                profile.centered_message = true;
+                profile
+            }
             "clipboard" => Self::new(110, 16, false, 18),
             "keybinds" => Self::new(110, 16, false, 18),
-            "network" => Self::new(90, 10, true, 20),
+            "network" => {
+                let mut profile = Self::new(62, 6, false, 16);
+                profile.placeholder = "\u{2026}";
+                profile.message_first = true;
+                profile
+            }
             _ => Self::new(96, 20, false, 20),
         }
     }
@@ -256,6 +287,40 @@ impl Theme {
         let show_icons = profile.show_icons;
         let width = profile.width_ch;
         let lines = profile.lines;
+        let columns = profile.columns;
+        let placeholder = escape_rasi(profile.placeholder);
+        let mainbox_children = if profile.message_first {
+            "message, inputbar, listview"
+        } else {
+            "inputbar, message, listview"
+        };
+        let message_align = if profile.centered_message {
+            "    text-align: center;\n"
+        } else {
+            ""
+        };
+        let listview_layout = if profile.compact_list {
+            "    background-color: transparent;\n    border: 0;\n    padding: 0;\n    spacing: 4px;\n"
+                .to_owned()
+        } else {
+            format!(
+                "    background-color: {mantle};\n    border: 1px;\n    border-color: {border};\n    border-radius: 8px;\n    padding: 4px;\n    spacing: 0;\n"
+            )
+        };
+        let element_layout = if profile.compact_list {
+            "    padding: 4px 8px;\n    border: 0;\n    border-radius: 6px;\n".to_owned()
+        } else {
+            format!(
+                "    padding: 4px 10px;\n    border: 0px 0px 1px 0px;\n    border-color: {border};\n    border-radius: 0;\n"
+            )
+        };
+        let selected_layout = if profile.compact_list {
+            "    border: 0;\n    border-radius: 6px;\n".to_owned()
+        } else {
+            format!(
+                "    border: 0px 0px 1px 2px;\n    border-color: {accent};\n    border-radius: 4px;\n"
+            )
+        };
 
         let mut out = String::new();
         let _ = write!(
@@ -301,7 +366,7 @@ window {{
 
 mainbox {{
     background-color: {base};
-    children: [ inputbar, message, listview ];
+    children: [ {mainbox_children} ];
     spacing: 8px;
     padding: 0;
 }}
@@ -323,14 +388,14 @@ message {{
     padding: 0px 12px;
     border: 0px 0px 1px 0px;
     border-color: {border};
-}}
+{message_align}}}
 
 textbox {{
     background-color: transparent;
     text-color: {text};
     padding: 0;
     border: 0;
-}}
+{message_align}}}
 
 prompt {{
     background-color: transparent;
@@ -340,24 +405,18 @@ prompt {{
 entry {{
     background-color: transparent;
     text-color: {text};
-    placeholder: "Type to filter";
+    placeholder: "{placeholder}";
     placeholder-color: {muted};
 }}
 
 listview {{
-    background-color: {mantle};
-    columns: 1;
+    columns: {columns};
     lines: {lines};
-    spacing: 0;
     scrollbar: false;
     cycle: true;
     dynamic: true;
     fixed-height: false;
-    padding: 4px;
-    border: 1px;
-    border-color: {border};
-    border-radius: 8px;
-}}
+{listview_layout}}}
 
 /* Section rows are marked active by the apps; the band separates zones. */
 element normal.active, element alternate.active, element selected.active {{
@@ -369,29 +428,19 @@ element normal.active, element alternate.active, element selected.active {{
 
 element {{
     children: [ element-icon, element-text ];
-    padding: 4px 10px;
-    background-color: {mantle};
+{element_layout}    background-color: {mantle};
     text-color: {text};
     spacing: 8px;
-    border: 0px 0px 1px 0px;
-    border-color: {border};
-    border-radius: 0;
 }}
 
 element selected {{
     background-color: {surface_alt};
     text-color: {text};
-    border: 0px 0px 1px 2px;
-    border-color: {accent};
-    border-radius: 4px;
-}}
+{selected_layout}}}
 
 element selected.active {{
     background-color: {surface_alt};
-    border: 0px 0px 1px 2px;
-    border-color: {accent};
-    border-radius: 4px;
-}}
+{selected_layout}}}
 
 element-icon {{
     size: 1.2em;
@@ -755,6 +804,28 @@ fn layout_rasi(profile: ChromeProfile) -> String {
     let width = profile.width_ch;
     let lines = profile.lines;
     let show_icons = profile.show_icons;
+    let columns = profile.columns;
+    let placeholder = escape_rasi(profile.placeholder);
+    let mainbox_children = if profile.message_first {
+        "message, inputbar, listview"
+    } else {
+        "inputbar, message, listview"
+    };
+    let message_align = if profile.centered_message {
+        "    text-align: center;\n"
+    } else {
+        ""
+    };
+    let listview_layout = if profile.compact_list {
+        "    padding: 0;\n    border: 0;\n    spacing: 4px;\n"
+    } else {
+        "    padding: 4px;\n    border: 1px;\n    border-radius: 8px;\n    spacing: 0;\n"
+    };
+    let element_layout = if profile.compact_list {
+        "    padding: 4px 8px;\n    border: 0;\n    border-radius: 6px;\n"
+    } else {
+        "    padding: 4px 10px;\n    border: 0px 0px 1px 0px;\n    border-radius: 0;\n"
+    };
     format!(
         r#"configuration {{
     show-icons: {show_icons};
@@ -774,7 +845,7 @@ window {{
 }}
 
 mainbox {{
-    children: [ inputbar, message, listview ];
+    children: [ {mainbox_children} ];
     spacing: 8px;
     padding: 0;
 }}
@@ -790,31 +861,28 @@ inputbar {{
 message {{
     padding: 0px 12px;
     border: 0px 0px 1px 0px;
-}}
+{message_align}}}
 
 textbox {{
     padding: 0;
     border: 0;
+{message_align}}}
+
+entry {{
+    placeholder: "{placeholder}";
 }}
 
 listview {{
-    columns: 1;
+    columns: {columns};
     lines: {lines};
-    spacing: 0;
     scrollbar: false;
     cycle: true;
     dynamic: true;
     fixed-height: false;
-    padding: 4px;
-    border: 1px;
-    border-radius: 8px;
-}}
+{listview_layout}}}
 
 element {{
-    padding: 4px 10px;
-    spacing: 8px;
-    border: 0px 0px 1px 0px;
-    border-radius: 0;
+{element_layout}    spacing: 8px;
 }}
 
 element-icon {{

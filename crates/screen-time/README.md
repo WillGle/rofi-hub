@@ -2,8 +2,9 @@
 
 A local screen-time tracker for Hyprland and systemd. Open Rofi to see daily
 totals, app timelines by category, and session details. This crate is part of
-the [rofi-hub](../../README.md) workspace; the hub installer can install it
-alone or alongside the launcher.
+the [rofi-hub](../../README.md) workspace and ships as an independent app: its
+package carries Rofi as a runtime dependency, its provider manifest, its layout
+fallback, and its own systemd user service.
 
 [![Memory and fast-switch coverage across UI-capable Linux trackers](docs/charts/memory-coverage.svg)](docs/EVALUATION.md)
 
@@ -25,13 +26,13 @@ bash install.sh --app screen-time
 ~/.local/bin/rofi-screen-time
 ```
 
-Updates are opt-in: `bash install.sh --check` only reports, and
-`--auto-update=check` or `--auto-update=apply` install signed user timers. See
-[data safety and updates](docs/AUTO_UPDATE.md).
+Update or remove only this app with `bash install.sh --update screen-time` or
+`bash install.sh --uninstall screen-time`. Other apps keep their versions and
+files. See [data safety and updates](docs/AUTO_UPDATE.md).
 
 On NixOS or standalone Home Manager, import
 `inputs.rofi-hub.homeManagerModules.screen-time` and set
-`services.screen-time.enable = true`. To preview an existing checkout:
+`services.rofi-apps.screen-time.enable = true`. To preview an existing checkout:
 
 ```bash
 nix build .#screen-time
@@ -58,7 +59,8 @@ To set a default theme, edit `~/.config/screen-time/config.toml` and reopen Rofi
 mode = "nord" # auto | matugen | static | config | nord | solarized | gruvbox
 ```
 
-The hub installer also ships `~/.local/share/screen-time/config.example.toml`.
+The Screen Time app package also ships
+`~/.local/share/screen-time/config.example.toml`.
 Run `screen-time config init` to copy it into place without overwriting an
 existing config.
 

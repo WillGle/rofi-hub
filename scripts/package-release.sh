@@ -117,18 +117,23 @@ for app_id, crate, optional in specs:
         "url": name,
         "sha256": digest,
         "requires": metadata.get("requires", []),
+        f"url_{arch}": name,
+        f"sha256_{arch}": digest,
     }
     if optional:
         entry["optional"] = True
     apps.append(entry)
 
 index = {
-    "schema": 1,
+    "schema": 2,
+    "architectures": [arch],
     "installer": {"version": installer_version},
     "apps": apps,
 }
-(dist / "index.json").write_text(json.dumps(index, indent=2, sort_keys=True) + "\n")
-print(f"wrote {dist / 'index.json'} ({len(apps)} apps)")
+text = json.dumps(index, indent=2, sort_keys=True) + "\n"
+(dist / "index.json").write_text(text)
+(dist / f"index-{arch}.json").write_text(text)
+print(f"wrote {dist / 'index.json'} ({len(apps)} apps, {arch})")
 PY
 
 install -m 755 "$ROOT/install.sh" "$DIST/install.sh"
@@ -136,7 +141,7 @@ install -m 755 "$ROOT/uninstall.sh" "$DIST/uninstall.sh"
 install -m 644 "$ROOT/minisign.pub" "$DIST/minisign.pub"
 (
     cd "$DIST"
-    sha256sum ./*.tar.gz index.json install.sh uninstall.sh minisign.pub >SHA256SUMS
+    sha256sum ./*.tar.gz index.json "index-${ARCH}.json" install.sh uninstall.sh minisign.pub >SHA256SUMS
 )
 
 printf 'release assembled in %s\n' "$DIST"

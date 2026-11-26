@@ -17,8 +17,8 @@ and `systemctl --user status` from a terminal inside Hyprland.
 
 ### Debian, Ubuntu, Fedora, Arch, and openSUSE
 
-Install the dependencies through your distro, then run the Screen Time
-installer as your desktop user.
+Install the dependencies through your distro, then run the per-app installer as
+your desktop user.
 
 | Distro family | Dependency command | Notes |
 |---|---|---|
@@ -52,23 +52,21 @@ rofi-screen-time
 
 The installer itself also verifies every release asset with the same pinned
 minisign key before it stops the service. A missing, invalid, or unknown
-signature is a hard failure. The key id is printed by `minisign -Vm` and the
-fingerprint is recorded in the backup manifest.
-
-Add `~/.local/bin` to your login session's PATH if Hyprland cannot resolve the
-launcher. You can also use an absolute path in your Hyprland shortcut. The
-release installer verifies signatures and archive checksums, then installs the
-tracker, its launcher and fallback theme, the user service, and the hub
-launcher with its provider manifest at:
+signature is a hard failure. The release installer installs only the
+screen-time payload: the tracker, its launcher and fallback theme, the user
+service, and the provider manifest:
 
 ```text
 ~/.local/bin/screen-time
 ~/.local/bin/rofi-screen-time
-~/.local/bin/rofi-hub
-~/.local/share/screen-time/rofi/screen-time.rasi
-~/.local/share/rofi-hub/providers/screen-time.toml
+~/.local/share/screen-time/config.example.toml
+~/.local/share/rofi/screen-time.rasi
+~/.local/share/rofi-apps/providers/screen-time.toml
 ~/.config/systemd/user/screen-time.service
 ```
+
+Add `~/.local/bin` to your login session's PATH if Hyprland cannot resolve the
+launcher, or use an absolute path in your Hyprland shortcut.
 
 Release archives target Linux x86_64 and, when the ARM build is published,
 AArch64. These are glibc builds. If an older distro reports `GLIBC_* not found`,
@@ -83,18 +81,19 @@ Use a current stable Rust toolchain, a C compiler and linker, and the runtime
 dependencies above. For example, install the C toolchain via `build-essential`
 on Debian/Ubuntu, `gcc` on Fedora, `base-devel` on Arch, or `gcc` on openSUSE.
 
-From the workspace root:
+From the workspace root, build a local per-app release and install it from the
+generated index:
 
 ```bash
-archive="$(bash scripts/package-release.sh | tail -n 1)"
-bash install.sh --app screen-time --tarball "$archive" --allow-unsigned
+DIST=$(mktemp -d)
+DIST="$DIST" scripts/package-release.sh
+bash install.sh --index "$DIST/index.json" --allow-unsigned --app screen-time
 ```
 
-`--allow-unsigned` is for a local build, never for an automatic update. To
-exercise the signed path, sign `dist/SHA256SUMS` with
-`scripts/sign-release.sh` first. For a separately obtained archive, put its
-`SHA256SUMS` beside it or pass its trusted digest with `--sha256`. The tarball
-installs the launcher, theme, and service together with the Rust binary.
+`--allow-unsigned` is for local builds only. A signed release is built with
+`scripts/sign-release.sh` and installed from the release index; see
+[data safety and updates](AUTO_UPDATE.md). The tarball installs the launcher,
+theme, service, and provider as one app payload.
 
 ### Nix
 
@@ -125,31 +124,22 @@ NixOS module is already imported, add:
 ```nix
 {
   home-manager.sharedModules = [ inputs.rofi-hub.homeManagerModules.default ];
-  home-manager.users.will.services.rofi-hub = {
-    enable = true;
-    apps = [ "screen-time" ];
-  };
+  home-manager.users.will.services.rofi-apps.screen-time.enable = true;
 }
 ```
 
-Replace `will` with your Home Manager user. Install Rofi in your system or
-home packages if it is missing. Rebuild from your host flake directory:
+Replace `will` with your Home Manager user. The per-app module installs only
+the Screen Time package and its user service; it does not install the menu or
+another app. Install Rofi in your system or home packages if it is missing.
+Rebuild from your host flake directory:
 
 ```bash
 sudo nixos-rebuild switch --flake ".#$(hostname)"
 ```
 
 Replace the hostname with your flake's configuration name if they differ.
-To try the local app checkout through an already enabled module:
-
-```bash
-bash install.sh --nixos "/etc/nixos#$(hostname)" --dry-run
-bash install.sh --nixos "/etc/nixos#$(hostname)"
-```
-
-This activates the entire selected NixOS configuration, including changes
-already present in it, and overrides the app input for that rebuild only. A
-later ordinary rebuild uses the locked revision again.
+`services.rofi-hub.enable` remains as a deprecated alias for the older module,
+but new configuration should use `services.rofi-apps.<app>.enable`.
 
 #### Standalone Home Manager
 
@@ -157,12 +147,12 @@ In your existing `homeManagerConfiguration`, add these entries to `modules`:
 
 ```nix
 inputs.rofi-hub.homeManagerModules.default
-{ services.rofi-hub.enable = true; services.rofi-hub.apps = [ "screen-time" ]; }
+{ services.rofi-apps.screen-time.enable = true; }
 ```
 
 For only the tracker and its service, use
 `inputs.rofi-hub.homeManagerModules.screen-time` and
-`services.screen-time.enable = true` instead.
+`services.rofi-apps.screen-time.enable = true` instead.
 
 Then run `home-manager switch --flake .#will` from your Home Manager flake,
 using your configuration name. Standalone Home Manager on a non-NixOS distro
@@ -327,9 +317,9 @@ Migration backups under
 pruned automatically. After verifying a migration, remove old copies manually:
 
 ```bash
-ls -lh ~/.local/state/rofi-hub/backups/migrations/
+ls -lh ~/.local/state/screen-time/backups/migrations/
 # Review the list, then remove only the files you no longer need.
-rm ~/.local/state/rofi-hub/backups/migrations/pre-v1-YYYYMMDD-HHMMSS.db
+rm ~/.local/state/screen-time/backups/migrations/pre-v1-YYYYMMDD-HHMMSS.db
 ```
 
 Installs before 0.4.0 pruned events/sessions/aggregates on a fixed 30/90/365
@@ -402,98 +392,41 @@ From the flake directory that declares the app input, run
 `nix flake update rofi-hub`, then use the same rebuild or Home Manager
 switch command as at install time. To roll back only Screen Time, restore its
 previous lock entry and switch the configuration again. To remove it, set
-`services.screen-time.enable = false` in Home Manager and switch. Your state
-and history stay in the user's state directory.
+`services.rofi-apps.screen-time.enable = false` in Home Manager and switch.
+Your database and history stay in the user's state directory.
 
-### GitHub release or tarball
+### Release installer
 
-Updates are opt-in. Nothing downloads or runs in the background unless you
-install a timer. The updater:
-
-1. takes a single update lock (a concurrent run exits before stopping the
-   service);
-2. verifies the release signature, checksums, and that it is a stable tag;
-3. checks free space for the database, WAL, two backups, and staging;
-4. records whether the service was active, stops it, and creates a consistent
-   `VACUUM INTO` snapshot with a manifest and SHA-256 hash;
-5. replaces the binary, launcher, theme, unit, version, and hash files
-   atomically;
-6. runs a data-fingerprint comparison and `screen-time doctor --json
-   --no-runtime`;
-7. marks the backup verified and prunes only old **verified** backups, keeping
-   at least two. Recent failed/pending attempts and their backups are kept for
-   diagnosis; entries older than 30 days are pruned on the next install/update
-   or `--clean` (change with `--failed-backup-days`, `0` keeps forever);
-8. restores the previous files, database snapshot, and service state on any
-   failure after the snapshot.
-
-`--update` checks the resolved release tag before downloading the archive, so a
-current installation does not fetch the tarball again. The component selection
-recorded at install time is reused; pass `--app` again to change it. Downloaded archives and
-extracted files live in a temporary directory and are removed when the
-installer exits. Leftover staging from a hard kill is removed on the next
-install/update or with `--clean`.
+The installer manages exactly three operations per app: install, update, and
+uninstall. `--update screen-time` verifies the signed index, checksum, and
+archive signature, then replaces only the files recorded for Screen Time.
+Other apps are not touched. The installer does not stop or snapshot the daemon;
+stop the user service before updating if you want a quiet database, or let the
+new binary migrate it on its next start.
 
 ```bash
-# check only; no installation changes
-bash install.sh --check
-bash install.sh --check --json
-# exit: 0 up to date, 10 update available, 20 network, 21 invalid release,
-#       22 signature error
+# update one app
+bash install.sh --update screen-time
 
-# install the latest stable release if newer
-bash install.sh --update
-bash install.sh --update --dry-run
+# uninstall one app; database and config are left in place
+bash install.sh --uninstall screen-time
 
-# opt in to a daily check notification (no code is downloaded or installed)
-bash install.sh --auto-update=check
-
-# opt in to signed automatic updates (stable tags only, no major bumps)
-bash install.sh --auto-update=apply
-
-# remove update timers and update state
-bash install.sh --no-auto-update
-
-# restore the latest verified successful backup; keep it for audit
-bash install.sh --rollback
-
-# remove artifacts; keep database, config, and all backups
-bash install.sh --uninstall
-
-# remove artifacts, database, config, and backups after confirmation
-bash install.sh --uninstall --purge
-
-# remove stale staging, old verified backups, and expired failed/pending backups
-bash install.sh --clean
+# install without the systemd user unit
+bash install.sh --app screen-time --no-service
 ```
 
-`install.sh --update` is a no-op when up to date and does not download the
-archive in that case. It never downgrades unless `--allow-downgrade` is passed,
-and it refuses a schema downgrade unless `--allow-schema-downgrade` is also
-passed. Automatic mode never accepts `--force`, `--allow-unsigned`,
-`--uninstall`, or a major-version bump.
+There is no installer-owned update timer, `--check`, `--auto-update`,
+`--rollback`, `--clean`, or `--purge`. Use your system scheduler or Nix
+configuration for notifications, and back up
+`${XDG_STATE_HOME:-~/.local/state}/screen-time/` yourself if you need a copy.
 
-Update state lives under `~/.local/state/rofi-hub/updates/`:
-`last-check.json`, `last-update.json`, `update-in-progress.json`,
-`failure.json`, and `update.lock`. The lock and state files are diagnostics;
-deleting them does not remove database history or verified backups. A failed
-automatic attempt backs off exponentially (up to 24 hours) and does not retry
-the same tag immediately.
+The per-app state file is
+`~/.local/state/rofi-apps/installed/screen-time`. If an install or update
+fails, the installer restores the previous files; the database is never part of
+the file rollback.
 
-`uninstall.sh` is a thin wrapper around `install.sh --uninstall` and
-supports `--prefix`, `--purge`, `--yes`, and `--dry-run`. `--purge` requires an
-interactive `purge` confirmation or `--yes` in a script.
-
-The update timer is a systemd **user** timer. It runs only while the user
-manager is available; with lingering enabled it can run after logout. If no
-graphical session is available the update still verifies data but skips
-runtime-only checks. Auto-apply also skips while the session is locked or the
-machine is on battery. A user-modified theme is not overwritten without
-`--force`. A unit whose `ExecStart` was changed is backed up and never silently
-replaced.
-
-See [AUTO_UPDATE.md](AUTO_UPDATE.md) for the channel model, signing, key
-rotation, and recovery runbook.
+See [AUTO_UPDATE.md](AUTO_UPDATE.md) for the channel model, signing, and
+migration-backup recovery.
 
 ## Troubleshooting
 

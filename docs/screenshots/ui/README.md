@@ -10,14 +10,44 @@ The README shows the Gruvbox row. Every app also has `nord`, `solarized`, and
 |---|---|---|---|---|
 | Menu | [![Menu Gruvbox](hub-gruvbox.png?v=3)](hub-gruvbox.png) | [![Menu Nord](hub-nord.png?v=3)](hub-nord.png) | [![Menu Solarized](hub-solarized.png?v=3)](hub-solarized.png) | [![Menu Auto](hub-auto.png?v=3)](hub-auto.png) |
 | Screen Time | [![Screen Time Gruvbox](screen-time-gruvbox.png?v=3)](screen-time-gruvbox.png) | [![Screen Time Nord](screen-time-nord.png?v=3)](screen-time-nord.png) | [![Screen Time Solarized](screen-time-solarized.png?v=3)](screen-time-solarized.png) | [![Screen Time Auto](screen-time-auto.png?v=3)](screen-time-auto.png) |
-| Calendar | [![Calendar Gruvbox](calendar-gruvbox.png?v=3)](calendar-gruvbox.png) | [![Calendar Nord](calendar-nord.png?v=3)](calendar-nord.png) | [![Calendar Solarized](calendar-solarized.png?v=3)](calendar-solarized.png) | [![Calendar Auto](calendar-auto.png?v=3)](calendar-auto.png) |
+| Calendar | [![Calendar Gruvbox](calendar-gruvbox.png?v=5)](calendar-gruvbox.png) | [![Calendar Nord](calendar-nord.png?v=5)](calendar-nord.png) | [![Calendar Solarized](calendar-solarized.png?v=5)](calendar-solarized.png) | [![Calendar Auto](calendar-auto.png?v=5)](calendar-auto.png) |
 | Clipboard | [![Clipboard Gruvbox](clipboard-gruvbox.png?v=3)](clipboard-gruvbox.png) | [![Clipboard Nord](clipboard-nord.png?v=3)](clipboard-nord.png) | [![Clipboard Solarized](clipboard-solarized.png?v=3)](clipboard-solarized.png) | [![Clipboard Auto](clipboard-auto.png?v=3)](clipboard-auto.png) |
 | Keybinds | [![Keybinds Gruvbox](keybinds-gruvbox.png?v=3)](keybinds-gruvbox.png) | [![Keybinds Nord](keybinds-nord.png?v=3)](keybinds-nord.png) | [![Keybinds Solarized](keybinds-solarized.png?v=3)](keybinds-solarized.png) | [![Keybinds Auto](keybinds-auto.png?v=3)](keybinds-auto.png) |
-| Network | [![Network Gruvbox](network-gruvbox.png?v=4)](network-gruvbox.png) | [![Network Nord](network-nord.png?v=4)](network-nord.png) | [![Network Solarized](network-solarized.png?v=4)](network-solarized.png) | [![Network Auto](network-auto.png?v=4)](network-auto.png) |
+| Network | [![Network Gruvbox](network-gruvbox.png?v=5)](network-gruvbox.png) | [![Network Nord](network-nord.png?v=5)](network-nord.png) | [![Network Solarized](network-solarized.png?v=5)](network-solarized.png) | [![Network Auto](network-auto.png?v=5)](network-auto.png) |
 
 The `auto` column falls back to Gruvbox when no matugen palette or
 `static.env` is present. See [UI style](../../UI_STYLE.md) for the palette,
 component grammar, and `ChromeProfile` table.
+
+## Calendar and Network redesign
+
+The §17 redesign captures are in [`redesign/`](redesign/). Each pair keeps the
+pre-redesign image from the previous commit and the real Rofi capture after the
+change, at 1280×800 with the same font and themes:
+
+| App | Before | After |
+|---|---|---|
+| Calendar | [Gruvbox](redesign/calendar-before-gruvbox.png) | [Gruvbox](redesign/calendar-after-gruvbox.png), [Nord](redesign/calendar-after-nord.png), [Solarized Light](redesign/calendar-after-solarized.png), [Auto](redesign/calendar-after-auto.png) |
+| Network | [Gruvbox](redesign/network-before-gruvbox.png) | [Gruvbox](redesign/network-after-gruvbox.png), [Nord](redesign/network-after-nord.png), [Solarized Light](redesign/network-after-solarized.png), [Auto](redesign/network-after-auto.png) |
+
+Interaction states:
+
+- Calendar date entry: [focused date](redesign/calendar-focus-gruvbox.png),
+  [invalid date](redesign/calendar-invalid.png).
+- Calendar narrow window: [1024×700](redesign/calendar-narrow.png).
+- Network Manage: [Gruvbox](redesign/network-manage-gruvbox.png),
+  [Nord](redesign/network-manage-nord.png),
+  [Solarized Light](redesign/network-manage-solarized.png).
+- Network Connection details:
+  [Gruvbox](redesign/network-details-gruvbox.png),
+  [Nord](redesign/network-details-nord.png),
+  [Solarized Light](redesign/network-details-solarized.png).
+- Network narrow window: [1024×700](redesign/network-narrow.png).
+- Network empty state: [only active network](redesign/network-only-active.png),
+  [Wi-Fi off + Ethernet](redesign/network-wifi-off.png).
+- Long SSID truncation: [1024×700](redesign/network-long-ssid.png).
+- Full-name filter still matches the truncated SSID:
+  [filtered list](redesign/network-filter-long.png).
 
 ## Regenerating
 
@@ -49,6 +79,13 @@ Use the app binary directly (`rofi-calendar`, `rofi-clipboard`,
 `~/.config/rofi/theme.rasi`, an app override `~/.config/rofi/<app>.rasi`,
 `ROFI_THEME`, or the menu's own `rofi-hub-menu theme set` state. Apps do not
 read `ROFI_HUB_THEME`.
+
+The redesign captures use `xdotool` for the date-entry, Manage, and details
+states, and set a full `ROFI_THEME` (from
+`cargo run -p rofi-dmenu --example dump-theme -- <app> <mode>`) plus
+`~/.config/theme/static.env` for the Nord/Solarized markup palette. Auto uses
+the built-in Gruvbox fallback. `scripts/test-performance.sh` measures the same
+binaries with the fake runtime tools.
 
 The committed `fixtures/` directory contains the fake `cliphist`, `wl-copy`,
 and `nmcli` scripts plus a small `hyprland.conf` for deterministic captures.

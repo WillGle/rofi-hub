@@ -83,6 +83,7 @@ for required in (
     "uninstall.sh",
     "installer/index.schema.json",
     "scripts/package-release.sh",
+    "scripts/merge-release-index.py",
     "scripts/sign-release.sh",
 ):
     check((ROOT / required).is_file(), f"missing {required}")

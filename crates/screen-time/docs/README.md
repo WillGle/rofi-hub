@@ -3,7 +3,7 @@
 ## 1. App and installation
 
 - [User guide](USER_GUIDE.md) — overview, distro installation, configuration, and usage.
-- [Data safety and updates](AUTO_UPDATE.md) — channel model, signed releases, timers, backups, and recovery.
+- [Data safety and updates](AUTO_UPDATE.md) — channel model, signed releases, per-app updates, backups, and recovery.
 - [Evaluation](EVALUATION.md) — visual comparison, benchmarks, and Linux app comparisons.
 
 ## 2. Reproduce development checks
@@ -29,9 +29,8 @@ main/detail screens at 1280x800 and 1920x1080 with section markers; and a
 daemon smoke test with a fake Hyprland socket and SIGTERM shutdown. Theme
 integration tests cover Matugen-over-static, corrupt-palette fallback, config
 overrides, generated Rofi themes, and live palette changes on the next render.
-The installer integration script covers install/upgrade/no-op, inactive
-service state, rollback, uninstall/purge, config and database invariants,
-permissions, signature refusal, concurrent-lock refusal, no-download
-up-to-date updates, and staging/backup retention in a temp HOME.
+The installer integration script covers per-app install, update/uninstall
+independence, prerequisite failure, checksum/signature refusal, path traversal,
+permissions, service handling, and rollback in a temp HOME.
 Charts under `docs/charts/` are generated from `docs/benchmarks/*.json` by
 `crates/screen-time/scripts/render-evaluation-charts.py`.

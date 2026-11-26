@@ -1,7 +1,8 @@
 # Data safety and updates
 
-Screen Time keeps local history on your machine. This page describes the update
-channels, the data-safety guarantees, release verification, and recovery.
+Screen Time keeps local history on your machine. This page describes the two
+supported installation channels, how updates work, and how to protect the
+database when removing or moving the app.
 
 ## Channels
 
@@ -9,217 +10,92 @@ There is exactly one owner for each installation:
 
 | Channel | Update mechanism | Notes |
 |---|---|---|
-| Nix / Home Manager | `nix flake update rofi-hub`, then rebuild | The flake input and lock choose the version. The standalone installer refuses Nix/Home Manager-owned paths and never adds update units for them. |
-| Flatpak (future) | Package manager timer | A window tracker needs host/Hyprland access; sandbox packaging is a separate project. |
-| Standalone | `install.sh` plus an opt-in user timer | This page. No root, no daemon auto-executes code by default. |
+| Nix / Home Manager | `nix flake update rofi-hub`, then rebuild | The flake input and lock choose the version. The per-app module installs the package and its service. |
+| `install.sh` | `install.sh --update screen-time` | Per-app signed release. The installer verifies the index, archive checksum, and minisign signature before replacing files. |
+| Flatpak (future) | A separate packaging project | A window tracker needs host/Hyprland access; this is not part of the current release. |
 
-`--nixos` in `install.sh` only activates an existing checkout through the host
-flake input. Do not mix channels for the same binary or unit.
+Do not mix channels for the same binary or unit. The standalone installer
+refuses Nix/Home-Manager-owned paths and never adds automatic update units.
+`install.sh --theme` and `install.sh --nixos` do not exist.
 
 ## What an update owns
 
-The updater may write only executable, unit, theme, version, and hash files,
-`backups/updates/`, and `updates/*.json` plus the update lock. It never writes,
-truncates, or restores over these without an explicit `--purge`:
+The app package owns:
 
-- the live database (`screen-time.db`, `-wal`, `-shm`);
-- migration backups under `backups/migrations/`;
-- `config.toml`;
-- the legacy `~/.local/share/rofi-screen-time/` and `~/.cache/rofi-screen-time/`
-  directories;
-- the theme choice file.
+- `~/.local/bin/screen-time` and `~/.local/bin/rofi-screen-time`;
+- `~/.config/systemd/user/screen-time.service` (unless `--no-service`);
+- the provider manifest and the fallback Rofi layout under
+  `~/.local/share/rofi-apps/` and `~/.local/share/rofi/`;
+- the per-app state file `~/.local/state/rofi-apps/installed/screen-time`.
+
+The app never touches the live database when installing or updating files. The
+database, config, and migration backups stay under
+`${XDG_STATE_HOME:-~/.local/state}/screen-time/` and
+`${XDG_CONFIG_HOME:-~/.config}/screen-time/`.
 
 Every snapshot and manifest is created with `0700` directories and `0600`
-files; the updater sets `umask 077` rather than relying on yours.
+files; the app sets `umask 077` rather than relying on yours.
 
-## Update modes
+## Update and uninstall
 
 ```bash
-bash install.sh --check                 # report only
-bash install.sh --check --json          # stable JSON schema
-bash install.sh --update                # manual, latest stable release
-bash install.sh --auto-update=check     # daily check timer (default opt-in)
-bash install.sh --auto-update=apply     # signed automatic updates
-bash install.sh --no-auto-update        # remove timers and update state
+# One app only. Other apps are not touched.
+bash install.sh --update screen-time
+bash install.sh --uninstall screen-time
+
+# Install without enabling the user service.
+bash install.sh --app screen-time --no-service
+
+# List index entries and the installed version.
+bash install.sh --list
 ```
 
-`--check` exit codes: `0` up to date, `10` update available, `20` network
-error, `21` invalid release, `22` signature error. `--check` does not replace
-files. `--write-check-state` additionally writes
-`~/.local/state/rofi-hub/updates/last-check.json` for the check timer.
+`install.sh --update screen-time` is a no-op when the installed version matches
+the index, and it refuses to install an archive without a valid signature or
+checksum. Updates do not restart the daemon automatically in automatic mode;
+the service is enabled with `systemctl --user enable --now screen-time.service`
+unless `--no-service` is passed.
 
-`--update` is a no-op when the installed version is current, and it checks the
-resolved release tag before downloading the archive. It only follows stable
-`vX.Y.Z` tags. Downgrades require an explicit `--allow-downgrade` and a schema
-compatibility check; `--allow-schema-downgrade` is a separate override.
+The installer keeps one state file per app and restores the previous files if
+an install or update fails. Uninstall removes only files recorded in that app's
+state; the database, config, and migration backups are left for the user.
+
+There is no installer-owned update timer. If you want notifications, use your
+system scheduler or your Nix configuration; the app does not download or run
+code in the background.
 
 ## Release verification
 
 Releases are signed with [minisign](https://jedisct1.github.io/minisign/). The
-public key is pinned twice: in `minisign.pub` and in the installer. The current
-key id is `F1A59235D536DB40`. The first `rofi-hub` release starts a new
-signing key because the retired `screen-time-rofi` key could not be transferred;
-verify the new fingerprint out of band before installing. Release assets include:
+public key is pinned in `minisign.pub`. Release assets include:
 
-- `rofi-hub-<arch>-linux.tar.gz`
-- `install.sh`, `uninstall.sh`, and `minisign.pub`
-- `SHA256SUMS`, `SHA256SUMS.minisig`, `install.sh.minisig`
+- per-app tarballs for `x86_64` and `aarch64`;
+- one `index.json` that maps each app to both architectures;
+- `install.sh`, `uninstall.sh`, and `minisign.pub`;
+- `SHA256SUMS` and `.minisig` files next to the index and each tarball.
 
 Release tags should be signed and CI builds from the tag. The installer
-downloads the checksum file and its detached signature, verifies the signature
-against the pinned key, verifies the archive checksum, and verifies the
-installer itself. If the running script differs from the signed
-release installer, it re-executes the verified release copy. `--allow-unsigned`
-exists only for a local tarball or offline test and is rejected in automatic
-mode. A first install must be verified manually:
+downloads the index and its detached signature, verifies them against the
+pinned key, selects the tarball for `uname -m`, then verifies the archive
+checksum and signature. `--allow-unsigned` exists only for a local tarball or
+offline test.
 
 ```bash
 minisign -Vm install.sh -p minisign.pub
-# Trusted key id: F1A59235D536DB40
 ```
 
-### Key rotation and revocation
+## Database safety
 
-- The trusted keys live in the `TRUSTED_KEYS` array in `install.sh` (id and
-  base64 public key) and in `minisign.pub`.
-- Rotation uses an overlap window: publish a release signed with the new key
-  while the installer still trusts both old and new keys.
-- Verify the new key id out of band before the next release. Then remove the
-  old entry and signed artifacts.
-- A revoked key is removed from the array in a release signed by a remaining
-  trusted key. Releases signed only by a revoked key fail closed.
-- Emergency compromise: publish a new installer and key through the repository
-  and release notes, keep the revocation list, and tell users to verify the new
-  fingerprint manually. Never fetch a trusted key from the same release
-  object.
-- The secret key is offline and never committed. `scripts/sign-release.sh`
-  reads `MINISIGN_SECRET_KEY` from the release environment.
-
-## Timer behavior
-
-`--auto-update=check` installs a daily `rofi-hub-update-check.timer` with
-`Persistent=true` and `RandomizedDelaySec=1h`. It runs `--check --json
---write-check-state` and sends a desktop notification when a newer stable
-version exists. It downloads no executable code and installs nothing.
-
-`--auto-update=apply` installs `rofi-hub-update-apply.timer`, which runs
-`--update --auto --channel stable --keep-backups 2`. Policies:
-
-- signed stable releases only; unsigned or unverifiable releases fail closed;
-- never a downgrade and never a major-version bump without manual approval;
-- no `--force`, `--uninstall`, or interactive prompt;
-- skip while another update holds the lock;
-- exponential backoff (1 h, 2 h, 4 h, ... capped at 24 h) after a failure, and
-  no immediate retry of the same bad tag;
-- skip while the session is locked or the machine is discharging on battery;
-- checked outside a graphical session using `doctor --json --no-runtime`:
-  runtime warnings such as missing Hyprland or Rofi do not trigger a rollback;
-- notifications use `notify-send` when available and always log to the journal.
-
-User timers run only while the systemd user manager is available. With
-lingering enabled they can run after logout; `Persistent=true` catches up on
-the next login. Without a user manager the timer does not run and nothing is
-reported as a failed update.
-
-The `rofi-hub-update-*` units use `NoNewPrivileges=true`, `PrivateTmp=true`,
-`ProtectSystem=strict`, explicit `ReadWritePaths`, journal logging, and
-`UMask=0077`. They are removed by `--no-auto-update`, `--uninstall`, and
-`uninstall.sh`.
-
-## Backups, retention, and rollback
-
-Update backups live under
-`~/.local/state/rofi-hub/backups/updates/<generation>/` and contain the
-previous hub binary, provider manifest, launcher, theme, unit, version, the
-installed component list, and, when the tracker is being updated, a `db/`
-snapshot with `manifest.json`. The update manifest records versions, release tag, asset and
-installer hashes, signature key id, service state, and the data fingerprint.
-Backup status is `pending` until post-update checks pass, then `verified`.
-
-- At least two verified backups are always retained.
-- Verified backups are pruned only after a successful `doctor` and data check.
-- Failed and interrupted backups are marked failed/pending and kept for
-  diagnosis for 30 days by default. Cleanup removes older entries on the next
-  install/update or `--clean`; `--failed-backup-days N` changes the window and
-  `0` keeps them forever. The backup referenced by an in-progress update is
-  never removed before recovery.
-- `--rollback` restores only the latest **verified successful** backup, runs the
-  data check and `doctor --json --no-runtime`, and keeps the backup.
-- Backups created by 0.3.0 have no manifest and are not selected by
-  `--rollback`; restore those manually while the service is stopped.
-- If the backup schema is newer than the backup binary supports, rollback
-  refuses unless `--allow-schema-downgrade` is passed.
-- A rollback that fails its checks stops the service, keeps the backup, and
-  writes a recovery manifest with instructions.
-
-Downloaded archives, checksum files, signatures, and extracted trees live in
-`${TMPDIR:-/tmp}/screen-time-install.*` and are removed when the installer
-exits, including a no-op update or a failed attempt. The next install/update
-and `--clean` also remove leftover staging older than one hour, including stale
-check-mode directories. A hard kill or power loss is the only case that can
-leave that temporary directory behind.
-
-The live database is snapshotted with SQLite `VACUUM INTO` after the service is
-stopped, so WAL/SHM state cannot produce a torn copy. The updater never runs
-`VACUUM` against a corrupt live database and never deletes one before a restore
-is verified.
-
-## History retention
-
-History is kept forever by default. `[retention]` in `config.toml` is opt-in;
-missing fields and `0` mean keep forever. Migration backups are never pruned
-automatically. See the [user guide](USER_GUIDE.md#history-retention) for the
-configuration and a manual cleanup command.
-
-## Recovery runbook
-
-Failed update:
-
-1. `install.sh --no-auto-update` if a timer is enabled.
-2. Inspect `updates/last-update.json`, the backup `manifest.json`, and
-   `journalctl --user -u screen-time`.
-3. Run `install.sh --rollback`; it only selects a verified backup.
-4. Confirm `screen-time doctor --json --no-runtime` and the data fingerprint.
-5. Confirm the service state matches the backup manifest.
-6. Keep the failed backup and logs and report the release tag, key id, and
-   backup path.
-
-Interrupted update (power loss or kill):
-
-- `updates/update-in-progress.json` records the phase, backup path, and previous
-  service state. The next install/update restores the backup and service state
-  before continuing.
-- A backup without a verified status is never used by `--rollback`.
-
-Corrupt live database:
-
-1. Stop the service and timer.
-2. Find the latest **verified** snapshot under `backups/updates/` (or a
-   `backups/migrations/` copy); never pick a failed artifact.
-3. Restore with `--rollback`, or copy the snapshot only while the service is
-   stopped.
-4. Run `doctor --json --no-runtime` and compare counts, session seconds, app
-   keys, and `quick_check`.
-5. Do not `VACUUM` the corrupt database or delete it until the restored copy is
-   verified.
-
-Lost config: restore `config.toml` from your external backup. The installer
-never owns or modifies it. Lost `last-check.json` / `last-update.json` are
-diagnostic only; deleting them does not affect install or rollback safety.
-
-## External backups
-
-Update backups protect against a bad update, not disk failure or `rm`. Use
-restic or borg for `~/.local/state/screen-time`, including `config.toml` and
-`backups/`, and test a restore periodically. A periodic restore drill should
-start from the oldest retained generation, not only the newest:
+The database schema migrates automatically at startup. Before a migration the
+app writes a snapshot under
+`${XDG_STATE_HOME:-~/.local/state}/screen-time/backups/migrations/`. Migration
+backups are never pruned automatically; after verifying a migration, remove old
+copies manually:
 
 ```bash
-scripts/restore-drill.sh                       # newest verified backup
-scripts/restore-drill.sh --oldest              # oldest verified generation
-scripts/restore-drill.sh --binary ~/.local/bin/screen-time
+ls -lh ~/.local/state/screen-time/backups/migrations/
+rm ~/.local/state/screen-time/backups/migrations/pre-v1-YYYYMMDD-HHMMSS.db
 ```
 
-The drill copies the snapshot into a temporary state directory and checks the
-manifest hash, `quick_check`, doctor JSON, fingerprint, and `0700`/`0600`
-permissions without touching the live installation.
+`screen-time doctor` checks the database, service state, and configuration. Run
+it after an update and before deleting any backup.

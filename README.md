@@ -32,11 +32,11 @@ are real Rofi captures.
 
 | Menu | Screen Time | Calendar |
 |---|---|---|
-| <img src="docs/screenshots/ui/hub-gruvbox.png?v=3" width="360" alt="Menu in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-gruvbox.png?v=3" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-gruvbox.png?v=3" width="360" alt="Calendar in Gruvbox Dark"> |
+| <img src="docs/screenshots/ui/hub-gruvbox.png?v=3" width="360" alt="Menu in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-gruvbox.png?v=3" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-gruvbox.png?v=5" width="360" alt="Calendar in Gruvbox Dark"> |
 
 | Clipboard | Keybinds | Network |
 |---|---|---|
-| <img src="docs/screenshots/ui/clipboard-gruvbox.png?v=3" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png?v=3" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png?v=4" width="360" alt="Network in Gruvbox Dark"> |
+| <img src="docs/screenshots/ui/clipboard-gruvbox.png?v=3" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png?v=3" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png?v=5" width="360" alt="Network in Gruvbox Dark"> |
 
 [Full screenshot matrix](docs/screenshots/ui/README.md) ·
 [UI style guide](docs/UI_STYLE.md)
@@ -46,7 +46,7 @@ are real Rofi captures.
 Only two channels are supported:
 
 1. **Nix** — flake packages and modules (primary).
-2. **`install.sh`** — signed universal release (secondary, non-Nix distros).
+2. **`install.sh`** — signed per-app release (secondary, non-Nix distros).
 
 No `.deb`, `.rpm`, `.apk`, AUR, distro recipe, or source asset is published.
 

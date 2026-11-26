@@ -52,14 +52,21 @@ Entertainment/System/Other to palette roles.
 
 ## Profiles
 
-| App | Width | Lines | Icons |
-|---|---:|---:|---|
-| Hub menu | 96ch | 20 | no |
-| Screen Time | 144ch/dynamic | 18 | no |
-| Calendar | 64ch (auto-fit) | 12 | no |
-| Clipboard | 110ch (auto-fit) | 16 | no |
-| Keybinds | 110ch | 16 | no |
-| Network | 90ch (auto-fit) | 10 | yes |
+| App | Width | Lines | Icons | Layout |
+|---|---:|---:|---|---|
+| Hub menu | 96ch | 20 | no | input, message, list |
+| Screen Time | 144ch/dynamic | 18 | no | input, message, list |
+| Calendar | 46ch | 1 | no | centered month message, date input, three buttons in one row |
+| Clipboard | 110ch (auto-fit) | 16 | no | input, message, list |
+| Keybinds | 110ch | 16 | no | input, message, list |
+| Network | 62ch | 6 | no | status message, filter, network list |
+
+Calendar and Network replace the three-line header and section band with the
+layouts in [goal.md §17](../goal.md). Calendar's message contains the centered
+month title and seven-column grid, its input is `Go to date`, and Prev/Today/
+Next are three compact list buttons. Network's message contains one connection
+line and the shortcut line, below it is the `Find network` filter, and the list
+holds only SSIDs; Manage and Connection details are separate screens.
 
 `rofi-hub-menu theme dump --app <app>` prints the generated `.rasi`. Installed
 `share/rofi/<app>.rasi` fallbacks are checked against the generator.

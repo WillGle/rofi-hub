@@ -106,6 +106,8 @@ per app:
 
 The installer:
 
+- selects the `url_<arch>`/`sha256_<arch>` pair for `uname -m` and refuses an
+  index with no artifact for the host;
 - verifies the index and each tarball with minisign and SHA-256 by default;
 - rejects unsigned input unless `--allow-unsigned` is passed for local tests;
 - rejects absolute paths, `..` components, links, and devices in tarballs;
@@ -123,14 +125,17 @@ NetworkManager, themes, or `PATH` wrappers.
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
+  "architectures": ["aarch64", "x86_64"],
   "installer": { "version": "0.3.0" },
   "apps": [
     {
       "id": "calendar",
       "version": "1.2.0",
-      "url": "rofi-calendar-1.2.0-x86_64.tar.gz",
-      "sha256": "...",
+      "url_x86_64": "rofi-calendar-1.2.0-x86_64.tar.gz",
+      "sha256_x86_64": "...",
+      "url_aarch64": "rofi-calendar-1.2.0-aarch64.tar.gz",
+      "sha256_aarch64": "...",
       "requires": ["rofi"]
     }
   ]
@@ -138,8 +143,10 @@ NetworkManager, themes, or `PATH` wrappers.
 ```
 
 Optional apps (the menu) carry `"optional": true` and are skipped by `--all`.
-The schema is in `installer/index.schema.json`. Tarballs and the index are
-signed with minisign (`.minisig` files next to each artifact).
+The schema is in `installer/index.schema.json`. The release job merges the two
+native bundles with `scripts/merge-release-index.py`; each app keeps both
+architectures, and `install.sh` picks the pair matching `uname -m`. Tarballs
+and the index are signed with minisign (`.minisig` files next to each artifact).
 
 ## Nix
 

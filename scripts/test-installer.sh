@@ -74,7 +74,7 @@ done
 
 mkdir -p "$WORK/tools"
 for tool in python3 tar sha256sum awk cut find sed basename dirname readlink \
-    mktemp cp mv rm mkdir chmod cat sort head minisign flock wc tr env bash gzip grep; do
+    mktemp cp mv rm mkdir chmod cat sort head minisign flock wc tr env bash gzip grep uname; do
     path="$(command -v "$tool" 2>/dev/null || true)"
     [[ -n "$path" ]] && ln -sf "$path" "$WORK/tools/$tool"
 done
@@ -183,7 +183,11 @@ python3 - "$BAD/index.json" <<'PY'
 import json, sys
 path = sys.argv[1]
 data = json.load(open(path))
-del data["apps"][0]["sha256"]
+entry = data["apps"][0]
+for key in ("url", "sha256"):
+    entry.pop(key, None)
+for key in [key for key in entry if key.startswith(("url_", "sha256_"))]:
+    entry.pop(key)
 json.dump(data, open(path, "w"))
 PY
 minisign -Sm "$BAD/index.json" -s "$WORK/sec" -x "$BAD/index.json.minisig" >/dev/null
@@ -196,7 +200,7 @@ assert_failure "INS-11 invalid index schema is rejected" \
 NO_ROFI="$WORK/tools-no-rofi"
 mkdir -p "$NO_ROFI"
 for tool in python3 tar sha256sum awk cut find sed basename dirname readlink \
-    mktemp cp mv rm mkdir chmod cat sort head minisign flock wc tr env bash gzip grep; do
+    mktemp cp mv rm mkdir chmod cat sort head minisign flock wc tr env bash gzip grep uname; do
     path="$(command -v "$tool" 2>/dev/null || true)"
     [[ -n "$path" ]] && ln -sf "$path" "$NO_ROFI/$tool"
 done
@@ -212,7 +216,18 @@ assert_no_file "$E/home/.local/bin/rofi-calendar" "INS-04 no partial install"
 # ---------------------------------------------------------------------------
 BAD2="$WORK/bad-checksum"
 cp -a "$DIST" "$BAD2"
-printf '\0' >>"$BAD2/rofi-calendar-1.2.0-x86_64.tar.gz"
+CALENDAR_ARCHIVE="$(python3 - "$DIST/index.json" <<'PY'
+import json, sys
+index = json.load(open(sys.argv[1]))
+for app in index["apps"]:
+    if app["id"] == "calendar":
+        for key, value in app.items():
+            if key.startswith("url"):
+                print(value)
+                raise SystemExit
+PY
+)"
+printf '\0' >>"$BAD2/$CALENDAR_ARCHIVE"
 assert_failure "INS-05 bad checksum is rejected" \
     in_env "$ROOT/install.sh" --index "$BAD2/index.json" --pubkey "$WORK/pub" --app calendar
 
@@ -254,6 +269,10 @@ for app in index["apps"]:
     if app["id"] == "calendar":
         app["url"] = "evil.tar.gz"
         app["sha256"] = sys.argv[3]
+        for key in [key for key in app if key.startswith("url_")]:
+            app[key] = "evil.tar.gz"
+        for key in [key for key in app if key.startswith("sha256_")]:
+            app[key] = sys.argv[3]
 json.dump(index, open(sys.argv[2], "w"))
 PY
 # Build a dedicated index directory so relative URLs resolve to the evil tar.

@@ -2,14 +2,23 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/WillGle/rofi-hub/installer/index.schema.json",
   "title": "rofi-apps release index",
-  "description": "Signed index of independent rofi-app tarballs.",
+  "description": "Signed index of independent rofi-app tarballs. Schema 2 keeps a tarball URL and checksum per architecture so one release can serve x86_64 and aarch64 hosts.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "installer", "apps"],
   "properties": {
     "schema": {
-      "const": 1,
-      "description": "Index schema version."
+      "const": 2,
+      "description": "Index schema version. install.sh also accepts legacy schema 1 indexes with a single url/sha256 pair."
+    },
+    "architectures": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["x86_64", "aarch64"]
+      },
+      "description": "Architectures present in this index."
     },
     "installer": {
       "type": "object",
@@ -27,7 +36,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "version", "url", "sha256"],
+        "required": ["id", "version"],
         "properties": {
           "id": {
             "type": "string",
@@ -40,9 +49,27 @@
           "url": {
             "type": "string",
             "minLength": 1,
-            "description": "Relative path (preferred) or https URL to the per-app tarball."
+            "description": "Legacy single-architecture path, kept for schema 1 indexes."
           },
           "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "url_x86_64": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relative path (preferred) or https URL to the x86_64 tarball."
+          },
+          "sha256_x86_64": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "url_aarch64": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relative path (preferred) or https URL to the aarch64 tarball."
+          },
+          "sha256_aarch64": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$"
           },
@@ -56,7 +83,17 @@
             "default": false,
             "description": "Optional apps (such as the menu) are skipped by --all."
           }
-        }
+        },
+        "dependentRequired": {
+          "url": ["sha256"],
+          "url_x86_64": ["sha256_x86_64"],
+          "url_aarch64": ["sha256_aarch64"]
+        },
+        "anyOf": [
+          { "required": ["url", "sha256"] },
+          { "required": ["url_x86_64", "sha256_x86_64"] },
+          { "required": ["url_aarch64", "sha256_aarch64"] }
+        ]
       }
     }
   }

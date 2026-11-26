@@ -2,7 +2,7 @@
    Overrides welcome; the app regenerates its runtime copy when it changes. */
 configuration {
     font: "JetBrainsMono Nerd Font 12";
-    show-icons: true;
+    show-icons: false;
     disable-history: true;
     hover-select: false;
     cycle: true;
@@ -27,7 +27,7 @@ configuration {
 
 /* Zoned chrome: one bordered card for filter, header, and list. */
 window {
-    width: calc( ( 90ch + 64px ) min 94% );
+    width: calc( ( 62ch + 64px ) min 94% );
     location: center;
     anchor: center;
     border: 1px;
@@ -39,7 +39,7 @@ window {
 
 mainbox {
     background-color: #1d2021;
-    children: [ inputbar, message, listview ];
+    children: [ message, inputbar, listview ];
     spacing: 8px;
     padding: 0;
 }
@@ -78,23 +78,23 @@ prompt {
 entry {
     background-color: transparent;
     text-color: #fbf1c7;
-    placeholder: "Type to filter";
+    placeholder: "…";
     placeholder-color: #a89984;
 }
 
 listview {
-    background-color: #282828;
     columns: 1;
-    lines: 10;
-    spacing: 0;
+    lines: 6;
     scrollbar: false;
     cycle: true;
     dynamic: true;
     fixed-height: false;
-    padding: 4px;
+    background-color: #282828;
     border: 1px;
     border-color: #3c3836;
     border-radius: 8px;
+    padding: 4px;
+    spacing: 0;
 }
 
 /* Section rows are marked active by the apps; the band separates zones. */
@@ -108,12 +108,12 @@ element normal.active, element alternate.active, element selected.active {
 element {
     children: [ element-icon, element-text ];
     padding: 4px 10px;
-    background-color: #282828;
-    text-color: #fbf1c7;
-    spacing: 8px;
     border: 0px 0px 1px 0px;
     border-color: #3c3836;
     border-radius: 0;
+    background-color: #282828;
+    text-color: #fbf1c7;
+    spacing: 8px;
 }
 
 element selected {

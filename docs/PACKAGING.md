@@ -3,7 +3,7 @@
 Only two delivery channels exist:
 
 1. **Nix** — flake packages and modules (primary).
-2. **`install.sh`** — signed universal release for other distributions
+2. **`install.sh`** — signed per-app release for other distributions
    (secondary).
 
 There are no distro packages: no `.deb`, `.rpm`, `.apk`, AUR, Debian official,
@@ -15,8 +15,11 @@ Gentoo, openSUSE, Void, Slackware, ALT, or source asset for community recipes.
 
 ```text
 dist/
-  index.json
+  index.json                          # convenience copy for one architecture
+  index-x86_64.json                   # native x86_64 bundle index
+  index-aarch64.json                  # native aarch64 bundle index
   rofi-calendar-1.2.0-x86_64.tar.gz
+  rofi-calendar-1.2.0-aarch64.tar.gz
   rofi-clipboard-0.8.0-x86_64.tar.gz
   rofi-keybinds-1.0.0-x86_64.tar.gz
   rofi-network-0.3.0-x86_64.tar.gz
@@ -28,23 +31,33 @@ dist/
   minisign.pub
 ```
 
-`index.json` follows `installer/index.schema.json`:
+`index.json` follows `installer/index.schema.json` (schema 2). Each app keeps
+one URL and checksum per architecture, so a merged release serves both hosts
+without losing the app-to-tarball mapping:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
+  "architectures": ["aarch64", "x86_64"],
   "installer": { "version": "0.3.0" },
   "apps": [
     {
       "id": "calendar",
       "version": "1.2.0",
-      "url": "rofi-calendar-1.2.0-x86_64.tar.gz",
-      "sha256": "...",
+      "url_x86_64": "rofi-calendar-1.2.0-x86_64.tar.gz",
+      "sha256_x86_64": "...",
+      "url_aarch64": "rofi-calendar-1.2.0-aarch64.tar.gz",
+      "sha256_aarch64": "...",
       "requires": ["rofi"]
     }
   ]
 }
 ```
+
+`scripts/package-release.sh` writes a single-architecture `index-<arch>.json`
+plus a convenience `index.json`. The release job merges both into one signed
+`index.json` with `scripts/merge-release-index.py`; `install.sh` selects the
+pair for `uname -m` and rejects an index that has no artifact for the host.
 
 Each tarball contains one app payload:
 

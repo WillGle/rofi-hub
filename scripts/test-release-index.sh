@@ -32,6 +32,7 @@ python3 - "$ROOT" "$DIST" <<'PY'
 import hashlib
 import json
 import pathlib
+import re
 import sys
 import tarfile
 import tomllib
@@ -45,8 +46,10 @@ def check(condition, message):
     if not condition:
         errors.append(message)
 
-check(index.get("schema") == 1, "index schema must be 1")
+check(index.get("schema") == 2, "index schema must be 2")
 check(isinstance(index.get("installer", {}).get("version"), str), "installer.version missing")
+architectures = index.get("architectures")
+check(isinstance(architectures, list) and architectures, "architectures missing")
 apps = index.get("apps")
 check(isinstance(apps, list) and apps, "apps must be a non-empty array")
 ids = set()
@@ -74,6 +77,14 @@ for entry in apps or []:
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     check(entry.get("sha256") == digest, f"{app_id}: sha256 mismatch")
     check(entry.get("requires", []) == metadata.get("requires", []), f"{app_id}: requires mismatch")
+
+    match = re.search(r"-(x86_64|aarch64)\.tar\.gz$", entry["url"])
+    check(match is not None, f"{app_id}: tarball URL has no architecture")
+    if match:
+        arch = match.group(1)
+        check(arch in architectures, f"{app_id}: {arch} missing from architectures")
+        check(entry.get(f"url_{arch}") == entry["url"], f"{app_id}: url_{arch} mismatch")
+        check(entry.get(f"sha256_{arch}") == digest, f"{app_id}: sha256_{arch} mismatch")
 
     with tarfile.open(archive, "r:gz") as tar:
         names = {member.name.removeprefix("./") for member in tar.getmembers() if member.isfile()}
@@ -136,6 +147,109 @@ if HOME="$TMP_HOME" XDG_STATE_HOME="$WORK/state" XDG_CONFIG_HOME="$WORK/config" 
     fail "unsigned index is rejected"
 else
     pass "unsigned index is rejected"
+fi
+
+# Two native bundles merge into one index without losing either architecture.
+MERGE="$WORK/merge"
+mkdir -p "$MERGE"
+python3 - "$DIST/index.json" "$MERGE/index-x86_64.json" "$MERGE/index-aarch64.json" "$MERGE" <<'PY'
+import hashlib
+import json
+import pathlib
+import re
+import shutil
+import sys
+
+source = pathlib.Path(sys.argv[1])
+index = json.loads(source.read_text())
+targets = {
+    "x86_64": pathlib.Path(sys.argv[2]),
+    "aarch64": pathlib.Path(sys.argv[3]),
+}
+out = pathlib.Path(sys.argv[4])
+ARCH = re.compile(r"-(x86_64|aarch64)\.tar\.gz$")
+indexes = {
+    arch: {"schema": 2, "architectures": [arch], "installer": index["installer"], "apps": []}
+    for arch in targets
+}
+for entry in index["apps"]:
+    source_url = entry["url"]
+    match = ARCH.search(source_url)
+    if not match:
+        raise SystemExit(f"cannot find architecture in {source_url}")
+    for arch, path in targets.items():
+        url = ARCH.sub(f"-{arch}.tar.gz", source_url)
+        target_archive = out / url
+        if not target_archive.exists():
+            shutil.copy2(source.parent / source_url, target_archive)
+        digest = hashlib.sha256(target_archive.read_bytes()).hexdigest()
+        target = dict(entry)
+        target["url"] = url
+        target["sha256"] = digest
+        target[f"url_{arch}"] = url
+        target[f"sha256_{arch}"] = digest
+        for key in [key for key in target if key.startswith(("url_", "sha256_")) and not key.endswith(arch)]:
+            target.pop(key)
+        indexes[arch]["apps"].append(target)
+for arch, path in targets.items():
+    path.write_text(json.dumps(indexes[arch], indent=2, sort_keys=True) + "\n")
+PY
+if "$ROOT/scripts/merge-release-index.py" "$MERGE/index.json" \
+    "$MERGE/index-x86_64.json" "$MERGE/index-aarch64.json" >/dev/null; then
+    pass "two native indexes merge"
+else
+    fail "two native indexes merge"
+fi
+if python3 - "$MERGE/index.json" <<'PY'
+import json
+import pathlib
+import sys
+
+index = json.loads(pathlib.Path(sys.argv[1]).read_text())
+assert index["schema"] == 2
+assert index["architectures"] == ["aarch64", "x86_64"]
+for entry in index["apps"]:
+    assert entry["url_x86_64"].endswith("-x86_64.tar.gz"), entry
+    assert entry["url_aarch64"].endswith("-aarch64.tar.gz"), entry
+    assert entry["url_x86_64"] != entry["url_aarch64"], entry
+PY
+then
+    pass "merged index keeps both architectures"
+else
+    fail "merged index keeps both architectures"
+fi
+
+# The installer must pick the tarball for the host architecture.
+TMP_HOME2="$WORK/home-arch"
+mkdir -p "$TMP_HOME2" "$WORK/state-arch" "$WORK/config-arch" "$WORK/data-arch" "$WORK/run-arch"
+if HOME="$TMP_HOME2" XDG_STATE_HOME="$WORK/state-arch" XDG_CONFIG_HOME="$WORK/config-arch" \
+    XDG_DATA_HOME="$WORK/data-arch" XDG_RUNTIME_DIR="$WORK/run-arch" \
+    PATH="$WORK/bin:$PATH" ROFI_APPS_ARCH=aarch64 \
+    "$ROOT/install.sh" --index "$MERGE/index.json" --allow-unsigned \
+    --dry-run --verbose --app calendar >"$WORK/arch.log" 2>&1; then
+    pass "installer accepts the aarch64 mapping"
+else
+    fail "installer accepts the aarch64 mapping"
+fi
+if grep -q -- "-aarch64.tar.gz" "$WORK/arch.log" &&
+    ! grep -q -- "-x86_64.tar.gz" "$WORK/arch.log"; then
+    pass "installer selects the aarch64 tarball"
+else
+    fail "installer selects the aarch64 tarball"
+fi
+if HOME="$TMP_HOME2" XDG_STATE_HOME="$WORK/state-arch" XDG_CONFIG_HOME="$WORK/config-arch" \
+    XDG_DATA_HOME="$WORK/data-arch" XDG_RUNTIME_DIR="$WORK/run-arch" \
+    PATH="$WORK/bin:$PATH" ROFI_APPS_ARCH=riscv64 \
+    "$ROOT/install.sh" --index "$MERGE/index.json" --allow-unsigned \
+    --dry-run --app calendar >"$WORK/arch-bad.log" 2>&1; then
+    fail "installer rejects a host with no artifact"
+else
+    pass "installer rejects a host with no artifact"
+fi
+if grep -q "no artifact for riscv64" "$WORK/arch-bad.log"; then
+    pass "missing-architecture error is clear"
+else
+    fail "missing-architecture error is clear"
 fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

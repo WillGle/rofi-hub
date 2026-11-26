@@ -134,7 +134,7 @@ jobs:
           name: rofi-apps-${{ matrix.arch }}
           path: |
             dist/*.tar.gz
-            dist/index.json
+            dist/index-${{ matrix.arch }}.json
             dist/SHA256SUMS
             dist/install.sh
             dist/uninstall.sh
@@ -163,6 +163,23 @@ jobs:
       - name: Workflow lint
         run: nix shell nixpkgs#actionlint -c actionlint
 
+  nix-arm:
+    name: NIX-07 native aarch64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v32
+      - name: Build every app natively on aarch64
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "aarch64"
+          for app in rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time rofi-hub-menu; do
+            out="$(nix build --no-link --print-out-paths ".#$app")"
+            echo "built $app: $out"
+            nix path-info -rSh "$out" | sed "s/^/closure $app: /"
+          done
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs:
@@ -173,6 +190,7 @@ jobs:
       - bundle
       - cross-distro
       - nix
+      - nix-arm
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -189,12 +207,27 @@ jobs:
           set -euo pipefail
           mkdir -p assets
           cp dist/*.tar.gz assets/
-          cp dist/index.json dist/install.sh dist/uninstall.sh dist/minisign.pub assets/
-          if ls dist/index-aarch64.json >/dev/null 2>&1; then
-            cp dist/index-aarch64.json assets/
-          fi
+          cp dist/install.sh dist/uninstall.sh dist/minisign.pub assets/
+          # Both native bundles publish index-<arch>.json. Merge them so the
+          # installer can select the tarball that matches the host.
+          python3 scripts/merge-release-index.py assets/index.json dist/index-*.json
           (cd assets && sha256sum ./*.tar.gz index.json install.sh uninstall.sh minisign.pub >SHA256SUMS)
           cat assets/SHA256SUMS
+      - name: Verify per-architecture mapping
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import pathlib
+          index = json.loads(pathlib.Path("assets/index.json").read_text())
+          assert index["schema"] == 2, index["schema"]
+          assert index["architectures"] == ["aarch64", "x86_64"], index["architectures"]
+          for entry in index["apps"]:
+              for arch in ("x86_64", "aarch64"):
+                  assert f"url_{arch}" in entry, (entry["id"], arch)
+                  assert f"sha256_{arch}" in entry, (entry["id"], arch)
+          print(f"index maps {len(index['apps'])} apps to both architectures")
+          PY
       - name: Sign release artifacts
         env:
           MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}

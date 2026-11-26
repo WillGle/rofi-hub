@@ -1,8 +1,10 @@
 //! A month sheet with a date search box, rendered in Rofi dmenu mode.
 //!
-//! Enter on the sheet opens today. Typing a date jumps to it:
-//! `15/3`, `3/2027`, `15/3/2027`, `2027-03-15`, or just `15`.
-//! Left/Right browse months and Ctrl+t returns to today.
+//! The month and grid are one message widget, the date entry is the input bar,
+//! and Prev/Today/Next are three compact buttons in one list row. Opening the
+//! app shows the current month. Typing a date jumps to it: `15/3`, `3/2027`,
+//! `15/3/2027`, `2027-03-15`, or just `15`. Left/Right browse months and
+//! Ctrl+t returns to today.
 
 use std::env;
 use std::process::ExitCode;
@@ -11,9 +13,13 @@ use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate, Weekday};
 use rofi_dmenu::{Item, Level, Outcome, Rofi, Theme, app, escape_markup, ui};
 
-const BTN_PREV: &str = "◀ Prev";
+const BTN_PREV_ID: &str = "prev";
+const BTN_TODAY_ID: &str = "today";
+const BTN_NEXT_ID: &str = "next";
+const BTN_PREV: &str = "\u{25c0} Prev";
 const BTN_TODAY: &str = "Today";
-const BTN_NEXT: &str = "Next ▶";
+const BTN_NEXT: &str = "Next \u{25b6}";
+const WEEKDAY_SHORT: [&str; 7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const WEEKDAYS: [&str; 7] = [
     "Monday",
     "Tuesday",
@@ -23,6 +29,12 @@ const WEEKDAYS: [&str; 7] = [
     "Saturday",
     "Sunday",
 ];
+/// Visible width of the seven day columns including the gaps between them.
+const GRID_WIDTH: usize = 20;
+/// Approximate character width inside the message box at the calendar profile
+/// (46ch window minus window/message padding). Used for explicit centering;
+/// Rofi does not reliably stretch the message textbox across the window.
+const CONTENT_WIDTH: usize = 40;
 
 fn main() -> ExitCode {
     match run() {
@@ -75,45 +87,19 @@ fn run() -> Result<()> {
     loop {
         let palette = Theme::active();
         let items = vec![
-            Item::new(BTN_PREV, BTN_PREV),
-            Item::new(BTN_TODAY, BTN_TODAY),
-            Item::new(BTN_NEXT, BTN_NEXT),
-            Item::new(
-                "hint",
-                ui::hint(
-                    &[
-                        ("\u{2190}/\u{2192}", "month"),
-                        ("Ctrl+t", "today"),
-                        ("esc", ""),
-                    ],
-                    &palette,
-                ),
-            )
-            .nonselectable(),
+            Item::new(BTN_PREV_ID, BTN_PREV),
+            Item::new(BTN_TODAY_ID, BTN_TODAY),
+            Item::new(BTN_NEXT_ID, BTN_NEXT),
         ];
 
-        let month = NaiveDate::from_ymd_opt(view.year, view.month, 1)
-            .expect("valid month")
-            .format("%B %Y")
-            .to_string();
-        let header = ui::header(
-            "CALENDAR",
-            &month,
-            &format!("today {}", today.format("%a %d %b %Y")),
-            &palette,
-        );
-        let sheet = render_sheet(&view, today, &palette);
-        let note_line = render_note(&view, note.as_deref(), &palette);
-        let mesg = format!("{header}\n{sheet}{note_line}");
-        let fitted_width = ui::widest(&items).max(ui::widest_text(&mesg)).clamp(34, 64) + 2;
-
-        let mut options = app::dmenu_options("calendar", "CALENDAR");
+        let mesg = render_sheet(&view, today, note.as_deref(), &palette);
+        let mut options = app::dmenu_options("calendar", "Go to date");
         options.allow_custom = true;
         options.extra_args = vec![
             "-matching".to_owned(),
             "normal".to_owned(),
-            "-select".to_owned(),
-            BTN_TODAY.to_owned(),
+            "-selected-row".to_owned(),
+            "1".to_owned(),
             "-mesg".to_owned(),
             mesg,
             // Reserve Left/Right for month navigation.
@@ -132,7 +118,6 @@ fn run() -> Result<()> {
             "-kb-custom-3".to_owned(),
             "Control+t".to_owned(),
         ];
-        options.extra_args.extend(ui::width_override(fitted_width));
 
         match rofi.dmenu(&items, &options)? {
             Outcome::Cancelled => return Ok(()),
@@ -149,38 +134,39 @@ fn run() -> Result<()> {
                 note = None;
             }
             Outcome::Custom(_) => return Ok(()),
-            Outcome::Selected(text) if text == "hint" => return Ok(()),
-            Outcome::Selected(text) => match text.as_str() {
-                BTN_PREV => {
-                    view.shift(-1);
-                    note = None;
+            Outcome::Selected(id) if id == BTN_PREV_ID => {
+                view.shift(-1);
+                note = None;
+            }
+            Outcome::Selected(id) if id == BTN_NEXT_ID => {
+                view.shift(1);
+                note = None;
+            }
+            Outcome::Selected(id) if id == BTN_TODAY_ID => {
+                view = View::today(today);
+                note = None;
+            }
+            Outcome::Selected(query) => {
+                let query = query.trim();
+                if query.is_empty() {
+                    return Ok(());
                 }
-                BTN_NEXT => {
-                    view.shift(1);
-                    note = None;
-                }
-                BTN_TODAY => {
-                    view = View::today(today);
-                    note = None;
-                }
-                query => {
-                    let query = query.trim();
-                    if query.is_empty() {
-                        return Ok(());
+                match parse_query(query, &view, today) {
+                    Some((year, month, day)) => {
+                        view = View {
+                            year,
+                            month,
+                            focus: day,
+                        };
+                        note = None;
                     }
-                    match parse_query(query, &view, today) {
-                        Some((year, month, day)) => {
-                            view = View {
-                                year,
-                                month,
-                                focus: day,
-                            };
-                            note = None;
-                        }
-                        None => note = Some(query.to_owned()),
+                    None => {
+                        // Keep the visible month; only the error line changes.
+                        view.focus = None;
+                        note = Some(query.to_owned());
                     }
                 }
-            },
+            }
         }
     }
 }
@@ -250,7 +236,31 @@ fn days_in_month(year: i32, month: u32) -> u32 {
         .day()
 }
 
-fn render_sheet(view: &View, today: NaiveDate, palette: &Theme) -> String {
+/// Render the whole message widget: centered month title, centered seven-column
+/// grid, the focused date, and a one-line error next to the input.
+fn render_sheet(view: &View, today: NaiveDate, note: Option<&str>, palette: &Theme) -> String {
+    let month = NaiveDate::from_ymd_opt(view.year, view.month, 1)
+        .expect("the view always holds a valid month")
+        .format("%B %Y")
+        .to_string();
+    let title_span = format!(
+        "<span foreground=\"{}\" weight=\"bold\" size=\"16000\">{}</span>",
+        palette.text,
+        escape_markup(&month)
+    );
+    let title = format!("{}{title_span}", center_pad(month.chars().count()));
+
+    let mut mesg = format!("{title}\n{}\n", render_grid(view, today, palette));
+    mesg.push_str(&render_note(view, note, palette));
+    mesg
+}
+
+/// Leading spaces that center a plain-text line inside the message box.
+fn center_pad(plain_width: usize) -> String {
+    " ".repeat(CONTENT_WIDTH.saturating_sub(plain_width) / 2)
+}
+
+fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
     let first = NaiveDate::from_ymd_opt(view.year, view.month, 1)
         .expect("the view always holds a valid month");
     let offset = first.weekday().num_days_from_monday() as usize;
@@ -258,13 +268,19 @@ fn render_sheet(view: &View, today: NaiveDate, palette: &Theme) -> String {
     let rows = (offset + days).div_ceil(7);
 
     let mut sheet = String::new();
+    let header = WEEKDAY_SHORT
+        .iter()
+        .map(|day| format!("{day:^2}"))
+        .collect::<Vec<_>>()
+        .join(" ");
     sheet.push_str(&format!(
-        "<span foreground=\"{}\">Mo Tu We Th Fr Sa Su</span>\n",
+        "{}<span foreground=\"{}\">{header}</span>\n",
+        center_pad(GRID_WIDTH),
         palette.muted
     ));
 
     for row in 0..rows {
-        let mut line = String::new();
+        let mut line = center_pad(GRID_WIDTH);
         for column in 0..7 {
             let index = row * 7 + column;
             if index < offset || index >= offset + days {
@@ -272,20 +288,29 @@ fn render_sheet(view: &View, today: NaiveDate, palette: &Theme) -> String {
             } else {
                 let day = (index - offset + 1) as u32;
                 let cell = format!("{day:>2}");
-                if view.year == today.year() && view.month == today.month() && day == today.day() {
+                let is_today =
+                    view.year == today.year() && view.month == today.month() && day == today.day();
+                if is_today {
+                    // The accent cell keeps a background even when the same
+                    // day is also the search result.
+                    let underline = if view.focus == Some(day) {
+                        " underline=\"single\""
+                    } else {
+                        ""
+                    };
                     line.push_str(&format!(
-                        "<span background=\"{}\" foreground=\"{}\"><b>{}</b></span>",
-                        palette.accent, palette.base, cell
+                        "<span background=\"{}\" foreground=\"{}\"{underline}><b>{cell}</b></span>",
+                        palette.accent, palette.base
                     ));
                 } else if view.focus == Some(day) {
                     line.push_str(&format!(
-                        "<span foreground=\"{}\" underline=\"double\"><b>{}</b></span>",
-                        palette.accent, cell
+                        "<span foreground=\"{}\" underline=\"single\"><b>{cell}</b></span>",
+                        palette.accent
                     ));
                 } else if column >= 5 {
                     line.push_str(&format!(
-                        "<span foreground=\"{}\">{}</span>",
-                        palette.muted, cell
+                        "<span foreground=\"{}\">{cell}</span>",
+                        palette.muted
                     ));
                 } else {
                     line.push_str(&cell);
@@ -296,7 +321,9 @@ fn render_sheet(view: &View, today: NaiveDate, palette: &Theme) -> String {
             }
         }
         sheet.push_str(&line);
-        sheet.push('\n');
+        if row + 1 < rows {
+            sheet.push('\n');
+        }
     }
 
     sheet
@@ -304,31 +331,32 @@ fn render_sheet(view: &View, today: NaiveDate, palette: &Theme) -> String {
 
 fn render_note(view: &View, note: Option<&str>, palette: &Theme) -> String {
     if let Some(query) = note {
+        let text = format!("Invalid date: {query}");
         return format!(
-            "\n{}",
-            ui::status(&format!("Unknown date: {query}"), Level::Danger, palette)
+            "{}{}",
+            center_pad(text.chars().count()),
+            ui::status(&text, Level::Danger, palette)
         );
     }
-    let text = if let Some(day) = view.focus {
-        let Some(date) = NaiveDate::from_ymd_opt(view.year, view.month, day) else {
-            return String::new();
-        };
-        format!(
-            "{}, {:02}/{:02}/{:04}",
-            weekday_name(date.weekday()),
-            day,
-            view.month,
-            view.year
-        )
-    } else {
+    let Some(day) = view.focus else {
         return String::new();
     };
-
-    format!(
-        "\n<span foreground=\"{}\" size=\"small\">{}</span>",
+    let Some(date) = NaiveDate::from_ymd_opt(view.year, view.month, day) else {
+        return String::new();
+    };
+    let text = format!(
+        "{}, {:02}/{:02}/{:04}",
+        weekday_name(date.weekday()),
+        day,
+        view.month,
+        view.year
+    );
+    let span = format!(
+        "<span foreground=\"{}\" size=\"small\">{}</span>",
         palette.accent,
         escape_markup(&text)
-    )
+    );
+    format!("{}{span}", center_pad(text.chars().count()))
 }
 
 fn weekday_name(weekday: Weekday) -> &'static str {
@@ -419,19 +447,19 @@ mod tests {
     }
 
     #[test]
-    fn sheet_has_twenty_column_grid_and_marks_today() {
+    fn sheet_has_seven_columns_and_marks_today() {
         let palette = Theme::gruvbox();
-        let sheet = render_sheet(&view(), today(), &palette);
-        let lines: Vec<&str> = sheet.lines().collect();
-        assert_eq!(
-            lines[0],
-            "<span foreground=\"#a89984\">Mo Tu We Th Fr Sa Su</span>"
-        );
-        assert!(sheet.contains("background=\"#fabd2f\""));
-        assert!(sheet.contains("30"));
-        // The last week row is 20 visible columns: 2 chars per day.
-        let last = lines.last().unwrap();
-        assert!(last.contains("30"));
+        let mesg = render_sheet(&view(), today(), None, &palette);
+        assert!(mesg.contains("November 2026"));
+        assert!(mesg.contains("Mo Tu We Th Fr Sa Su"));
+        assert!(mesg.contains("background=\"#fabd2f\""));
+        assert!(mesg.contains("30"));
+        for line in render_grid(&view(), today(), &palette).lines() {
+            assert!(
+                ui::display_width(&strip_markup(line)) <= CONTENT_WIDTH,
+                "grid line is wider than {CONTENT_WIDTH}: {line}"
+            );
+        }
     }
 
     #[test]
@@ -441,11 +469,85 @@ mod tests {
             focus: Some(17),
             ..view()
         };
-        assert!(render_sheet(&focused, today(), &palette).contains("underline=\"double\""));
+        assert!(render_sheet(&focused, today(), None, &palette).contains("underline=\"single\""));
         let note = render_note(&focused, None, &palette);
         assert!(note.contains("Tuesday, 17/11/2026"));
         let error = render_note(&focused, Some("a < b"), &palette);
-        assert!(error.contains("Unknown date: a &lt; b"));
+        assert!(error.contains("Invalid date: a &lt; b"));
         assert!(error.contains(&palette.danger));
+    }
+
+    #[test]
+    fn focus_and_today_share_the_accent_cell() {
+        let palette = Theme::gruvbox();
+        let both = View {
+            focus: Some(24),
+            ..view()
+        };
+        let mesg = render_sheet(&both, today(), None, &palette);
+        assert!(mesg.contains("underline=\"single\""));
+        assert!(mesg.contains("background=\"#fabd2f\""));
+    }
+
+    #[test]
+    fn six_week_months_render_every_row() {
+        let palette = Theme::gruvbox();
+        // 1 August 2026 is a Saturday; the month needs six week rows.
+        let august = View {
+            year: 2026,
+            month: 8,
+            focus: None,
+        };
+        let grid = render_grid(&august, today(), &palette);
+        assert_eq!(grid.lines().count(), 1 + 6);
+        assert!(grid.contains("31"));
+    }
+
+    #[test]
+    fn leap_february_and_december_to_january_render() {
+        let palette = Theme::gruvbox();
+        let leap = View {
+            year: 2028,
+            month: 2,
+            focus: Some(29),
+        };
+        let grid = render_grid(&leap, today(), &palette);
+        assert!(grid.contains("29"));
+        let mut december = View {
+            year: 2026,
+            month: 12,
+            focus: None,
+        };
+        december.shift(1);
+        assert_eq!((december.year, december.month), (2027, 1));
+        let mesg = render_sheet(&december, today(), None, &palette);
+        assert!(mesg.contains("January 2027"));
+    }
+
+    #[test]
+    fn today_is_not_highlighted_in_another_month() {
+        let palette = Theme::gruvbox();
+        let other = View {
+            year: 2026,
+            month: 12,
+            focus: None,
+        };
+        let grid = render_grid(&other, today(), &palette);
+        assert!(!grid.contains("background=\"#fabd2f\""));
+    }
+
+    /// Test helper: remove Pango tags so visible widths can be compared.
+    fn strip_markup(text: &str) -> String {
+        let mut out = String::new();
+        let mut in_tag = false;
+        for ch in text.chars() {
+            match ch {
+                '<' => in_tag = true,
+                '>' => in_tag = false,
+                _ if !in_tag => out.push(ch),
+                _ => {}
+            }
+        }
+        out
     }
 }

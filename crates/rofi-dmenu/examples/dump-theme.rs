@@ -1,14 +1,20 @@
-//! Print the built-in Gruvbox fallback theme for one app profile.
+//! Print a built-in theme for one app profile.
 //!
-//! Used by release tooling to regenerate the packaged `share/rofi/<app>.rasi`
-//! fallbacks. Run with `cargo run -p rofi-dmenu --example dump-theme -- <app>`.
+//! Used by release tooling and the screenshot matrix to regenerate the
+//! packaged `share/rofi/<app>.rasi` fallbacks and mode-specific captures.
+//! Run with `cargo run -p rofi-dmenu --example dump-theme -- <app> [mode]`.
 
-use rofi_dmenu::{ChromeProfile, Theme};
+use rofi_dmenu::{ChromeProfile, Mode, Theme};
 
 fn main() {
-    let app = std::env::args().nth(1).unwrap_or_else(|| "hub".to_owned());
+    let mut args = std::env::args().skip(1);
+    let app = args.next().unwrap_or_else(|| "hub".to_owned());
+    let mode = args
+        .next()
+        .and_then(|value| value.parse::<Mode>().ok())
+        .unwrap_or(Mode::Gruvbox);
     print!(
         "{}",
-        Theme::gruvbox().rasi_with(ChromeProfile::for_app(&app))
+        Theme::for_mode(mode).rasi_with(ChromeProfile::for_app(&app))
     );
 }

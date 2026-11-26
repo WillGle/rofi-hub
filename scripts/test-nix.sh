@@ -24,13 +24,14 @@ SYSTEM="$(nix eval --raw --impure --expr builtins.currentSystem)"
 APPS=(rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time rofi-hub-menu)
 
 for app in "${APPS[@]}"; do
-    if nix build --no-link ".#$app" >/dev/null 2>&1; then
+    out="$(nix build --no-link --print-out-paths ".#$app" 2>/dev/null)" || out=""
+    if [[ -n "$out" ]]; then
         pass "NIX-01 nix build .#$app"
     else
         fail "NIX-01 nix build .#$app"
         continue
     fi
-    closure="$(nix path-info -rSh ".#$app" 2>/dev/null | awk '{print $1}')"
+    closure="$(nix path-info -rSh "$out" 2>/dev/null | awk '{print $1}')"
     if [[ "$app" != "rofi-hub-menu" ]] && grep -qE -- '-rofi-hub(-menu)?-[0-9]' <<<"$closure"; then
         fail "NIX-01 $app closure contains hub/menu"
     else
@@ -106,11 +107,13 @@ else
     fail "NIX-07 aarch64 package evaluates"
 fi
 if [[ "$(uname -m)" = "aarch64" ]]; then
-    if nix build --no-link .#rofi-calendar >/dev/null 2>&1; then
-        pass "NIX-07 native aarch64 build"
-    else
-        fail "NIX-07 native aarch64 build"
-    fi
+    for app in "${APPS[@]}"; do
+        if nix build --no-link --print-out-paths ".#$app" >/dev/null 2>&1; then
+            pass "NIX-07 native aarch64 build .#$app"
+        else
+            fail "NIX-07 native aarch64 build .#$app"
+        fi
+    done
 else
     printf 'note: aarch64 native build requires a remote builder; eval checked\n'
 fi

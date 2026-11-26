@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Redesign `rofi-calendar`: centered month sheet and seven-column grid in the
+  message, `Go to date` input, and Prev/Today/Next in one compact row. Focused
+  dates use bold underline plus a full date line; invalid input keeps the month
+  and shows one error line.
+- Redesign `rofi-network`: one connection line, `Find network` filter, and a
+  vertical SSID list; Manage and Connection details are separate screens.
+  Long SSIDs truncate while full-name filtering still matches, and empty/radio
+  states are static nonselectable rows.
+- Release indexes keep a tarball URL and checksum per architecture. Native
+  x86_64 and aarch64 bundles merge without losing either mapping, and
+  `install.sh` rejects a host with no artifact.
+- Add a native aarch64 Nix CI job for all six packages.
+- Refresh Calendar/Network screenshots and the Calendar/Network theme profiles;
+  update Screen Time installation docs for the per-app installer.
+
 ## 0.3.0
 
 - Split the runtime menu from the apps. `crates/rofi-hub-menu` is optional and

@@ -34,6 +34,12 @@ PROVIDER_DIR="$DATA_ROOT/rofi-apps/providers"
 SYSTEMD_USER_DIR="$XDG_CONFIG_HOME/systemd/user"
 
 SELF_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ARCH="$(printf '%s' "${ROFI_APPS_ARCH:-$(uname -m 2>/dev/null || printf unknown)}" |
+    tr '[:upper:]' '[:lower:]')"
+case "$ARCH" in
+    amd64) ARCH=x86_64 ;;
+    arm64) ARCH=aarch64 ;;
+esac
 WORK=""
 INDEX_FILE=""
 INDEX_BASE=""
@@ -73,6 +79,7 @@ Environment:
   ROFI_APPS_INDEX         default index source
   ROFI_APPS_PREFIX        default install prefix
   ROFI_APPS_PUBKEY        default minisign public key
+  ROFI_APPS_ARCH          override the detected architecture (testing only)
 
 The installer refuses to write into a Nix-managed path. Prerequisites are
 checked with `command -v` from each app.toml `requires` list; missing tools
@@ -227,7 +234,7 @@ fi
 
 require_tools() {
     local tool
-    for tool in tar sha256sum awk sed grep cut find; do
+    for tool in tar sha256sum awk sed grep cut find uname; do
         command -v "$tool" >/dev/null 2>&1 || die "required tool not found: $tool"
     done
     if [[ "$INDEX_SOURCE" == http://* || "$INDEX_SOURCE" == https://* ]]; then
@@ -317,10 +324,31 @@ json_is_true() {
     printf '%s' "$object" | grep -q "\"$key\"[[:space:]]*:[[:space:]]*true"
 }
 
+# Validate one artifact URL and checksum pair.
+validate_artifact() {
+    local id="$1"
+    local url="$2"
+    local sha="$3"
+    [[ -n "$url" && -n "$sha" ]] ||
+        die "invalid index: app entry for $id is missing a url/sha256 pair"
+    [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || die "invalid index: bad sha256 for $id"
+    case "$url" in
+        /*) die "invalid index: unsafe url for $id" ;;
+    esac
+    [[ "/$url/" == *"/../"* ]] && die "invalid index: unsafe url for $id"
+    if [[ "$url" == *://* && "$url" != https://* ]]; then
+        die "invalid index: only https URLs are allowed for $id"
+    fi
+}
+
+# Schema 1 indexes carry one flat url/sha256 pair. Schema 2 indexes carry one
+# pair per architecture (`url_x86_64`, `sha256_aarch64`, ...), so the release
+# job can merge the native x86_64 and aarch64 bundles without losing a mapping.
 validate_index() {
-    local text installer_block object id version url sha requires optional seen_ids=" "
+    local text installer_block object id version url sha requires optional
+    local arch arch_url arch_sha seen_arches seen_ids=" "
     text="$(tr '\n\r' '  ' <"$INDEX_FILE")"
-    printf '%s' "$text" | grep -q '"schema"[[:space:]]*:[[:space:]]*1\([^0-9]\|$\)' ||
+    printf '%s' "$text" | grep -q '"schema"[[:space:]]*:[[:space:]]*[12]\([^0-9]\|$\)' ||
         die "invalid index: unsupported or missing schema"
     installer_block="$(printf '%s' "$text" |
         grep -o '"installer"[[:space:]]*:[[:space:]]*{[^{}]*}' | head -n1)"
@@ -335,20 +363,28 @@ validate_index() {
         version="$(json_string "$object" version)"
         url="$(json_string "$object" url)"
         sha="$(json_string "$object" sha256)"
-        [[ -n "$id" && -n "$version" && -n "$url" && -n "$sha" ]] ||
-            die "invalid index: app entry is missing id/version/url/sha256"
+        [[ -n "$id" && -n "$version" ]] ||
+            die "invalid index: app entry is missing id/version"
         [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "invalid index: bad app id '$id'"
         [[ "$seen_ids" == *" $id "* ]] && die "invalid index: duplicate app id $id"
         seen_ids+="$id "
         [[ "$version" =~ ^[0-9A-Za-z.+-]+$ ]] || die "invalid index: bad version for $id"
-        [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || die "invalid index: bad sha256 for $id"
-        case "$url" in
-            /*) die "invalid index: unsafe url for $id" ;;
-        esac
-        [[ "/$url/" == *"/../"* ]] && die "invalid index: unsafe url for $id"
-        if [[ "$url" == *://* && "$url" != https://* ]]; then
-            die "invalid index: only https URLs are allowed for $id"
+
+        seen_arches=""
+        if [[ -n "$url" || -n "$sha" ]]; then
+            validate_artifact "$id" "$url" "$sha"
+            seen_arches="default"
         fi
+        for arch in x86_64 aarch64; do
+            arch_url="$(json_string "$object" "url_$arch")"
+            arch_sha="$(json_string "$object" "sha256_$arch")"
+            [[ -n "$arch_url" || -n "$arch_sha" ]] || continue
+            validate_artifact "$id" "$arch_url" "$arch_sha"
+            seen_arches+=" $arch"
+        done
+        [[ -n "$seen_arches" ]] ||
+            die "invalid index: app entry for $id has no artifact"
+
         requires="$(json_array "$object" requires)"
         while IFS= read -r tool_name; do
             [[ -n "$tool_name" ]] || continue
@@ -390,20 +426,36 @@ load_index() {
 
 index_records() {
     local filter="$*"
-    local object id
+    local object id url sha arch available
     while IFS= read -r object; do
         [[ -n "$object" ]] || continue
         id="$(json_string "$object" id)"
         if [[ -n "$filter" && " $filter " != *" $id "* ]]; then
             continue
         fi
-        printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+        url="$(json_string "$object" url)"
+        sha="$(json_string "$object" sha256)"
+        available=""
+        if [[ -n "$url" ]]; then
+            available="legacy"
+        fi
+        for arch in x86_64 aarch64; do
+            if [[ -n "$(json_string "$object" "url_$arch")" ]]; then
+                available="${available:+$available,}$arch"
+            fi
+        done
+        if [[ -z "$url" ]]; then
+            url="$(json_string "$object" "url_$ARCH")"
+            sha="$(json_string "$object" "sha256_$ARCH")"
+        fi
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
             "$id" \
             "$(json_string "$object" version)" \
-            "$(json_string "$object" url)" \
-            "$(json_string "$object" sha256)" \
+            "$url" \
+            "$sha" \
             "$(json_array "$object" requires | tr '\n' ',' | sed 's/,$//')" \
-            "$(json_is_true "$object" optional && printf true || printf false)"
+            "$(json_is_true "$object" optional && printf true || printf false)" \
+            "$available"
     done < <(json_objects)
 }
 
@@ -412,6 +464,11 @@ record_for() {
     local record
     record="$(index_records "$id")"
     [[ -n "$record" ]] || die "unknown app: $id"
+    if [[ -z "$(record_field "$record" 3)" && -z "$(record_field "$record" 4)" ]]; then
+        local available
+        available="$(record_field "$record" 7)"
+        die "$id: release index has no artifact for $ARCH (available: ${available:-none})"
+    fi
     printf '%s\n' "$record"
 }
 

@@ -376,8 +376,13 @@ fn theme_dump_uses_app_profiles() {
         .unwrap();
     assert!(calendar.status.success(), "{}", stderr(&calendar));
     let calendar = stdout(&calendar);
-    assert!(calendar.contains("64ch"), "{calendar}");
-    assert!(calendar.contains("lines: 12;"), "{calendar}");
+    assert!(calendar.contains("46ch"), "{calendar}");
+    assert!(calendar.contains("lines: 1;"), "{calendar}");
+    assert!(calendar.contains("columns: 3;"), "{calendar}");
+    assert!(
+        calendar.contains("placeholder: \"DD/MM/YYYY\";"),
+        "{calendar}"
+    );
     assert!(calendar.contains("show-icons: false"), "{calendar}");
 }
 
