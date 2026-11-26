@@ -414,7 +414,7 @@ State:
 - [x] `scripts/test-install-matrix.sh` pass (Debian/Ubuntu/Arch/Fedora).
 - [x] `scripts/test-nix.sh` pass.
 - [x] `nix flake check` pass.
-- [ ] NIX-07: native build từng app trên x86_64-linux và aarch64-linux. Đã có bằng chứng Nix x86_64. Đã thêm job `nix-arm` (ubuntu-24.04-arm) build đủ sáu package; còn thiếu log của một CI run thật.
+- [x] NIX-07: native build từng app trên x86_64-linux và aarch64-linux. CI run [45865366745](https://github.com/WillGle/rofi-hub/actions/runs/45865366745) job `NIX-07 native aarch64` pass 7m17s, build đủ `rofi-calendar`, `rofi-clipboard`, `rofi-keybinds`, `rofi-network`, `screen-time`, `rofi-hub-menu` trên `ubuntu-24.04-arm`.
 - [x] `install.sh --app calendar` trong HOME tạm.
 - [x] Gỡ hub/menu → app vẫn chạy.
 - [x] `ROFI_THEME` và app override hoạt động.
@@ -989,7 +989,7 @@ Phase/PR chỉ Done khi:
 - [ ] Tất cả mục trong nhóm liên quan đã check. _(còn các mục external bên dưới)_
 - [ ] Test ID tương ứng pass trong CI. _(CI run 45850184054 pass các job test; CON-05 vẫn là kiểm tra manual trên máy thật)_
 - [x] Không còn TODO/P0 trong scope.
-- [ ] Có evidence đính kèm PR/release. _(CI run 45850184054 có trên `main`; chưa tạo PR/release)_
+- [x] Có evidence đính kèm PR/release. _(PR [#1](https://github.com/WillGle/rofi-hub/pull/1), CI run [45865366745](https://github.com/WillGle/rofi-hub/actions/runs/45865366745) pass toàn bộ job trừ `release` tag-only)_
 - [x] Không làm hỏng app khác.
 - [x] `goal.md` không mâu thuẫn với implementation.
 - [x] Nếu thay đổi quyết định kiến trúc, cập nhật `goal.md` trước khi merge.
@@ -1221,17 +1221,24 @@ Các exit criteria của M1–M8 được chứng minh bằng `scripts/check-dep
   `bundle (aarch64)`, `cross-distro`, `nix`, `NIX-07 native aarch64`; strict
   status checks bật. `release` là job tag-only nên không đưa vào required
   checks của pull request.
+- PR [#1](https://github.com/WillGle/rofi-hub/pull/1) / CI run
+  [45865366745](https://github.com/WillGle/rofi-hub/actions/runs/45865366745)
+  (commit `7636b5a`): pass `lint`, `test`, `MSRV (1.89)`, `installer`,
+  `cross-distro`, `bundle (x86_64)`, `bundle (aarch64)`, `nix` (11m8s) và
+  `NIX-07 native aarch64` (7m17s, đủ sáu package). `release` skipped vì PR
+  không phải tag.
 
 ### 16.2 Việc còn mở trong hai kênh phát hành
 
 1. M0: review/chốt `goal.md` với stakeholder.
 2. CON-05: generation 1042 hiện trỏ về closure cũ `/nix/store/n4lbs…`. Cần xác minh hoạt động của hệ thống sau rollback để đóng tiêu chí.
 3. Release candidate ký bằng minisign key thật (key offline, không có trong repo).
-4. CI run: workflow mới đã pass trên `main` (run 45850184054); required checks
-   đã cấu hình. Còn chạy `release` job khi có tag/minisign key.
-5. Nix native: `NIX-07` đã có job `nix-arm` trên `ubuntu-24.04-arm`, build đủ
-   sáu package và in closure; cần một CI run trên nhánh/tag để có log native
-   ARM chính thức.
+4. CI run: PR #1 / run 45865366745 pass `lint`, `test`, `MSRV`, `installer`,
+   `bundle` (x86_64 + aarch64), `cross-distro`, `nix`, `NIX-07 native aarch64`;
+   required checks đã cấu hình. `release` skipped vì PR không phải tag; còn
+   chạy `release` job khi có tag/minisign key.
+5. Nix native: **đã có log**. Run 45865366745 job `NIX-07 native aarch64`
+   build đủ sáu package trên `ubuntu-24.04-arm` (7m17s) và in closure.
 6. `install.sh`: **đã sửa**. `scripts/package-release.sh` xuất
    `index-<arch>.json`; `scripts/merge-release-index.py` gộp hai bundle thành
    `index.json` schema 2 với `url_<arch>`/`sha256_<arch>` cho từng app;
