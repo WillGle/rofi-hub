@@ -8,7 +8,9 @@ use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_dmenu::{ChromeProfile, DmenuOptions, Item, Outcome, Rofi, Theme, app, ui, which};
+use rofi_dmenu::{
+    ChromeProfile, DmenuOptions, Item, MenuInput, Outcome, Rofi, Theme, app, ui, which,
+};
 
 const TITLE_WIDTH: usize = 72;
 
@@ -219,40 +221,109 @@ fn header(entries: &[Entry], theme: &Theme) -> String {
     } else {
         stats.join(" \u{00b7} ")
     };
-    let toolbar = ui::toolbar(
-        &[
-            ("\u{23ce}", "Copy"),
-            ("Alt+d", "Delete"),
-            ("Alt+x", "Clear"),
-            ("Alt+r", "Refresh"),
-        ],
-        theme,
-    );
-    let hint = ui::hint(&[("\u{2191}/\u{2193}", "select"), ("esc", "close")], theme);
     format!(
-        "{}\n{}  {}\n",
+        "{}\n{}\n",
         ui::header(
             "CLIPBOARD",
             &format!("{} items", entries.len()),
             &meta,
             theme
         ),
-        toolbar,
-        hint,
+        ui::hint(
+            &[("Enter", "copy"), ("Ctrl+1–4", "theme"), ("esc", "close")],
+            theme,
+        ),
     )
 }
 
 fn empty_header(theme: &Theme) -> String {
-    let toolbar = ui::toolbar(&[("Alt+r", "Refresh"), ("esc", "Close")], theme);
     format!(
-        "{}\n{}",
+        "{}\n{}\n",
         ui::header(
             "CLIPBOARD",
             "No history",
             "Copy something, then reopen this picker",
             theme
         ),
-        toolbar,
+        ui::hint(
+            &[
+                ("Alt+r", "refresh"),
+                ("Ctrl+1–4", "theme"),
+                ("esc", "close")
+            ],
+            theme,
+        ),
+    )
+}
+
+/// Real RASI buttons replace the old textual action chips. Each button points
+/// at the same Rofi key used by the keyboard path.
+fn clipboard_toolbar(theme: &Theme, refresh_only: bool) -> String {
+    let buttons = if refresh_only {
+        "button-refresh"
+    } else {
+        "button-copy, button-delete, button-clear, button-refresh"
+    };
+    format!(
+        r#"
+mainbox {{
+    children: [ inputbar, message, box-clipboard-actions, listview ];
+    spacing: 12px;
+}}
+box-clipboard-actions {{
+    background-color: transparent;
+    orientation: horizontal;
+    expand: false;
+    spacing: 10px;
+    padding: 0 0 2px;
+    children: [ {buttons} ];
+}}
+button-copy, button-delete, button-clear, button-refresh {{
+    expand: false;
+    padding: 6px 11px;
+    margin: 0 0 2px;
+    border: 1px;
+    border-radius: 6px;
+    border-color: {muted};
+    background-color: {mantle};
+    text-color: {text};
+}}
+button-copy {{
+    content: "Copy Enter";
+    action: "kb-accept-entry";
+    border-color: {accent};
+}}
+button-delete {{
+    content: "Delete Alt+d";
+    action: "kb-custom-3";
+}}
+button-clear {{
+    content: "Clear Alt+x";
+    action: "kb-custom-1";
+    border-color: {danger};
+    text-color: {danger};
+}}
+button-refresh {{
+    content: "Refresh Alt+r";
+    action: "kb-custom-2";
+}}
+button selected,
+button selected.normal {{
+    background-color: {accent};
+    text-color: {base};
+}}
+button-clear selected,
+button-clear selected.normal {{
+    background-color: {danger};
+    text-color: {base};
+}}
+"#,
+        muted = theme.muted,
+        mantle = theme.mantle,
+        text = theme.text,
+        accent = theme.accent,
+        danger = theme.danger,
+        base = theme.base,
     )
 }
 
@@ -275,8 +346,15 @@ fn render_items(entries: &[Entry], theme: &Theme) -> Vec<Item> {
         .nonselectable(),
     );
     for (index, entry) in entries.iter().enumerate() {
+        // Dmenu matches the row text. Keep the original preview searchable
+        // even when its formatted display has been shortened.
+        let preview = entry
+            .raw
+            .split_once('\t')
+            .map_or(entry.raw.as_str(), |(_, preview)| preview);
+        let preview = preview.replace(['\0', '\n', '\x1f'], " ");
         items.push(Item::new(
-            index.to_string(),
+            format!("{index}:{preview}"),
             ui::entry_row(
                 index + 1,
                 entry.kind.icon(),
@@ -295,19 +373,33 @@ fn empty_items(theme: &Theme) -> Vec<Item> {
         Item::new("empty", ui::empty("Clipboard history is empty", theme)).nonselectable(),
         Item::new(
             "hint",
-            ui::hint(&[("Alt+r", "refresh"), ("esc", "close")], theme),
+            ui::hint(
+                &[
+                    ("Alt+r", "refresh"),
+                    ("Ctrl+1–4", "theme"),
+                    ("esc", "close"),
+                ],
+                theme,
+            ),
         )
         .nonselectable(),
     ]
 }
 
-fn main_options(entries: &[Entry], theme: &Theme) -> DmenuOptions {
+fn main_options(
+    items: &[Item],
+    entries: &[Entry],
+    theme: &Theme,
+    selected_row: usize,
+) -> DmenuOptions {
     let mut options = app::dmenu_options("clipboard", "FILTER");
     options.extra_args = vec![
         "-selected-row".to_owned(),
-        "1".to_owned(),
+        selected_row.to_string(),
         "-mesg".to_owned(),
         header(entries, theme),
+        "-a".to_owned(),
+        ui::active_rows(items),
         "-kb-custom-1".to_owned(),
         "Alt+x".to_owned(),
         "-kb-custom-2".to_owned(),
@@ -315,6 +407,8 @@ fn main_options(entries: &[Entry], theme: &Theme) -> DmenuOptions {
         "-kb-custom-3".to_owned(),
         "Alt+d".to_owned(),
     ];
+    options.theme_str.push(ui::static_header_theme(theme));
+    options.theme_str.push(clipboard_toolbar(theme, false));
     options
 }
 
@@ -326,20 +420,8 @@ fn empty_options(theme: &Theme) -> DmenuOptions {
         "-kb-custom-1".to_owned(),
         "Alt+r".to_owned(),
     ];
+    options.theme_str.push(clipboard_toolbar(theme, true));
     options
-}
-
-fn delete_header(theme: &Theme) -> String {
-    format!(
-        "{}\n{}\n",
-        ui::header(
-            "DELETE ENTRY",
-            "Select an item",
-            "It will be removed from cliphist history",
-            theme
-        ),
-        ui::toolbar(&[("\u{23ce}", "Delete"), ("esc", "Cancel")], theme),
-    )
 }
 
 fn confirm_header(theme: &Theme) -> String {
@@ -357,77 +439,112 @@ fn confirm_header(theme: &Theme) -> String {
 
 fn fit_options(options: &mut DmenuOptions, items: &[Item], text: &str, min: usize, max: usize) {
     let width = ui::widest(items).max(ui::widest_text(text)).clamp(min, max) + 2;
-    options.extra_args.extend(ui::width_override(width));
-}
-
-fn delete_options(theme: &Theme) -> DmenuOptions {
-    let mut options = app::dmenu_options("clipboard-delete", "DELETE");
-    options.extra_args = vec![
-        "-selected-row".to_owned(),
-        "1".to_owned(),
-        "-mesg".to_owned(),
-        delete_header(theme),
-    ];
-    options
+    options.theme_str.push(ui::width_rule(width));
 }
 
 fn confirm_options(theme: &Theme) -> DmenuOptions {
     let mut options = app::dmenu_options("clipboard-confirm", "CLEAR HISTORY");
-    options.extra_args = vec![
-        "-mesg".to_owned(),
-        confirm_header(theme),
-        "-theme-str".to_owned(),
-        "inputbar { enabled: false; }".to_owned(),
-    ];
+    options.extra_args = vec!["-mesg".to_owned(), confirm_header(theme)];
+    options
+        .theme_str
+        .push("inputbar { enabled: false; }".to_owned());
     options
 }
 
 fn run() -> Result<()> {
     let cliphist = which::require("cliphist")?;
     let wl_copy = which::require("wl-copy")?;
-    let theme = Theme::active();
+    let (mut theme, mut theme_path) = app::initial_theme("clipboard");
     let rofi = Rofi::find()?;
 
+    let mut filter = String::new();
+    let mut focus = 1usize;
     loop {
         let entries = load_entries(&cliphist)?;
         if entries.is_empty() {
             let items = empty_items(&theme);
             let mut options = empty_options(&theme);
+            options.theme = theme_path.clone();
+            app::bind_theme_shortcuts(&mut options, 1);
             fit_options(&mut options, &items, &empty_header(&theme), 32, 80);
             match rofi.dmenu(&items, &options)? {
                 Outcome::Custom(0) => continue,
+                Outcome::Custom(binding) if binding >= 1 => {
+                    if let Some((next, path)) = app::session_theme("clipboard", binding, 1) {
+                        theme = next;
+                        theme_path = path;
+                    }
+                    continue;
+                }
                 _ => return Ok(()),
             }
         }
 
         let items = render_items(&entries, &theme);
-        let mut options = main_options(&entries, &theme);
+        let mut options = main_options(&items, &entries, &theme, focus);
+        options.theme = theme_path.clone();
+        app::bind_theme_shortcuts(&mut options, 3);
         fit_options(&mut options, &items, &header(&entries, &theme), 48, 112);
-        match rofi.dmenu(&items, &options)? {
+        options.allow_custom = true;
+        options
+            .extra_args
+            .extend(["-filter".to_owned(), filter.clone()]);
+        let (outcome, input) = rofi.dmenu_with_input(&items, &options)?;
+        filter.clone_from(&input.text);
+        if let Some(row) = input.row {
+            focus = row;
+        }
+        match outcome {
             Outcome::Selected(id) => {
-                let index = id
-                    .parse::<usize>()
-                    .with_context(|| format!("rofi selected an unknown clipboard row: {id}"))?;
+                let Some(index) = selected_entry_index(&items, &input, &id) else {
+                    // Header rows and unknown custom text never copy or delete.
+                    continue;
+                };
                 let Some(entry) = entries.get(index) else {
-                    bail!("rofi selected clipboard row {index}, which is out of range");
+                    continue;
                 };
                 let contents = decode(&cliphist, &entry.raw)?;
                 return copy(&wl_copy, &contents);
             }
             Outcome::Custom(0) => {
-                if confirm_clear(&rofi, &theme)? {
+                if confirm_clear(&rofi, &theme, theme_path.as_deref())? {
                     run_cliphist(&cliphist, &["wipe"], None)?;
                 }
             }
             Outcome::Custom(1) => {}
             Outcome::Custom(2) => {
-                if let Some(entry) = pick_delete(&rofi, &entries, &theme)? {
+                if let Some(index) = selected_entry_index(&items, &input, "")
+                    && let Some(entry) = entries.get(index)
+                {
                     run_cliphist(&cliphist, &["delete"], Some(&entry.raw))?;
+                }
+            }
+            Outcome::Custom(binding) if binding >= 3 => {
+                if let Some((next, path)) = app::session_theme("clipboard", binding, 3) {
+                    theme = next;
+                    theme_path = path;
                 }
             }
             Outcome::Cancelled | Outcome::Custom(_) => return Ok(()),
         }
     }
+}
+
+/// Resolve the selected data row. Rofi's `i` output is preferred; the id also
+/// starts with the entry index for wrappers that return only `-format s`.
+fn selected_entry_index(items: &[Item], input: &MenuInput, id: &str) -> Option<usize> {
+    if let Some(row) = input.row {
+        let item = items.get(row)?;
+        if item.nonselectable || item.id.starts_with("section-") {
+            return None;
+        }
+        return item.id.split(':').next()?.parse().ok();
+    }
+    let index = id.split(':').next()?.parse::<usize>().ok()?;
+    let exists = items.iter().any(|item| {
+        !item.nonselectable && item.id.split(':').next().and_then(|v| v.parse().ok()) == Some(index)
+    });
+    exists.then_some(index)
 }
 
 fn load_entries(cliphist: &Path) -> Result<Vec<Entry>> {
@@ -443,7 +560,7 @@ fn load_entries(cliphist: &Path) -> Result<Vec<Entry>> {
     Ok(parse_entries(&String::from_utf8_lossy(&output.stdout)))
 }
 
-fn confirm_clear(rofi: &Rofi, theme: &Theme) -> Result<bool> {
+fn confirm_clear(rofi: &Rofi, theme: &Theme, theme_path: Option<&std::path::Path>) -> Result<bool> {
     let items = vec![
         Item::new("no", ui::row("\u{2022}", "Cancel", "", "", theme)),
         Item::new(
@@ -452,28 +569,13 @@ fn confirm_clear(rofi: &Rofi, theme: &Theme) -> Result<bool> {
         ),
     ];
     let mut options = confirm_options(theme);
+    if let Some(path) = theme_path {
+        options.theme = Some(path.to_path_buf());
+    }
     fit_options(&mut options, &items, &confirm_header(theme), 32, 80);
     match rofi.dmenu(&items, &options)? {
         Outcome::Selected(id) => Ok(id == "yes"),
         _ => Ok(false),
-    }
-}
-
-fn pick_delete(rofi: &Rofi, entries: &[Entry], theme: &Theme) -> Result<Option<Entry>> {
-    if entries.is_empty() {
-        return Ok(None);
-    }
-    let items = render_items(entries, theme);
-    let mut options = delete_options(theme);
-    fit_options(&mut options, &items, &delete_header(theme), 48, 112);
-    match rofi.dmenu(&items, &options)? {
-        Outcome::Selected(id) => {
-            let index = id
-                .parse::<usize>()
-                .with_context(|| format!("delete picker returned unknown row: {id}"))?;
-            Ok(entries.get(index).cloned())
-        }
-        _ => Ok(None),
     }
 }
 

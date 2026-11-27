@@ -73,13 +73,17 @@ pub fn row(leading: &str, title: &str, detail: &str, trailing: &str, theme: &The
 }
 
 /// A row whose leading marker uses an explicit semantic color.
+///
+/// Title and metadata deliberately inherit the row foreground. Rofi applies
+/// the same Pango markup to normal and selected rows, so hardcoding `text` or
+/// `muted` here would stay light on a light selected background.
 pub fn row_with_leading(
     leading: &str,
     leading_color: &str,
     title: &str,
     detail: &str,
     trailing: &str,
-    theme: &Theme,
+    _theme: &Theme,
 ) -> String {
     let mut out = String::new();
     if !leading.is_empty() {
@@ -89,22 +93,19 @@ pub fn row_with_leading(
         ));
     }
     out.push_str(&format!(
-        "<span foreground='{text}' weight='600'>{}</span>",
-        escape_markup(title),
-        text = theme.text
+        "<span weight='600'>{}</span>",
+        escape_markup(title)
     ));
     if !detail.is_empty() {
         out.push_str(&format!(
-            "  <span foreground='{muted}'>{}</span>",
-            escape_markup(detail),
-            muted = theme.muted
+            "  <span alpha='72%'>{}</span>",
+            escape_markup(detail)
         ));
     }
     if !trailing.is_empty() {
         out.push_str(&format!(
-            "  <span foreground='{muted}'>{}</span>",
-            escape_markup(trailing),
-            muted = theme.muted
+            "  <span alpha='72%'>{}</span>",
+            escape_markup(trailing)
         ));
     }
     out
@@ -143,10 +144,11 @@ pub fn status(text: &str, level: Level, theme: &Theme) -> String {
     )
 }
 
-/// Compact action chips: `[key label]` with the key in the accent role.
+/// Compact textual action hints: `[key label]` with the key in the accent role.
 ///
-/// Rofi cannot draw clickable borders around arbitrary markup, so the chips
-/// stay textual; the surrounding message box supplies the real zone border.
+/// Use this inside prompts and confirmations. Primary app screens should use
+/// real RASI buttons for mouse actions; Rofi cannot attach click actions to
+/// arbitrary markup.
 pub fn toolbar(actions: &[(&str, &str)], theme: &Theme) -> String {
     let parts: Vec<String> = actions
         .iter()
@@ -196,18 +198,18 @@ pub fn inline_detail(pairs: &[(&str, &str)], theme: &Theme) -> String {
 }
 
 /// A clipboard/history row: index, colored kind glyph, title, muted metadata.
+///
+/// The index and detail inherit the row foreground with reduced alpha, so a
+/// selected row stays readable on themes with a light selection band.
 pub fn entry_row(
     index: usize,
     icon: &str,
     icon_color: &str,
     title: &str,
     detail: &str,
-    theme: &Theme,
+    _theme: &Theme,
 ) -> String {
-    let mut out = format!(
-        "<span foreground='{muted}'>{index:>3}</span>",
-        muted = theme.muted
-    );
+    let mut out = format!("<span alpha='55%'>{index:>3}</span>");
     if !icon.is_empty() {
         out.push_str(&format!(
             "  <span foreground='{icon_color}'>{}</span>",
@@ -215,15 +217,13 @@ pub fn entry_row(
         ));
     }
     out.push_str(&format!(
-        "  <span foreground='{text}' weight='600'>{}</span>",
-        escape_markup(title),
-        text = theme.text
+        "  <span weight='600'>{}</span>",
+        escape_markup(title)
     ));
     if !detail.is_empty() {
         out.push_str(&format!(
-            "  <span foreground='{muted}'>{}</span>",
-            escape_markup(detail),
-            muted = theme.muted
+            "  <span alpha='72%'>{}</span>",
+            escape_markup(detail)
         ));
     }
     out
@@ -249,10 +249,43 @@ pub fn widest_text(text: &str) -> usize {
 /// short content (calendar) or unusually long rows (clipboard) can fit the
 /// window to the rows they actually render.
 pub fn width_override(width_ch: usize) -> [String; 2] {
-    [
-        "-theme-str".to_owned(),
-        format!("window {{ width: calc( ( {width_ch}ch + 48px ) min 94% ); }}"),
-    ]
+    ["-theme-str".to_owned(), width_rule(width_ch)]
+}
+
+/// The same width rule without Rofi arguments, for apps that combine several
+/// theme overrides into one `-theme-str`.
+pub fn width_rule(width_ch: usize) -> String {
+    format!("window {{ width: calc( ( {width_ch}ch + 48px ) min 94% ); }}")
+}
+
+/// Comma-separated indexes of rows marked active. Rofi's `-a` option applies
+/// the fixed active-row style used for section headers.
+pub fn active_rows(items: &[crate::Item]) -> String {
+    items
+        .iter()
+        .enumerate()
+        .filter(|(_, item)| item.active)
+        .map(|(index, _)| index.to_string())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// Fixed appearance for active section headers across normal, alternate, and
+/// selected states. Clicking or navigating onto a header must not paint the
+/// regular selected-row outline.
+pub fn static_header_theme(theme: &Theme) -> String {
+    format!(
+        "element normal.active, element alternate.active, element selected.active {{\n\
+         \x20   background-color: {surface};\n\
+         \x20   text-color: {text};\n\
+         \x20   border: 0px 0px 1px 0px;\n\
+         \x20   border-color: {border};\n\
+         \x20   border-radius: 4px;\n\
+         }}",
+        surface = theme.surface_alt,
+        text = theme.text,
+        border = theme.border,
+    )
 }
 
 /// Truncate to a display width, reserving one cell for an ellipsis.
@@ -361,6 +394,48 @@ mod tests {
     }
 
     #[test]
+    fn row_text_inherits_the_selected_foreground() {
+        let theme = theme();
+        let text = row("\u{25b6}", "Title", "detail", "trailing", &theme);
+        assert!(
+            text.contains(&theme.accent),
+            "leading marker keeps its role"
+        );
+        assert!(
+            !text.contains(&theme.text),
+            "title must inherit the row color"
+        );
+        assert!(
+            !text.contains(&theme.muted),
+            "metadata must inherit the row color"
+        );
+        assert!(text.contains("alpha='72%'"), "{text}");
+    }
+
+    #[test]
+    fn active_header_style_is_identical_for_selected_state() {
+        let theme = theme();
+        let rule = static_header_theme(&theme);
+        for state in ["normal.active", "alternate.active", "selected.active"] {
+            assert!(rule.contains(state), "{state}: {rule}");
+        }
+        assert!(rule.contains(&theme.surface_alt));
+        assert!(rule.contains("border-radius: 4px"));
+        assert!(!rule.contains("selected-normal"));
+    }
+
+    #[test]
+    fn active_rows_lists_header_indexes() {
+        let items = vec![
+            crate::Item::new("section", "Section").active(),
+            crate::Item::new("row", "Row"),
+            crate::Item::new("section2", "Section 2").active(),
+        ];
+        assert_eq!(active_rows(&items), "0,2");
+        assert_eq!(active_rows(&[]), "");
+    }
+
+    #[test]
     fn hint_joins_bindings() {
         let text = hint(
             &[("\u{2191}/\u{2193}", "select"), ("esc", "close")],
@@ -395,11 +470,20 @@ mod tests {
 
     #[test]
     fn entry_row_escapes_text_and_keeps_index() {
-        let text = entry_row(7, "\u{25a7}", "#83a598", "a & b", "<40 KiB>", &theme());
+        let theme = theme();
+        let text = entry_row(7, "\u{25a7}", "#83a598", "a & b", "<40 KiB>", &theme);
         assert!(text.contains("  7"));
         assert!(text.contains("a &amp; b"));
         assert!(text.contains("&lt;40 KiB&gt;"));
         assert!(text.contains("#83a598"));
+        assert!(
+            !text.contains(&theme.text),
+            "title must inherit the row color"
+        );
+        assert!(
+            !text.contains(&theme.muted),
+            "metadata must inherit the row color"
+        );
     }
 
     #[test]

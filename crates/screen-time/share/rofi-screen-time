@@ -132,12 +132,28 @@ run_popup() {
         done
     fi
 
+    # On the first open, select the first app row. On a theme/detail reopen,
+    # restore the row the renderer saved after handling the key. Rofi's script
+    # `new-selection` metadata is not honored by every Rofi build, so the
+    # launcher passes the saved index explicitly.
+    state_runtime="${SCREEN_TIME_RUNTIME_DIR:-${XDG_RUNTIME_DIR:-/tmp}/screen-time}"
+    selection=6
+    if [ -n "${SCREEN_TIME_ROFI_REOPEN:-}" ] && [ -r "${state_runtime}/rofi-selection" ]; then
+        saved_selection=""
+        read -r saved_selection <"${state_runtime}/rofi-selection" || true
+        case "$saved_selection" in
+            ''|*[!0-9]*) ;;
+            *) selection="$saved_selection" ;;
+        esac
+    fi
+
     "$rofi_bin" \
         "${config_args[@]}" \
         -show screen-time \
         -modes "screen-time:$self" \
         -pid "${ROFI_PIDFILE:-${XDG_RUNTIME_DIR:-/tmp}/rofi-screen-time.pid}" \
-        -selected-row 8 \
+        -selected-row "$selection" \
+        -no-hover-select \
         -normal-window \
         -kb-move-char-back "Alt+Left" \
         -kb-move-char-forward "Alt+Right" \
@@ -149,12 +165,14 @@ run_popup() {
         -kb-custom-5 "BackSpace" \
         -kb-custom-6 "T" \
         -kb-custom-7 "R" \
-        -kb-custom-8 "Alt+1" \
-        -kb-custom-9 "Alt+2" \
-        -kb-custom-10 "Alt+3" \
-        -kb-custom-11 "Alt+4" \
-        -kb-custom-12 "Alt+Down" \
-        -kb-custom-13 "Alt+Up" \
+        -kb-custom-8 "Control+1" \
+        -kb-custom-9 "Control+2" \
+        -kb-custom-10 "Control+3" \
+        -kb-custom-11 "Control+4" \
+        -kb-row-left "" \
+        -kb-row-right "" \
+        -kb-custom-12 "Control+Page_Down" \
+        -kb-custom-13 "Control+Page_Up" \
         "${theme_args[@]}"
 }
 

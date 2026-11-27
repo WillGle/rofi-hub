@@ -2,10 +2,40 @@
 
 ## Unreleased
 
+- Show 12 nearby Wi-Fi candidates in the Network main view.
+- Use a 3-column × 10-row Keybinds list (10 visible rows maximum).
+- Default the optional app launcher to 3 columns × 10 rows (config clamps
+  `columns` 1–6 and `lines` 1–10). The emoji picker uses a fixed 4 × 15 grid
+  and the power menu a 3 × 2 grid.
+- Close UI-01..08 across the seven apps:
+  - Keybinds rows put the shortcut and description in the searchable dmenu id
+    while keeping a stable binding index; header rows never run a command.
+  - Shared row markup inherits the row foreground for titles and metadata, so
+    selected text stays readable on light desktop themes.
+  - Clipboard, Keybinds, and Hub headers use the fixed active style and ignore
+    header selections.
+  - Clipboard replaces textual chips with RASI Copy/Delete/Clear/Refresh
+    buttons that share the Enter/`Alt+d`/`Alt+x`/`Alt+r` paths.
+  - Calendar, Clipboard, Keybinds, Network, Atomic Tasks, and Screen Time
+    persist `Ctrl+1–4` as an app-owned theme lock
+    (`~/.local/state/rofi-apps/<app>/theme-choice`); `Ctrl+4` clears it and
+    restores the configured theme.
+  - Hub `Ctrl+1–4` preserves filter, selected provider id, and window height;
+    the selected palette is layered over the resolved menu theme.
+  - Screen Time keeps the cursor separate from the expanded detail and restores
+    the app on the same page after a theme change.
+  - Atomic Tasks moves Done/Edit/Move/priority controls into an inline
+    expandable action area opened by Enter or Actions; the second task menu is
+    gone.
+  - Calendar moves Prev/Today/Next to RASI buttons outside the filtered list,
+    so they remain visible while typing a date.
+- Add the inline Atomic Tasks menu test and the §18 interaction screenshot set.
+- Revisit the README, UI guide, architecture, packaging, migration, screenshot,
+  Screen Time, and goal documents for the current seven-app behavior.
 - Redesign `rofi-calendar`: centered month sheet and seven-column grid in the
-  message, `Go to date` input, and Prev/Today/Next in one compact row. Focused
-  dates use bold underline plus a full date line; invalid input keeps the month
-  and shows one error line.
+  message, `Go to date` input, and Prev/Today/Next in one RASI button row.
+  Focused dates use bold underline plus a full date line; invalid input keeps
+  the month and shows one error line.
 - Redesign `rofi-network`: one connection line, `Find network` filter, and a
   vertical SSID list; Manage and Connection details are separate screens.
   Long SSIDs truncate while full-name filtering still matches, and empty/radio
@@ -13,7 +43,7 @@
 - Release indexes keep a tarball URL and checksum per architecture. Native
   x86_64 and aarch64 bundles merge without losing either mapping, and
   `install.sh` rejects a host with no artifact.
-- Add a native aarch64 Nix CI job for all six packages.
+- Add a native aarch64 Nix CI job for all seven packages.
 - Refresh Calendar/Network screenshots and the Calendar/Network theme profiles;
   update Screen Time installation docs for the per-app installer.
 

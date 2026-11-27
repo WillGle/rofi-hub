@@ -1,0 +1,8 @@
+id = "atomic-note"
+name = "Atomic Tasks"
+description = "Quick task queue with priorities and undo"
+category = "Productivity"
+icon = "view-task"
+keywords = ["tasks", "notes", "todo", "waybar"]
+exec = ["atomic-note"]
+version = "0.1.0"

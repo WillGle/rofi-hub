@@ -126,139 +126,22 @@ impl Theme {
                 escape_rasi(&path.display().to_string())
             ));
         }
-        let font = escape_rasi(&self.font());
-        let columns = crate::render::grid_columns(self);
-        let profile = ChromeProfile::for_app("screen-time");
+        let mut profile = ChromeProfile::for_app("screen-time");
+        profile.width_ch = crate::render::grid_columns(self);
+        out.push_str(&self.core.rasi_with(profile));
         out.push_str(&format!(
-            r#"configuration {{
-    font: "{font}";
-    show-icons: {show_icons};
-    disable-history: true;
-    hover-select: false;
-    cycle: true;
-    matching: "fuzzy";
-}}
-
-* {{
-    font: "{font}";
-    background-color: {base};
-    text-color: {text};
-    border-color: {border};
-    selected-normal-background: {mantle};
-    selected-normal-foreground: {text};
-    normal-background: {base};
-    normal-foreground: {text};
-    foreground: {text};
-    background: {base};
-    spacing: 0;
-    margin: 0;
-    padding: 0;
-}}
-
-window {{
-    width: calc( ( {columns}ch + 64px ) min 94% );
-    location: center;
-    anchor: center;
-    border: 1px;
-    border-color: {border};
-    border-radius: 12px;
-    padding: 12px;
-    background-color: {base};
-}}
-
-mainbox {{
-    background-color: {base};
-    padding: 0;
-    children: [ message, listview ];
-    spacing: 8px;
-}}
-
-message {{
-    background-color: {mantle};
-    text-color: {text};
-    padding: 0px 12px;
-    border: 0px 0px 1px 0px;
-    border-color: {border};
-}}
-
+            r#"
+mainbox {{ children: [ message, listview ]; }}
+inputbar {{ enabled: false; }}
+element {{ children: [ element-text ]; }}
 textbox {{
-    background-color: transparent;
-    text-color: {text};
-    padding: 0;
-    border: 0;
-    font: "{family} {header}";
+    font: "{} {}";
     markup: true;
     vertical-align: 0.5;
 }}
-
-inputbar {{
-    enabled: false;
-}}
-
-listview {{
-    background-color: {mantle};
-    columns: 1;
-    lines: {lines};
-    spacing: 0;
-    scrollbar: false;
-    cycle: true;
-    dynamic: true;
-    fixed-height: false;
-    padding: 4px;
-    border: 1px;
-    border-color: {border};
-    border-radius: 8px;
-}}
-
-element normal.active, element alternate.active, element selected.active {{
-    background-color: {surface_alt};
-    border: 0px 0px 1px 0px;
-    border-color: {border};
-    border-radius: 4px;
-}}
-
-element {{
-    children: [ element-text ];
-    padding: 4px 10px;
-    background-color: {mantle};
-    text-color: {text};
-    border: 0px 0px 1px 0px;
-    border-color: {border};
-    border-radius: 0;
-}}
-
-element selected {{
-    background-color: {surface_alt};
-    text-color: {text};
-    border: 0px 0px 1px 2px;
-    border-color: {accent};
-    border-radius: 4px;
-}}
-
-element selected.active {{
-    background-color: {surface_alt};
-    border: 0px 0px 1px 2px;
-    border-color: {accent};
-    border-radius: 4px;
-}}
-
-element-text {{
-    background-color: transparent;
-    text-color: inherit;
-    font: "{font}";
-    vertical-align: 0.5;
-}}
 "#,
-            family = escape_rasi(&self.font_family),
-            accent = self.accent,
-            base = self.base,
-            mantle = self.mantle,
-            surface_alt = self.surface_alt,
-            border = self.border,
-            text = self.text,
-            show_icons = profile.show_icons,
-            header = profile.header_pt,
-            lines = profile.lines,
+            escape_rasi(&self.font_family),
+            profile.header_pt,
         ));
         out
     }

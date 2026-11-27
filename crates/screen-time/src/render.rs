@@ -103,6 +103,28 @@ pub fn render_main(view: &DayView, mode: OutputMode) -> String {
 }
 
 pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &Theme) -> String {
+    render_dashboard(view, mode, theme, None)
+}
+
+pub(crate) fn render_dashboard(
+    view: &DayView,
+    mode: OutputMode,
+    theme: &Theme,
+    detail: Option<&DetailView>,
+) -> String {
+    render_dashboard_with_cursor(view, mode, theme, detail, None)
+}
+
+/// Render the main view while keeping the row under the cursor separate from
+/// the app whose detail panel is expanded. `cursor` is an app name from the
+/// current page; a missing name falls back to the first app row.
+pub(crate) fn render_dashboard_with_cursor(
+    view: &DayView,
+    mode: OutputMode,
+    theme: &Theme,
+    detail: Option<&DetailView>,
+    cursor: Option<&str>,
+) -> String {
     let layout = Layout::from_theme(theme);
     let width = layout.screen_width();
     let page_count = view.rows.len().div_ceil(APP_PAGE_SIZE).max(1);
@@ -191,11 +213,23 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
         let extra = usize::from(show_other || list_slots == 0);
         // The Rofi main view omits the three 4pt spacer rows used by plain
         // output. Six fixed rows + app rows + one footer row fit five apps.
-        out.push_str(&format!("\0active\x1f1-{}\n", 5 + list_slots + extra));
         out.push_str(&format!(
             "\0theme\x1flistview {{ lines: {}; }}\n",
-            7 + list_slots + extra
+            7 + list_slots + extra + usize::from(detail.is_some()) * 6
         ));
+        let selected_app = cursor
+            .or_else(|| detail.map(|detail| detail.app.as_str()))
+            .filter(|app| !app.is_empty());
+        if !page_rows.is_empty() {
+            let row = selected_app
+                .and_then(|app| page_rows.iter().position(|row| row.name == app))
+                // Only fall back to the first app when the previous row has
+                // disappeared or the preserved cursor is on another page.
+                .or_else(|| selected_app.map(|_| 0));
+            if let Some(row) = row {
+                out.push_str(&format!("\0new-selection\x1f{}\n", 6 + row));
+            }
+        }
         emit(&mut out, &summary, RowMeta::NonSelectable, mode);
     } else {
         out.push_str(&format!(" {title}\n{total_line}\n {date}\n{summary}\n"));
@@ -315,9 +349,14 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
     ];
     if mode == OutputMode::Rofi {
         if paginated {
-            keys.insert(1, ("Alt+↓/↑", "page"));
+            keys.insert(1, ("Ctrl+PgUp/Dn", "page"));
         }
-        keys.push(("Alt+1–4", "theme"));
+        if detail.is_some()
+            && let Some(action) = keys.iter_mut().find(|(key, _)| *key == "Enter")
+        {
+            *action = ("Enter/⌫", "details");
+        }
+        keys.push(("Ctrl+1–4", "theme"));
     }
     emit(
         &mut out,
@@ -325,6 +364,33 @@ pub(crate) fn render_main_with_theme(view: &DayView, mode: OutputMode, theme: &T
         RowMeta::NonSelectable,
         mode,
     );
+    if let Some(detail) = detail {
+        let label = display_label(&detail.app);
+        let total = timeutil::format_duration(detail.total_seconds);
+        let meta = format!(
+            "{label} · {total} · {}% of active time",
+            detail.share_percent
+        );
+        emit(
+            &mut out,
+            &section_header("APP DETAILS", &meta, width, theme, mode),
+            RowMeta::NonSelectable,
+            mode,
+        );
+        let (body, _) = detail_body(detail, mode, theme, &layout, true);
+        out.push_str(&body);
+    }
+    if mode == OutputMode::Rofi {
+        let last_row = out.lines().filter(|line| !line.starts_with('\0')).count() - 1;
+        let after_apps = 6 + page_rows.len();
+        out.insert_str(
+            0,
+            &format!(
+                "\0active\x1f0-5,{after_apps}-{last_row}\n{}",
+                read_only_row_style(theme)
+            ),
+        );
+    }
     out
 }
 
@@ -599,7 +665,6 @@ pub(crate) fn render_detail_with_theme(
     theme: &Theme,
 ) -> String {
     let layout = Layout::from_theme(theme);
-    let width = layout.screen_width();
     let category = category_for_app(&view.app);
     let color = category.color(theme);
     let label = display_label(&view.app);
@@ -611,6 +676,56 @@ pub(crate) fn render_detail_with_theme(
     let date = timeutil::format_date_label(view.date, view.today);
     let subtitle = format!("{} · {share} · {date}", category_label(category));
 
+    let (
+        mut body,
+        [
+            (activity_start, activity_end),
+            (burst_start, burst_end),
+            (trend_start, trend_end),
+        ],
+    ) = detail_body(view, mode, theme, &layout, false);
+    emit_spacer(&mut body, mode);
+    let mut keys = vec![("←/→", "day"), ("Backspace", "back"), ("Esc", "close")];
+    if mode == OutputMode::Rofi {
+        keys.push(("Ctrl+1–4", "theme"));
+    }
+    emit(
+        &mut body,
+        &footer_hint(&keys, theme, mode),
+        RowMeta::App("__back__".to_owned()),
+        mode,
+    );
+
+    if mode == OutputMode::Rofi {
+        let lines = body.lines().count();
+        let header = ui::header_inline(&label, &total, &subtitle, theme);
+        let static_style = read_only_row_style(theme);
+        format!(
+            "{static_style}\0message\x1f{header}\n\0theme\x1flistview {{ lines: {lines}; }}\n\0use-hot-keys\x1ftrue\n\0markup-rows\x1ftrue\n\0no-custom\x1ftrue\n\0active\x1f{activity_start}-{activity_end},{burst_start}-{burst_end},{trend_start}-{trend_end}\n\0keep-selection\x1ftrue\n\0new-selection\x1f{}\n{body}",
+            lines - 1
+        )
+    } else {
+        format!(" {title}   {total}   {subtitle}\n{body}")
+    }
+}
+
+fn detail_body(
+    view: &DetailView,
+    mode: OutputMode,
+    theme: &Theme,
+    layout: &Layout,
+    inline: bool,
+) -> (String, [(usize, usize); 3]) {
+    let width = layout.screen_width();
+    let color = category_for_app(&view.app).color(theme);
+    let row_type = || {
+        if inline {
+            // Keep the read-only rows reachable with keyboard and wheel scrolling.
+            RowMeta::App("__none__".to_owned())
+        } else {
+            RowMeta::NonSelectable
+        }
+    };
     let mut body = String::new();
     let stats = format!(
         " {} sessions    median {}    {} switches/h",
@@ -618,7 +733,7 @@ pub(crate) fn render_detail_with_theme(
         timeutil::format_minutes(view.median_seconds),
         view.switches_per_hour
     );
-    emit(&mut body, &stats, RowMeta::NonSelectable, mode);
+    emit(&mut body, &stats, row_type(), mode);
 
     let through = view
         .sessions_through
@@ -635,7 +750,7 @@ pub(crate) fn render_detail_with_theme(
                 mode
             )
         ),
-        RowMeta::NonSelectable,
+        row_type(),
         mode,
     );
     emit_spacer(&mut body, mode);
@@ -644,7 +759,7 @@ pub(crate) fn render_detail_with_theme(
     emit(
         &mut body,
         &section_header("APP ACTIVITY", "", width, theme, mode),
-        RowMeta::NonSelectable,
+        row_type(),
         mode,
     );
     let mut slots = [0; SLOT_COUNT];
@@ -658,7 +773,7 @@ pub(crate) fn render_detail_with_theme(
             " ".repeat(PREFIX_WIDTH),
             ruler(layout.timeline_width())
         ),
-        RowMeta::NonSelectable,
+        row_type(),
         mode,
     );
     let activity = if slots.iter().any(|&seconds| seconds > 0) {
@@ -666,12 +781,12 @@ pub(crate) fn render_detail_with_theme(
         format!(
             "{label}{}{}",
             " ".repeat(PREFIX_WIDTH - " Sessions".len()),
-            strip(&slots.map(|seconds| seconds > 0), "█", &layout, mode, color)
+            strip(&slots.map(|seconds| seconds > 0), "█", layout, mode, color)
         )
     } else {
         " No sessions recorded".to_owned()
     };
-    emit(&mut body, &activity, RowMeta::NonSelectable, mode);
+    emit(&mut body, &activity, row_type(), mode);
     let activity_end = body.lines().count() - 1;
     emit_spacer(&mut body, mode);
 
@@ -679,20 +794,15 @@ pub(crate) fn render_detail_with_theme(
     emit(
         &mut body,
         &section_header("BURSTS", "", width, theme, mode),
-        RowMeta::NonSelectable,
+        row_type(),
         mode,
     );
     if let Some(error) = &view.db_error {
-        emit(
-            &mut body,
-            " Database unavailable",
-            RowMeta::NonSelectable,
-            mode,
-        );
+        emit(&mut body, " Database unavailable", row_type(), mode);
         emit(
             &mut body,
             &format!(" {}", markup_text(error, mode)),
-            RowMeta::NonSelectable,
+            row_type(),
             mode,
         );
     } else {
@@ -708,7 +818,7 @@ pub(crate) fn render_detail_with_theme(
                         mode
                     )
                 ),
-                RowMeta::NonSelectable,
+                row_type(),
                 mode,
             );
             for burst in bursts {
@@ -725,7 +835,7 @@ pub(crate) fn render_detail_with_theme(
                     burst.count,
                     timeutil::format_duration_compact(burst.seconds),
                 );
-                emit(&mut body, &line, RowMeta::NonSelectable, mode);
+                emit(&mut body, &line, row_type(), mode);
             }
         } else {
             let message = if view.sessions.is_empty() {
@@ -733,7 +843,7 @@ pub(crate) fn render_detail_with_theme(
             } else {
                 " No bursts of repeated sessions."
             };
-            emit(&mut body, message, RowMeta::NonSelectable, mode);
+            emit(&mut body, message, row_type(), mode);
         }
         if view.remaining_sessions > 0 && !view.bursts.is_empty() {
             emit(
@@ -743,7 +853,7 @@ pub(crate) fn render_detail_with_theme(
                     view.remaining_sessions,
                     timeutil::format_duration(view.remaining_seconds)
                 ),
-                RowMeta::NonSelectable,
+                row_type(),
                 mode,
             );
         }
@@ -761,7 +871,7 @@ pub(crate) fn render_detail_with_theme(
     emit(
         &mut body,
         &section_header("7 DAY", &average, width, theme, mode),
-        RowMeta::NonSelectable,
+        row_type(),
         mode,
     );
     if let Some(bars) = sparkline(&view.trend) {
@@ -788,39 +898,27 @@ pub(crate) fn render_detail_with_theme(
             durations.push_str(&role_span(&format!("{total:^cell_width$}"), ink, mode));
         }
         for line in [labels, graph, durations] {
-            emit(&mut body, &line, RowMeta::NonSelectable, mode);
+            emit(&mut body, &line, row_type(), mode);
         }
     } else {
-        emit(
-            &mut body,
-            " No recorded history",
-            RowMeta::NonSelectable,
-            mode,
-        );
+        emit(&mut body, " No recorded history", row_type(), mode);
     }
     let trend_end = body.lines().count() - 1;
-    emit_spacer(&mut body, mode);
-    let mut keys = vec![("←/→", "day"), ("Backspace", "back"), ("Esc", "close")];
-    if mode == OutputMode::Rofi {
-        keys.push(("Alt+1–4", "theme"));
-    }
-    emit(
-        &mut body,
-        &footer_hint(&keys, theme, mode),
-        RowMeta::App("__back__".to_owned()),
-        mode,
-    );
+    (
+        body,
+        [
+            (activity_start, activity_end),
+            (burst_start, burst_end),
+            (trend_start, trend_end),
+        ],
+    )
+}
 
-    if mode == OutputMode::Rofi {
-        let lines = body.lines().count();
-        let header = ui::header_inline(&label, &total, &subtitle, theme);
-        format!(
-            "\0message\x1f{header}\n\0theme\x1flistview {{ lines: {lines}; }}\n\0use-hot-keys\x1ftrue\n\0markup-rows\x1ftrue\n\0no-custom\x1ftrue\n\0active\x1f{activity_start}-{activity_end},{burst_start}-{burst_end},{trend_start}-{trend_end}\n\0keep-selection\x1ftrue\n\0new-selection\x1f{}\n{body}",
-            lines - 1
-        )
-    } else {
-        format!(" {title}   {total}   {subtitle}\n{body}")
-    }
+fn read_only_row_style(theme: &Theme) -> String {
+    format!(
+        "\0theme\x1felement normal.active, element alternate.active, element selected.active {{ background-color: {}; text-color: {}; border: 0px 0px 1px 0px; border-color: {}; border-radius: 4px; }}\n",
+        theme.surface_alt, theme.text, theme.border
+    )
 }
 
 fn escape_markup(value: &str) -> String {
@@ -1085,12 +1183,33 @@ mod tests {
     }
 
     #[test]
+    fn cursor_is_restored_by_app_name_and_falls_back_to_the_first_row() {
+        let theme = Theme::resolve(&Config::default());
+        let mut view = sample_view_with_rows(8);
+        let first_page =
+            render_dashboard_with_cursor(&view, OutputMode::Rofi, &theme, None, Some("App3"));
+        assert!(first_page.contains("\0new-selection\x1f8"), "{first_page}");
+
+        view.page = 1;
+        let second_page =
+            render_dashboard_with_cursor(&view, OutputMode::Rofi, &theme, None, Some("App7"));
+        assert!(
+            second_page.contains("\0new-selection\x1f7"),
+            "{second_page}"
+        );
+
+        let missing =
+            render_dashboard_with_cursor(&view, OutputMode::Rofi, &theme, None, Some("App3"));
+        assert!(missing.contains("\0new-selection\x1f6"), "{missing}");
+    }
+
+    #[test]
     fn single_page_uses_exact_height_and_plain_output_lists_all_rows() {
         let theme = Theme::resolve(&Config::default());
         let view = sample_view_with_rows(3);
         let rofi = render_main_with_theme(&view, OutputMode::Rofi, &theme);
         assert_eq!(list_lines(&rofi), 10);
-        assert!(!rofi.contains("Alt+↓/↑ page"));
+        assert!(!rofi.contains("Ctrl+PgUp/Dn page"));
 
         let plain = render_main_with_theme(&sample_view_with_rows(8), OutputMode::Plain, &theme);
         for index in 1..=8 {

@@ -13,8 +13,15 @@ case "$*" in
     printf ' :IoT 2.4G:69:WPA2:2412\n'
     printf ' :Cafe Open:45:--:2462\n'
     printf ' :Office WiFi:55:WPA2:5745\n'
+    printf ' :Library:38:WPA2:2412\n'
+    printf ' :Studio 5G:73:WPA2:5180\n'
+    printf ' :Workshop:28:WPA2:2462\n'
+    printf ' :Cafe Guest:52:--:2412\n'
+    printf ' :Neighbor 2.4:66:WPA2:2437\n'
+    printf ' :Test Lab:34:WPA2:5500\n'
+    printf ' :Visitor:21:--:2412\n'
     ;;
-  *GENERAL.CONNECTION*device*show*)
+  *GENERAL.HWADDR*device*show*)
     printf 'GENERAL.CONNECTION:Example WiFi\n'
     printf 'GENERAL.HWADDR:02:00:00:00:00:01\n'
     printf 'IP4.ADDRESS[1]:192.0.2.42/24\n'

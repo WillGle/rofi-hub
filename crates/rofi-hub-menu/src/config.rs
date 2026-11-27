@@ -25,7 +25,7 @@ pub struct Config {
 pub struct Launcher {
     /// Number of columns in `rofi-hub launcher`; clamped to 1..=6.
     pub columns: Option<u32>,
-    /// Number of visible rows in `rofi-hub launcher`; clamped to 1..=40.
+    /// Number of visible rows in `rofi-hub launcher`; clamped to 1..=10.
     pub lines: Option<u32>,
 }
 
@@ -95,13 +95,21 @@ impl Config {
     }
 
     pub fn launcher_columns(&self) -> Option<u32> {
-        self.launcher
-            .columns
-            .filter(|columns| (1..=6).contains(columns))
+        Some(
+            self.launcher
+                .columns
+                .filter(|columns| (1..=6).contains(columns))
+                .unwrap_or(3),
+        )
     }
 
     pub fn launcher_lines(&self) -> Option<u32> {
-        self.launcher.lines.filter(|lines| (1..=40).contains(lines))
+        Some(
+            self.launcher
+                .lines
+                .filter(|lines| (1..=10).contains(lines))
+                .unwrap_or(10),
+        )
     }
 }
 
@@ -115,8 +123,8 @@ mod tests {
         assert_eq!(config.prompt(), "Rofi Hub");
         assert_eq!(config.font_family(), None);
         assert_eq!(config.font_size(), None);
-        assert_eq!(config.launcher_columns(), None);
-        assert_eq!(config.launcher_lines(), None);
+        assert_eq!(config.launcher_columns(), Some(3));
+        assert_eq!(config.launcher_lines(), Some(10));
     }
 
     #[test]
@@ -141,12 +149,12 @@ font_size = 200
         assert_eq!(config.launcher_columns(), Some(3));
 
         let config: Config = toml::from_str("[launcher]\ncolumns = 0\n").unwrap();
-        assert_eq!(config.launcher_columns(), None);
-        assert_eq!(config.launcher_lines(), None);
+        assert_eq!(config.launcher_columns(), Some(3));
+        assert_eq!(config.launcher_lines(), Some(10));
 
-        let config: Config = toml::from_str("[launcher]\ncolumns = 9\n").unwrap();
-        assert_eq!(config.launcher_columns(), None);
-        assert_eq!(config.launcher_lines(), None);
+        let config: Config = toml::from_str("[launcher]\ncolumns = 9\nlines = 40\n").unwrap();
+        assert_eq!(config.launcher_columns(), Some(3));
+        assert_eq!(config.launcher_lines(), Some(10));
     }
 
     #[test]

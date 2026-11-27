@@ -5,20 +5,30 @@ binary, provider manifest, release, version, and runtime dependencies. The
 hub is no longer a runtime dependency: it only installs and manages app
 packages.
 
-Apps in this workspace:
+### Ported app status
 
-| App | Version | Runtime tools it owns |
-|---|---|---|
-| `rofi-calendar` | 1.2.0 | Rofi |
-| `rofi-clipboard` | 0.8.0 | Rofi, `cliphist`, `wl-copy` |
-| `rofi-keybinds` | 1.0.0 | Rofi |
-| `rofi-network` | 0.3.0 | Rofi, NetworkManager (`nmcli`) |
-| `screen-time` | 0.5.0 | Rofi; owns its own user service |
-| `rofi-hub-menu` | 0.3.0 | Optional provider menu |
+All seven apps are ported and independently runnable. Only the optional menu
+can be removed without affecting the others; every app owns its own theme,
+state, runtime tools, and release artifact.
 
-`rofi-dmenu` is the shared library (`0.3.0`) used by the apps. It contains the
-dmenu protocol, theme resolution, paths, and UI helpers. No app depends on the
-optional menu or the installer.
+| App | Status | Version | Launch | Runtime tools |
+|---|---|---|---|---|
+| Calendar | Ported | 1.2.0 | `rofi-calendar` | Rofi |
+| Clipboard | Ported | 0.8.0 | `rofi-clipboard` | Rofi, `cliphist`, `wl-copy` |
+| Keybinds | Ported | 1.0.0 | `rofi-keybinds` | Rofi |
+| Network | Ported | 0.3.0 | `rofi-network` | Rofi, NetworkManager (`nmcli`) |
+| Atomic Tasks | Ported | 0.1.0 | `atomic-note` | Rofi, Bash, jq, awk, flock |
+| Screen Time | Ported · service | 0.5.0 | `rofi-screen-time` | Rofi; owns its user service |
+| Hub menu | Optional | 0.3.0 | `rofi-hub-menu` | Rofi, provider manifests |
+
+Every app supports the same `Ctrl+1–4` theme control (`Nord`, `Solarized
+Light`, `Gruvbox Dark`, `Auto`) and keeps its own theme lock. Calendar,
+Clipboard, Keybinds, Network, Atomic Tasks, and Screen Time continue from the
+current filter and selection after a theme change.
+
+`rofi-dmenu` is the shared library (`0.3.0`) used by the Rust apps. It contains
+the dmenu protocol, theme resolution, paths, and UI helpers. No app depends on
+the optional menu or the installer.
 
 > **Project status:** `screen-time-rofi` is retired and archived. This
 > repository is the canonical home for Screen Time and the Rofi apps. See
@@ -26,20 +36,54 @@ optional menu or the installer.
 
 ## UI
 
+### Snapshot
+
 Every native app uses the same design language: zoned cards, 1px borders, a
-shared palette, and an accent strip on the active row. The screenshots below
-are real Rofi captures.
+shared palette, and an accent strip on the active row. The snapshots below are
+real Rofi captures at 1280×800 from disposable fixtures: no real SSIDs, IP
+addresses, clipboard contents, task text, command output, hostnames, or user
+paths are shown.
 
 | Menu | Screen Time | Calendar |
 |---|---|---|
-| <img src="docs/screenshots/ui/hub-gruvbox.png?v=3" width="360" alt="Menu in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-gruvbox.png?v=3" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-gruvbox.png?v=5" width="360" alt="Calendar in Gruvbox Dark"> |
+| <img src="docs/screenshots/ui/hub-current.png" width="360" alt="Menu in Gruvbox Dark"> | <img src="docs/screenshots/ui/screen-time-current.png" width="360" alt="Screen Time in Gruvbox Dark"> | <img src="docs/screenshots/ui/calendar-current.png" width="360" alt="Calendar in Gruvbox Dark"> |
 
 | Clipboard | Keybinds | Network |
 |---|---|---|
-| <img src="docs/screenshots/ui/clipboard-gruvbox.png?v=3" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-gruvbox.png?v=3" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-gruvbox.png?v=5" width="360" alt="Network in Gruvbox Dark"> |
+| <img src="docs/screenshots/ui/clipboard-current.png" width="360" alt="Clipboard in Gruvbox Dark"> | <img src="docs/screenshots/ui/keybinds-current.png" width="360" alt="Keybinds in Gruvbox Dark"> | <img src="docs/screenshots/ui/network-current.png" width="360" alt="Network in Gruvbox Dark"> |
 
-[Full screenshot matrix](docs/screenshots/ui/README.md) ·
-[UI style guide](docs/UI_STYLE.md)
+| Atomic Tasks |
+|---|
+| <img src="docs/screenshots/ui/atomic-current.png" width="360" alt="Atomic Tasks with inline actions"> |
+
+The full four-palette matrix and the interaction captures are in
+[`docs/screenshots/ui`](docs/screenshots/ui/). See the
+[full screenshot matrix](docs/screenshots/ui/README.md) and the
+[UI style guide](docs/UI_STYLE.md).
+
+### UI behavior
+
+- **Keybinds.** Search matches both the shortcut and its description; the
+  list uses 3 columns × 10 rows maximum; section bands never run a command.
+- **Clipboard.** Copy, Delete, Clear, and Refresh are real RASI buttons and
+  share the keyboard paths (`Enter`, `Alt+d`, `Alt+x`, `Alt+r`).
+- **Hub Menu.** `Ctrl+1–4` keeps the typed filter, selected provider, and
+  window height; `Ctrl+4` restores the configured theme.
+- **Theme.** Calendar, Clipboard, Keybinds, Network, Atomic Tasks, and Screen
+  Time all use `Ctrl+1–4` for Nord, Solarized Light, Gruvbox Dark, and Auto.
+  The chosen palette is app-owned in
+  `~/.local/state/rofi-apps/<app>/theme-choice`; `Ctrl+4` clears the lock and
+  returns to the configured theme. The hub menu keeps its own state.
+- **Screen Time.** The row under the cursor is separate from the expanded
+  detail and is restored by app name, page, and date after a theme change.
+- **Atomic Tasks.** `Enter` or the `Actions` button expands Done, Edit, Move,
+  and priorities on the task list; no second task menu is used. `Ctrl+1–4`
+  switches the palette without losing the filter or expanded state.
+- **Calendar.** Prev/Today/Next are RASI buttons outside the filterable list,
+  so they remain visible while a partial date is typed.
+- **Network.** The main view shows 12 nearby Wi-Fi candidates and keeps
+  Details/Alt+i on the same screen.
+
 
 ## Install
 
@@ -70,13 +114,19 @@ services.rofi-apps.menu.enable = false; # optional
 ```
 
 Each option installs only that app package and the app's own dependencies.
+Atomic Tasks can be enabled independently with `services.rofi-apps.atomic-note.enable = true;`
+or installed with `bash install.sh --app atomic-note`. Run `atomic-note` to open it.
+It uses the existing `~/.atomic_tasks` and `~/.atomic_tasks.done` files, including
+for users migrating from the older Home Manager script. The `render-waybar`
+subcommand remains available for an optional Waybar integration.
+
 `screen-time` owns its user service; the other apps do not install services.
 The old `services.rofi-hub.enable` option is kept as a deprecated alias that
 maps the selected apps to `services.rofi-apps.<app>.enable`.
 
 Individual modules are available as `nixosModules.rofi-calendar`,
 `nixosModules.rofi-clipboard`, `nixosModules.rofi-keybinds`,
-`nixosModules.rofi-network`, `nixosModules.screen-time`, and
+`nixosModules.rofi-network`, `nixosModules.atomic-note`, `nixosModules.screen-time`, and
 `nixosModules.rofi-hub-menu`.
 
 ### Home Manager
@@ -100,6 +150,7 @@ options and prints a warning.
 nix profile add github:WillGle/rofi-hub#rofi-calendar
 nix profile add github:WillGle/rofi-hub#rofi-clipboard
 nix profile add github:WillGle/rofi-hub#rofi-network
+nix profile add github:WillGle/rofi-hub#atomic-note
 nix profile add github:WillGle/rofi-hub#screen-time
 nix profile add github:WillGle/rofi-hub#rofi-hub-menu   # optional
 ```
@@ -146,6 +197,7 @@ rofi-calendar
 rofi-clipboard
 rofi-keybinds
 rofi-network
+atomic-note
 rofi-screen-time
 ```
 
@@ -169,6 +221,7 @@ Theme ownership is split into three layers:
 | Base theme | user / theme module | `~/.config/rofi/theme.rasi` or `ROFI_THEME` |
 | App layout | app package | `$XDG_DATA_DIRS/rofi/<app>.rasi` |
 | App override | user | `~/.config/rofi/<app>.rasi` |
+| App theme lock | app | `~/.local/state/rofi-apps/<app>/theme-choice` |
 | Menu theme | optional menu | `share/rofi/hub-menu.rasi` + `~/.config/rofi-hub-menu/theme` |
 
 Resolution order for every app:
@@ -178,6 +231,10 @@ Resolution order for every app:
 3. `~/.config/rofi/theme.rasi` + app layout
 4. packaged `$XDG_DATA_DIRS/rofi/<app>.rasi`
 5. built-in fallback
+
+Every app may also have an app-owned theme lock from `Ctrl+1–4`; the lock
+selects a palette over this resolved theme and `Ctrl+4` removes it. The lock
+is stored per app and never changes another app's theme.
 
 ### Environment
 
@@ -209,7 +266,12 @@ columns = 3
 lines = 10
 ```
 
-The menu owns this state. Apps never read it.
+The launcher defaults to 3 columns × 10 rows; both values are clamped
+(`columns` 1–6, `lines` 1–10). `rofi-hub-menu emoji` uses a fixed 4 × 15 grid,
+and `rofi-hub-menu power` uses 3 columns × 2 rows.
+The menu owns this state. Apps never read it. `Ctrl+1–4` inside the menu
+writes a palette layer over the resolved theme, so the base font, layout, and
+window geometry stay intact; `Ctrl+4` returns to the configured theme.
 
 ## Repository layout
 
@@ -219,6 +281,7 @@ crates/rofi-calendar/    app.toml, provider, layout, source
 crates/rofi-clipboard/
 crates/rofi-keybinds/
 crates/rofi-network/
+crates/atomic-note/     task queue shell app, provider, layout, tests
 crates/screen-time/      tracker, Rofi UI, and its user service
 crates/rofi-hub-menu/    optional provider menu
 installer/               release index schema
@@ -241,6 +304,7 @@ python3 scripts/check-deps.py
 python3 scripts/check-app-sync.py
 scripts/test-apps.sh
 scripts/test-theme.sh
+bash crates/atomic-note/tests/menu.sh
 scripts/test-installer.sh
 scripts/package-release.sh
 scripts/test-bundle.sh dist
@@ -252,6 +316,8 @@ nix flake check
 `check-deps.py` enforces the one-way dependency graph: apps may depend on
 `rofi-dmenu`, never on the menu or installer. `test-apps.sh` and
 `test-theme.sh` run apps against a fake Rofi in a temporary XDG environment.
+`crates/atomic-note/tests/menu.sh` covers the inline task action area with a
+fake Rofi and disposable HOME.
 `test-installer.sh` covers installation, update/uninstall independence,
 missing prerequisites, bad checksums, unsigned releases, path traversal,
 permissions, rollback, services, and the optional menu. `test-nix.sh` verifies

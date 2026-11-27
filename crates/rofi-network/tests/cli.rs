@@ -13,6 +13,7 @@ struct TestEnv {
     config: PathBuf,
     data: PathBuf,
     runtime: PathBuf,
+    state: PathBuf,
     bin: PathBuf,
 }
 
@@ -23,16 +24,19 @@ impl TestEnv {
         let config = root.path().join("config");
         let data = root.path().join("data");
         let runtime = root.path().join("run");
+        let state = root.path().join("state");
         let bin = root.path().join("bin");
-        for dir in [&home, &config, &data, &runtime, &bin] {
+        for dir in [&home, &config, &data, &runtime, &state, &bin] {
             fs::create_dir_all(dir).unwrap();
         }
+        fs::create_dir_all(root.path().join("data-dirs")).unwrap();
         Self {
             root,
             home,
             config,
             data,
             runtime,
+            state,
             bin,
         }
     }
@@ -49,6 +53,8 @@ impl TestEnv {
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.config)
             .env("XDG_DATA_HOME", &self.data)
+            .env("XDG_DATA_DIRS", self.root.path().join("data-dirs"))
+            .env("XDG_STATE_HOME", &self.state)
             .env("XDG_RUNTIME_DIR", &self.runtime)
             .env_remove("ROFI_HUB_THEME")
             .env_remove("ROFI_HUB_THEME_FILE")
@@ -123,6 +129,10 @@ impl TestEnv {
     fn nmcli_log(&self) -> String {
         fs::read_to_string(self.root.path().join("nmcli.log")).unwrap_or_default()
     }
+
+    fn state_home(&self) -> &std::path::Path {
+        &self.state
+    }
 }
 
 /// A shell from PATH. Nix build sandboxes do not provide `/bin/sh`.
@@ -150,13 +160,14 @@ fn wifi_fixture(extra: &str) -> String {
          'radio wifi') echo enabled ;;\n\
          *DEVICE,TYPE,STATE*device*) {DEVICES} ;;\n\
          *IN-USE,SSID,SIGNAL,SECURITY,FREQ*) {extra} ;;\n\
-         *GENERAL.CONNECTION*device*show*)\n\
+         *GENERAL.HWADDR*device*show*)\n\
            printf 'GENERAL.CONNECTION:Example WiFi\\n';\n\
            printf 'GENERAL.HWADDR:02:00:00:00:00:01\\n';\n\
            printf 'IP4.ADDRESS[1]:192.0.2.42/24\\n';\n\
            printf 'IP4.GATEWAY:192.0.2.1\\n';\n\
            printf 'IP4.DNS[1]:192.0.2.53\\n';\n\
            printf 'IP4.DNS[2]:192.0.2.54' ;;\n\
+         *NAME,TYPE*connection*show*--active*) printf 'Work Tunnel:vpn\\nPrivate WireGuard:wireguard\\nExample WiFi:802-11-wireless\\n' ;;\n\
          *NAME,TYPE*connection*show*)\n\
            printf 'Example WiFi:802-11-wireless\\nOffice WiFi:802-11-wireless\\nWired:802-3-ethernet\\n' ;;\n\
          esac"
@@ -180,7 +191,7 @@ fn main_screen_shows_connection_and_sorted_networks() {
 
     let args = env.args();
     let stdin = env.stdin();
-    for expected in ["Connected", "Example WiFi", "Alt+r Scan", "Alt+m Manage"] {
+    for expected in ["Connected", "Example WiFi", "Scan Alt+r", "Actions Alt+m"] {
         assert!(args.contains(expected), "missing {expected} in {args}");
     }
     for row in [
@@ -263,7 +274,7 @@ fn connect_failure_is_shown_and_the_list_stays_usable() {
 }
 
 #[test]
-fn alt_r_scans_and_alt_m_opens_manage() {
+fn alt_r_scans_and_alt_m_jumps_to_inline_actions() {
     let env = TestEnv::new();
     env.nmcli(&wifi_fixture(
         "printf '*:Example WiFi:77:WPA2:5180\\n';\
@@ -279,15 +290,14 @@ fn alt_r_scans_and_alt_m_opens_manage() {
         env.nmcli_log()
     );
     let args = env.args();
-    assert!(args.contains("Manage network"), "{args}");
+    assert_eq!(args.matches("Find network or action").count(), 3, "{args}");
     for expected in [
-        "Connection details",
         "Turn Wi-Fi off",
         "Connect to hidden network",
-        "Edit saved connection",
+        "Saved connections",
         "Disconnect current Wi-Fi",
         "Connect Ethernet eth0",
-        "Back",
+        "Office WiFi",
     ] {
         assert!(
             env.stdin().contains(expected),
@@ -298,19 +308,13 @@ fn alt_r_scans_and_alt_m_opens_manage() {
 }
 
 #[test]
-fn details_are_queried_only_when_the_screen_opens() {
+fn details_are_queried_only_when_expanded_inline() {
     let env = TestEnv::new();
     env.nmcli(&wifi_fixture(
         "printf '*:Example WiFi:77:WPA2:5180\\n';\
          printf ' :Office WiFi:55:WPA2:5745'",
     ));
-    let rofi = env.rofi(&[
-        "@custom:1",
-        "manage:details",
-        "@cancel",
-        "@cancel",
-        "@cancel",
-    ]);
+    let rofi = env.rofi(&["@custom:6", "@custom:6", "@cancel"]);
     let output = env.command().env("ROFI_BIN", &rofi).output().unwrap();
     assert!(output.status.success(), "{}", stderr(&output));
 
@@ -320,7 +324,14 @@ fn details_are_queried_only_when_the_screen_opens() {
         .filter(|line| line.contains("device show"))
         .count();
     assert_eq!(details_calls, 1, "{}", env.nmcli_log());
-    let args = env.args();
+    assert_eq!(
+        env.nmcli_log().matches("connection show --active").count(),
+        1
+    );
+    assert!(!env.stdin().contains("manage:details"));
+    assert!(!env.stdin().contains("section:connection"));
+    let rows = format!("{}\n{}", env.stdin(), env.args());
+    assert!(rows.contains("ap:Office WiFi"), "{rows}");
     for expected in [
         "Example WiFi",
         "Interface",
@@ -330,6 +341,8 @@ fn details_are_queried_only_when_the_screen_opens() {
         "WPA2",
         "IP/prefix",
         "192.0.2.42/24",
+        "VPN",
+        "Work Tunnel, Private WireGuard",
         "Gateway",
         "192.0.2.1",
         "Subnet",
@@ -341,7 +354,7 @@ fn details_are_queried_only_when_the_screen_opens() {
         "MAC",
         "02:00:00:00:00:01",
     ] {
-        assert!(args.contains(expected), "missing {expected} in {args}");
+        assert!(rows.contains(expected), "missing {expected} in {rows}");
     }
 }
 
@@ -363,7 +376,7 @@ fn ethernet_connect_and_disconnect_use_the_named_interface() {
 }
 
 #[test]
-fn hidden_network_cancel_returns_to_manage_without_connecting() {
+fn hidden_network_cancel_returns_to_the_same_list_without_connecting() {
     let env = TestEnv::new();
     env.nmcli(&wifi_fixture("printf '*:Example WiFi:77:WPA2:5180'"));
     let rofi = env.rofi(&["@custom:1", "manage:hidden", "@cancel", "@cancel"]);
@@ -476,6 +489,40 @@ fn rofi_theme_override_is_honored() {
         "{}",
         env.args()
     );
+}
+
+#[test]
+fn theme_choice_is_locked_and_ctrl4_restores_the_configuration() {
+    let env = TestEnv::new();
+    env.nmcli(&wifi_fixture("printf '*:Example WiFi:77:WPA2:5180'"));
+    fs::create_dir_all(env.config.join("rofi")).unwrap();
+    fs::write(
+        env.config.join("rofi/theme.rasi"),
+        "* { font: \"JetBrainsMono Nerd Font 12\"; }\n",
+    )
+    .unwrap();
+    let choice = env.state_home().join("rofi-apps/network/theme-choice");
+
+    // Ctrl+1 is kb-custom-3 (theme bindings start at custom 3).
+    let rofi = env.rofi(&["@custom:2", "@cancel"]);
+    let output = env.command().env("ROFI_BIN", &rofi).output().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(fs::read_to_string(&choice).unwrap(), "nord\n");
+
+    let rofi = env.rofi(&["@cancel"]);
+    let output = env.command().env("ROFI_BIN", &rofi).output().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        env.args().contains("theme-network-nord.rasi"),
+        "the saved choice was not used on the next launch: {}",
+        env.args()
+    );
+
+    // Ctrl+4 is kb-custom-6; it clears the lock.
+    let rofi = env.rofi(&["@custom:5", "@cancel"]);
+    let output = env.command().env("ROFI_BIN", &rofi).output().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(!choice.exists(), "Ctrl+4 must remove the theme lock");
 }
 
 #[test]

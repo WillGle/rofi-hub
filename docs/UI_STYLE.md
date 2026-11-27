@@ -1,9 +1,12 @@
 # UI style
 
-> **Owner:** WillGle · **Baseline:** 0.3.0 · **Updated:** 2026-11-26
+> **Owner:** WillGle · **Baseline:** 0.3.0 · **Updated:** 2026-11-27
 
-All native apps use one zoned Gruvbox Dark (hard contrast) language. Tokens live
-in `rofi_dmenu::Theme`; layout in `ChromeProfile`; components in `rofi_dmenu::ui`.
+[AGENTS.md](../AGENTS.md#required-ui-rules) defines the mandatory rules for every
+app. This document defines how to apply them. Use `rofi_dmenu::Theme` for color
+roles, `ChromeProfile` for app geometry, and `rofi_dmenu::ui` for shared
+components where the app uses Rust. Script-backed apps use the same visual
+roles and honor user theme overrides. Gruvbox Dark is the fallback palette.
 
 ## Palette
 
@@ -15,7 +18,7 @@ in `rofi_dmenu::Theme`; layout in `ChromeProfile`; components in `rofi_dmenu::ui
 | `border` | `#3c3836` | card borders/dividers |
 | `text` | `#fbf1c7` | primary text |
 | `muted` | `#a89984` | metadata/hints |
-| `accent` | `#fabd2f` | labels/selection strip |
+| `accent` | `#fabd2f` | labels/selection outline |
 | `power` | `#d5c4a1` | system |
 | `work` | `#b8bb26` | Work |
 | `browser` | `#83a598` | Browser |
@@ -31,13 +34,42 @@ in `rofi_dmenu::Theme`; layout in `ChromeProfile`; components in `rofi_dmenu::ui
 
 - JetBrainsMono Nerd Font; 12pt body, 18pt dmenu hero, 26pt fixed-height
   Screen Time hero.
-- Window inset 12px; cards use 6px/8px padding; rows `4px 10px`.
-- Radii: window 12px, input/header/list cards 8px, rows 4px.
-- Selected row: `surface_alt` + `accent` left strip and border.
-- Section: `.active()` band, `▌ TITLE` accent left, muted meta right.
-- Footer: one muted line separated by `·`; action chips use `[key label]`.
+- Window inset 16px, zone spacing 12px, input padding `8px 12px` and standard row padding `6px 10px`.
+- Radii: window 12px, input/header/list cards 8px, selected rows 6px.
+- Selected row: `surface_alt` background with a rounded `accent` outline.
+- Section headers use a fixed band with an accent marker, a heading label,
+  and optional muted metadata. Make headers non-actionable. If Rofi moves its
+  cursor onto a header, the cursor must produce no visible change in the band,
+  text, or border. Keep normal, alternate, and selected styles identical for
+  that header. An action must never use the header style.
+- Give actions a label and a recognizable marker or button treatment. Use a
+  marked warning and an explicit label for disruptive actions. Keep list labels
+  in the theme's row foreground so selection remains legible. Use weight,
+  labels, or glyphs alongside color to distinguish data and actions.
+- Row titles, detail text, and metadata inherit the row foreground. Metadata
+  may use Pango `alpha` for hierarchy, but must not hardcode `text` or `muted`
+  colors: Rofi applies the same markup to normal and selected rows. Keep only
+  the leading marker's semantic role color.
+- Rofi dmenu filters the text before the first NUL, not the display markup.
+  Put the stable index first and the visible search fields after it when a row
+  must be searchable (for example Keybinds).
+- Section headers are fixed. Mark their rows active with `-a` (or equivalent
+  metadata) and define the same background, text, and border for
+  `element normal.active`, `alternate.active`, and `selected.active`.
+- Use real RASI buttons for mouse actions. A `button` uses `content` and
+  `action`; keep the two quoted values on separate lines when they are passed
+  through `-theme-str`, because Rofi 2.0 treats multiple quoted strings on one
+  line as one string.
+- Center aligned content as a block using widget alignment. Give grouped
+  controls and rows enough space at the desktop's actual scale, including the
+  full outline of clickable buttons.
+- Footer: one muted line separated by `·`; action chips use `[key label]` in
+  prompts/confirmations. Primary screens use RASI buttons for mouse actions.
 - Menu launcher: `[launcher] columns = N` (1–6) adds a `-theme-str`
-  `listview { columns: N; }` override; text-heavy apps stay single-column.
+  `listview { columns: N; }` override; the default launcher is 3 columns ×
+  10 rows maximum. Text-heavy menus stay single-column. The emoji picker is
+  fixed at 4 columns × 15 rows maximum; the power menu is fixed at 3 columns ×
+  2 rows for its six actions.
 
 ## Components
 
@@ -54,19 +86,51 @@ Entertainment/System/Other to palette roles.
 
 | App | Width | Lines | Icons | Layout |
 |---|---:|---:|---|---|
-| Hub menu | 96ch | 20 | no | input, message, list |
-| Screen Time | 144ch/dynamic | 18 | no | input, message, list |
-| Calendar | 46ch | 1 | no | centered month message, date input, three buttons in one row |
-| Clipboard | 110ch (auto-fit) | 16 | no | input, message, list |
-| Keybinds | 110ch | 16 | no | input, message, list |
-| Network | 62ch | 6 | no | status message, filter, network list |
+| Hub menu | 96ch | 20 | no | input, message, searchable provider list; height stays fixed while filtering |
+| Screen Time | 144ch/dynamic | 18 | no | header, timeline, inline app details |
+| Calendar | 51ch | 1 | no | centered month message, date input, three RASI buttons in one row |
+| Clipboard | 110ch (auto-fit) | 16 | no | input, message, four RASI action buttons, list |
+| Keybinds | 110ch | 10 | no | input, message, 3-column shortcut list (10 rows max), searchable ids |
+| Network | 74ch | 13 | no | status, action buttons, filter, Wi-Fi and actions (12 candidates) |
+| Atomic Note | 54% | up to 12 | no | action bar, expandable task actions, filter, task status, task list |
 
-Calendar and Network replace the three-line header and section band with the
-layouts in [goal.md §17](../goal.md). Calendar's message contains the centered
-month title and seven-column grid, its input is `Go to date`, and Prev/Today/
-Next are three compact list buttons. Network's message contains one connection
-line and the shortcut line, below it is the `Find network` filter, and the list
-holds only SSIDs; Manage and Connection details are separate screens.
+## Controls and detail panels
+
+- **Calendar.** Keep the centered month grid and date input. Put Prev, Today,
+  and Next in one row of RASI buttons outside the filterable list, with the
+  same actions as Left, Ctrl+t, and Right. Distinguish today's date from a date
+  lookup; the buttons stay visible while the date text is incomplete.
+- **Network.** Keep nearby Wi-Fi and actions in one list. Show 12
+  candidates plus the section header in the main view. Use a colored dot and bold SSID for a network,
+  and an arrow or warning marker for an action. The Details button and `Alt+i`
+  toggle the one panel above the list. Put IP, gateway, VPN, DNS and supplemental
+  link fields there once. Saved connections expand under their row.
+- **Screen Time.** Keep the day summary, timeline and the selected app's
+  expanded detail on the same screen. Open with the first available app
+  selected. `Ctrl+PgUp` and `Ctrl+PgDn` move through app groups. The row under
+  the cursor is separate from the expanded detail; after a theme change restore
+  that app on the same page, falling back to the first app row only when it is
+  gone. Read-only rows and section titles retain their appearance during
+  navigation.
+- **Clipboard.** Use RASI buttons for Copy, Delete, Clear, and Refresh. They
+  share the keyboard paths: Enter copies, `Alt+d` deletes the highlighted entry,
+  `Alt+x` clears the entire history after confirmation, and `Alt+r` refreshes.
+- **Hub Menu.** Keep the typed filter, selected provider id, and window height
+  across `Ctrl+1–4`. Apply the selected palette over the resolved theme instead
+  of replacing the base layout.
+- **Keybinds.** Match both the shortcut and its description. Keep a stable row
+  index for dispatch; section headers and empty results never run a command.
+- **Atomic Tasks.** Keep the task list in view with Add, Open, Clear, and an
+  Actions control. `Enter` or Actions expands Done, Edit, Move, and the four
+  priorities for the task under the cursor. Use no second task menu; keep the
+  existing `Alt+d`, `Alt+e`, `Alt+Up`, `Alt+1–4`, undo, lock, and Waybar
+  behavior. Preserve `Alt+1–4` for priorities.
+
+Use `Ctrl+1` for Nord, `Ctrl+2` for Solarized Light, `Ctrl+3` for Gruvbox Dark
+and `Ctrl+4` to restore the configured theme. Apply the chosen colors over the
+configured theme and keep its typography, dimensions, spacing, and widget order.
+Keep typed input, the selected item, and expanded details intact while switching
+colors. Applying a palette must never submit an action.
 
 `rofi-hub-menu theme dump --app <app>` prints the generated `.rasi`. Installed
 `share/rofi/<app>.rasi` fallbacks are checked against the generator.
@@ -76,15 +140,40 @@ holds only SSIDs; Manage and Connection details are separate screens.
 - Base theme: `~/.config/rofi/theme.rasi`.
 - App layout: `$XDG_DATA_DIRS/rofi/<app>.rasi`.
 - App override: `~/.config/rofi/<app>.rasi`.
+- App theme lock: `~/.local/state/rofi-apps/<app>/theme-choice` for Calendar,
+  Clipboard, Keybinds, Network, and Atomic Tasks; Screen Time keeps its own
+  `theme-choice` in its state directory.
 - Menu theme: `share/rofi/hub-menu.rasi` plus
   `~/.config/rofi-hub-menu/theme`.
 
 Precedence: app override, `ROFI_THEME`, base + layout, packaged fallback,
 built-in fallback. There is no `ROFI_HUB_THEME` or `ROFI_HUB_THEME_FILE`.
-Screen Time owns its `theme-choice` state; the menu owns its own.
+Screen Time owns its `theme-choice` state; the menu owns its own. Calendar,
+Clipboard, Keybinds, Network, and Atomic Tasks persist their palette lock per
+app and `Ctrl+4` removes that lock. The
+menu writes a palette layer over the resolved menu theme, so its font, geometry,
+filter, selection, and list content survive `Ctrl+1–4`; `Ctrl+4` returns to the
+configured theme rather than a hardcoded palette.
 
 ## Screenshots and validation
 
-- Matrix: [`docs/screenshots/ui/`](screenshots/ui/README.md).
-- `cargo test --workspace`, `scripts/test-theme.sh`, `scripts/test-nix.sh`,
-  `nix flake check`.
+For each UI change, run the relevant existing checks and exercise the changed
+path in Rofi with a disposable home or fixture data. The [screenshot
+matrix](screenshots/ui/README.md) describes the Xvfb workflow. Use the desktop
+theme and scale when reproducing a reported visual issue. Current §18
+interaction captures and fixtures are listed in the same screenshot document.
+
+- For a layout change, verify that the content and button outlines fit the
+  window, the main action is visible, and the list remains readable when
+  filtered or scrolled.
+- For a header or selection change, hover and click the header and navigate
+  through it with the keyboard. Its appearance must stay fixed and Enter must
+  run no action on it. Check adjacent selectable rows for readable text.
+- For a theme change, compare the same view with the same font and scale before
+  and after each shortcut. The window dimensions and layout must match. Verify
+  that Enter still targets the same item after switching.
+- For an inline panel, open and close it with its button and shortcut. Confirm
+  that the primary screen remains available and the same control or data is
+  represented only once.
+
+Document the specific cases checked and any remaining unverified behavior.

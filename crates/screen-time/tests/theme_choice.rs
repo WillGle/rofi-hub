@@ -12,7 +12,7 @@ fn theme_background(fixture: &Fixture) -> String {
 }
 
 #[test]
-fn theme_shortcuts_persist_to_app_state_and_alt4_restores_config() {
+fn theme_shortcuts_persist_to_app_state_and_ctrl4_restores_config() {
     init_tz();
     let fixture = Fixture::new();
     fixture.write_config("[theme]\nmode = \"solarized\"\n");
@@ -49,7 +49,7 @@ fn theme_shortcuts_persist_to_app_state_and_alt4_restores_config() {
     fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
     assert_eq!(theme_background(&fixture), "background-color: #2e3440;");
 
-    // Alt+4 clears the app choice and returns to the configured theme.
+    // Ctrl+4 clears the app choice and returns to the configured theme.
     std::fs::write(&request_path, "").unwrap();
     fixture.render_env(
         &["render", "--format", "rofi"],

@@ -94,7 +94,9 @@ by apps. Use one of:
 
 The menu keeps its own theme at `~/.config/rofi-hub-menu/theme`.
 
-Screen Time also keeps its own `theme-choice` state and its own
+Calendar, Clipboard, Keybinds, Network, and Atomic Tasks keep their `Ctrl+1–4`
+theme lock in `~/.local/state/rofi-apps/<app>/theme-choice`; `Ctrl+4` removes
+it. Screen Time also keeps its own `theme-choice` state and its own
 `~/.config/screen-time/config.toml`; it no longer writes hub state.
 
 ## 5. Update scripts and keybinds
@@ -112,7 +114,10 @@ New:
 ```text
 rofi-calendar
 rofi-clipboard
+rofi-keybinds
 rofi-network
+atomic-note
+rofi-screen-time
 ```
 
 The optional menu still provides a launcher:
@@ -145,6 +150,7 @@ hub back, use an old release; new releases no longer publish distro packages.
 | clipboard | 0.8.0 |
 | keybinds | 1.0.0 |
 | network | 0.3.0 |
+| atomic-note | 0.1.0 |
 | screen-time | 0.5.0 |
 | rofi-dmenu | 0.3.0 |
 | rofi-hub-menu | 0.3.0 |

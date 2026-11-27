@@ -28,7 +28,9 @@ priority, and compact layout; golden
 main/detail screens at 1280x800 and 1920x1080 with section markers; and a
 daemon smoke test with a fake Hyprland socket and SIGTERM shutdown. Theme
 integration tests cover Matugen-over-static, corrupt-palette fallback, config
-overrides, generated Rofi themes, and live palette changes on the next render.
+overrides, generated Rofi themes, live palette changes on the next render, and
+cursor/page/detail preservation across theme changes, including the saved Rofi
+selection index.
 The installer integration script covers per-app install, update/uninstall
 independence, prerequisite failure, checksum/signature refusal, path traversal,
 permissions, service handling, and rollback in a temp HOME.

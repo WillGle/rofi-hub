@@ -199,25 +199,29 @@ Keys:
 |---|---|
 | `←` / `→` | Previous / next day (clamped at today) |
 | `↑` / `↓` | Select an app row |
-| `Alt+↓` / `Alt+↑` | Next / previous app-timeline page |
-| `Enter` | Open the selected app detail |
+| `Ctrl+PgDn` / `Ctrl+PgUp` | Next / previous app-timeline page |
+| `Enter` | Expand or collapse details for the selected app |
 | `Esc` | Close the popup |
-| `Backspace` | Back from detail |
+| `Backspace` | Collapse expanded app details |
 | `T` | Today |
 | `R` | Re-read the live snapshot and SQLite |
-| `Alt+1` / `Alt+2` / `Alt+3` | Switch to Nord / Solarized Light / Gruvbox Dark |
-| `Alt+4` | Return to the theme from your config |
+| `Ctrl+1` / `Ctrl+2` / `Ctrl+3` | Switch to Nord / Solarized Light / Gruvbox Dark |
+| `Ctrl+4` | Return to the theme from your config |
 
-The app timeline shows at most five apps at a time. Use `Alt+↓` / `Alt+↑` to
-move to the next or previous page; the popup height stays fixed so returning
-from an app detail does not crop the main view. App names from legacy WM_CLASS
+The app timeline shows at most five apps at a time. Use `Ctrl+PgDn` / `Ctrl+PgUp` to
+move to the next or previous page. Expanded details appear below the timeline.
+App names from legacy WM_CLASS
 values are normalized on read and merged by a one-time migration.
 
 The footer lists the shortcuts. Switching themes reopens the popup on the
-same day and view. The shortcut selection is saved as `theme-choice` in
-the Screen Time state directory and applies on future launches. Press
-`Alt+4` to clear it and return to `theme.mode` in the config. The shortcuts
-leave `config.toml` intact, including when Home Manager owns it.
+same day, page, and view. The row under the cursor is kept separate from the
+expanded detail, so both the selected app and the open detail survive. The
+launcher restores that row by app name after the reopen; if the app has
+disappeared, it selects the first app row on the current page. The shortcut
+selection is saved as `theme-choice` in the Screen Time state directory and
+applies on future launches. Press `Ctrl+4` to clear it and return to
+`theme.mode` in the config. The shortcuts leave `config.toml` intact, including
+when Home Manager owns it.
 
 The dashboard shows a daily total, a `DAY ACTIVITY` overview with a `POWER`
 row, and an `APP TIMELINE` for the top 10 apps. Each slot represents 30

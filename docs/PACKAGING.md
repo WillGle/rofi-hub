@@ -23,6 +23,8 @@ dist/
   rofi-clipboard-0.8.0-x86_64.tar.gz
   rofi-keybinds-1.0.0-x86_64.tar.gz
   rofi-network-0.3.0-x86_64.tar.gz
+  atomic-note-0.1.0-x86_64.tar.gz
+  atomic-note-0.1.0-aarch64.tar.gz
   screen-time-0.5.0-x86_64.tar.gz
   rofi-hub-menu-0.3.0-x86_64.tar.gz   # optional app
   SHA256SUMS
@@ -122,6 +124,7 @@ nix build .#rofi-calendar
 nix build .#rofi-clipboard
 nix build .#rofi-keybinds
 nix build .#rofi-network
+nix build .#atomic-note
 nix build .#screen-time
 nix build .#rofi-hub-menu
 nix build .#rofi-hub-installer

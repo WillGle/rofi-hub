@@ -199,6 +199,103 @@ fn unknown_provider_and_theme_fail_cleanly() {
 }
 
 #[test]
+fn auto_clears_the_menu_override_and_restores_the_configured_theme() {
+    let env = TestEnv::new();
+    env.write_config(
+        "rofi-hub-menu/config.toml",
+        "[theme]\nmode = \"solarized\"\n",
+    );
+
+    let output = env.run(&["theme", "set", "nord"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(
+        fs::read_to_string(env.config.join("rofi-hub-menu/theme")).unwrap(),
+        "nord\n"
+    );
+
+    let output = env.run(&["theme", "set", "auto"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !env.config.join("rofi-hub-menu/theme").exists(),
+        "Ctrl+4/auto must remove the menu override"
+    );
+
+    let output = env.run(&["theme", "show"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("mode:   solarized"), "{text}");
+    assert!(text.contains("source: config.toml"), "{text}");
+}
+
+#[test]
+fn theme_change_keeps_filter_and_selected_provider_id() {
+    let env = TestEnv::new();
+    let marker = env.root.path().join("provider-marker");
+    let provider = env.script(
+        "provider.sh",
+        &format!(
+            "#!{}\nprintf '%s' \"$1\" > '{}'\n",
+            shell_path().display(),
+            marker.display()
+        ),
+    );
+    env.provider(
+        "alpha-one",
+        "Alpha One",
+        &[provider.to_str().unwrap(), "first"],
+    );
+    env.provider(
+        "alpha-two",
+        "Alpha Two",
+        &[provider.to_str().unwrap(), "second"],
+    );
+
+    let args_log = env.root.path().join("rofi-replies-args");
+    let reply_path = env.root.path().join("rofi-replies");
+    fs::write(&reply_path, "@custom:0:2:Alpha\nalpha-two\n").unwrap();
+    let rofi = env.script(
+        "bin/rofi",
+        &format!(
+            "#!/bin/sh\n\
+             printf 'INVOCATION\\n' >> '{}'\n\
+             printf '%s\\n' \"$@\" >> '{}'\n\
+             cat >/dev/null\n\
+             reply=$(sed -n '1p' '{}')\n\
+             sed '1d' '{}' > '{}.tmp' && mv '{}.tmp' '{}'\n\
+             case \"$reply\" in\n\
+               @custom:*:*:*)\n\
+                 rest=${{reply#@custom:}}\n\
+                 code=${{rest%%:*}}\n\
+                 rest=${{rest#*:}}\n\
+                 row=${{rest%%:*}}\n\
+                 filter=${{rest#*:}}\n\
+                 printf '%s\\n%s\\n' \"$row\" \"$filter\"\n\
+                 exit $((10 + code)) ;;\n\
+               *) printf '%s\\n' \"$reply\"; exit 0 ;;\n\
+             esac\n",
+            args_log.display(),
+            args_log.display(),
+            reply_path.display(),
+            reply_path.display(),
+            reply_path.display(),
+            reply_path.display(),
+            reply_path.display(),
+        ),
+    );
+
+    let output = env.command().env("ROFI_BIN", &rofi).output().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(wait_for(&marker), "second");
+    let args = fs::read_to_string(&args_log).unwrap();
+    assert_eq!(args.matches("INVOCATION").count(), 2, "{args}");
+    assert!(args.contains("-filter\nAlpha\n"), "{args}");
+    assert!(args.contains("-selected-row\n2\n"), "{args}");
+    let second = args.rsplit("INVOCATION").next().unwrap();
+    assert!(second.contains("rofi/theme-hub.rasi"), "{second}");
+    assert!(!second.contains("theme-hub-menu.rasi"), "{second}");
+}
+
+#[test]
 fn launched_providers_get_a_clean_environment_and_their_args() {
     let env = TestEnv::new();
     let marker = env.root.path().join("marker");
@@ -295,7 +392,8 @@ fn manager_modes_dispatch_raw_rofi_modes() {
     let args = fs::read_to_string(&log).unwrap();
     assert!(args.contains("-show\ndrun\n"), "{args}");
     assert!(args.contains("-theme\n"), "{args}");
-    assert!(args.contains("rofi/theme-hub.rasi"), "{args}");
+    assert!(args.contains("rofi/theme-hub-menu.rasi"), "{args}");
+    assert!(args.contains("columns: 3; lines: 10;"), "{args}");
 
     let output = env
         .command()
@@ -336,6 +434,30 @@ fn calc_and_emoji_use_their_rofi_modes() {
     let args = fs::read_to_string(&log).unwrap();
     assert!(args.contains("-show\nemoji\n"), "{args}");
     assert!(args.contains("-modi\nemoji\n"), "{args}");
+    assert!(args.contains("columns: 4; lines: 15;"), "{args}");
+}
+
+#[test]
+fn power_menu_uses_a_three_column_grid() {
+    let env = TestEnv::new();
+    let log = env.root.path().join("rofi-args");
+    let rofi = fake_rofi(&env, &log);
+    env.script(
+        "bin/rofi-power-menu",
+        "#!/bin/sh\nprintf 'Shut down\\nReboot\\nSuspend\\n'",
+    );
+
+    let output = env
+        .command()
+        .env("ROFI_BIN", &rofi)
+        .args(["power"])
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-show\npower-menu\n"), "{args}");
+    assert!(args.contains("-modi\npower-menu:"), "{args}");
+    assert!(args.contains("columns: 3; lines: 2;"), "{args}");
 }
 
 #[test]
@@ -376,7 +498,7 @@ fn theme_dump_uses_app_profiles() {
         .unwrap();
     assert!(calendar.status.success(), "{}", stderr(&calendar));
     let calendar = stdout(&calendar);
-    assert!(calendar.contains("46ch"), "{calendar}");
+    assert!(calendar.contains("51ch"), "{calendar}");
     assert!(calendar.contains("lines: 1;"), "{calendar}");
     assert!(calendar.contains("columns: 3;"), "{calendar}");
     assert!(
@@ -384,6 +506,16 @@ fn theme_dump_uses_app_profiles() {
         "{calendar}"
     );
     assert!(calendar.contains("show-icons: false"), "{calendar}");
+
+    let keybinds = env
+        .command()
+        .args(["theme", "dump", "--app", "keybinds"])
+        .output()
+        .unwrap();
+    assert!(keybinds.status.success(), "{}", stderr(&keybinds));
+    let keybinds = stdout(&keybinds);
+    assert!(keybinds.contains("columns: 3;"), "{keybinds}");
+    assert!(keybinds.contains("lines: 10;"), "{keybinds}");
 }
 
 #[test]

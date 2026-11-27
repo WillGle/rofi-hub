@@ -1,10 +1,18 @@
 # UI screenshot matrix
 
-Real Rofi captures of the six native apps in four theme modes, generated
+Real Rofi captures of the seven native apps in four theme modes, generated
 headlessly with Xvfb, Rofi 2.x, and JetBrainsMono Nerd Font.
 
+The `*-current.png` snapshots use disposable fixtures. Real SSIDs, IP
+addresses, clipboard contents, task text, command output, hostnames, and user
+paths are replaced with example data; the committed `fixtures/` files, a
+temporary Screen Time database, and sample menu providers are the source of
+every capture.
+
 The README shows the Gruvbox row. Every app also has `nord`, `solarized`, and
-`auto` captures in this directory.
+`auto` captures in this directory. The four-mode matrix is the palette/layout
+baseline; the `*-current.png` files and the §18 interaction captures below are
+the current controls after the UI-01..08 fixes.
 
 | App | Gruvbox Dark | Nord | Solarized Light | Auto |
 |---|---|---|---|---|
@@ -14,6 +22,7 @@ The README shows the Gruvbox row. Every app also has `nord`, `solarized`, and
 | Clipboard | [![Clipboard Gruvbox](clipboard-gruvbox.png?v=3)](clipboard-gruvbox.png) | [![Clipboard Nord](clipboard-nord.png?v=3)](clipboard-nord.png) | [![Clipboard Solarized](clipboard-solarized.png?v=3)](clipboard-solarized.png) | [![Clipboard Auto](clipboard-auto.png?v=3)](clipboard-auto.png) |
 | Keybinds | [![Keybinds Gruvbox](keybinds-gruvbox.png?v=3)](keybinds-gruvbox.png) | [![Keybinds Nord](keybinds-nord.png?v=3)](keybinds-nord.png) | [![Keybinds Solarized](keybinds-solarized.png?v=3)](keybinds-solarized.png) | [![Keybinds Auto](keybinds-auto.png?v=3)](keybinds-auto.png) |
 | Network | [![Network Gruvbox](network-gruvbox.png?v=5)](network-gruvbox.png) | [![Network Nord](network-nord.png?v=5)](network-nord.png) | [![Network Solarized](network-solarized.png?v=5)](network-solarized.png) | [![Network Auto](network-auto.png?v=5)](network-auto.png) |
+| Atomic Tasks | [![Atomic Tasks Gruvbox](atomic-gruvbox.png)](atomic-gruvbox.png) | [![Atomic Tasks Nord](atomic-nord.png)](atomic-nord.png) | [![Atomic Tasks Solarized](atomic-solarized.png)](atomic-solarized.png) | [![Atomic Tasks Auto](atomic-auto.png)](atomic-auto.png) |
 
 The `auto` column falls back to Gruvbox when no matugen palette or
 `static.env` is present. See [UI style](../../UI_STYLE.md) for the palette,
@@ -49,6 +58,33 @@ Interaction states:
 - Full-name filter still matches the truncated SSID:
   [filtered list](redesign/network-filter-long.png).
 
+## Menu grids
+
+- [App launcher 3×10](hub-launcher-3x10.png)
+- [Emoji picker 4×15](hub-emoji-4x15.png)
+- [Power menu 3×2](hub-power-3col.png)
+
+## §18 UI evidence (2026-11-27)
+
+These captures use the current binaries and disposable fixtures. They record
+the interaction cases from [goal.md](../../../goal.md).
+
+| ID | Capture | Verified behavior |
+|---|---|---|
+| UI-01 | [Keybinds search](redesign/ui01-keybinds-search.png) | Typing `Terminal` matches `Super+Enter`; the fixture executable runs once. |
+| UI-02 | [Keybinds light selection](redesign/ui02-keybinds-light-selection.png), [Clipboard light selection](redesign/ui02-clipboard-light-selection.png) | Title/metadata stay readable on a light selected band; markers keep their role. |
+| UI-03 | [Keybinds header](redesign/ui03-keybinds-header.png) | Clicking or entering a section header keeps its band unchanged and runs nothing. |
+| UI-04 | [Clipboard buttons](redesign/ui04-clipboard-actions.png), [Clear confirmation](redesign/ui04-clipboard-clear-confirm.png), [Refresh with empty filter](redesign/ui04-clipboard-refresh-empty.png) | Copy/Delete act on the selected row; Clear confirms; Cancel preserves every item; Refresh works with no matches. |
+| UI-05 | [Hub filter after Nord](redesign/ui05-hub-filter-nord.png), [Ctrl+4 restored](redesign/ui05-hub-auto-restored.png) | Filter, selected provider, and 1024×353 size survive all four keys; Enter launches the second provider. |
+| UI-06 | [Screen Time cursor after Nord](redesign/ui06-screen-time-cursor-nord.png), [page 2 after Solarized](redesign/ui06-screen-time-page2-solarized.png), [detail after Nord](redesign/ui06-screen-time-detail-nord.png) | Third-row and page-2 selections, date/page, detail, and 1024×523/733 size survive theme changes. |
+| UI-07 | [Atomic inline actions](redesign/ui07-atomic-actions.png), [Atomic Nord palette](redesign/ui07-atomic-theme-nord.png) | Enter or Actions expands Done/Edit/Move/priorities on the same list; filter and selection survive; `Ctrl+1` recolors and persists in the app-owned theme lock. |
+| UI-08 | [Calendar RASI buttons](redesign/ui08-calendar-buttons.png), [typed date after Nord](redesign/ui08-calendar-typed-nord.png), [December→January](redesign/ui08-calendar-january.png) | Prev/Today/Next stay visible while typing and after a theme change; Enter resolves one date query. |
+| Network regression | [Filter and Nord](redesign/network-regression-filter-nord.png), [details after Nord](redesign/network-regression-details-nord.png) | Two SSIDs stay filtered, the second is selected, size stays 804×332/624, and Enter sends one connect request. |
+
+The fixture set is in [`fixtures/`](fixtures): `hyprland.conf`, `cliphist`,
+`wl-copy`, and `nmcli`. Screen Time evidence uses a temporary SQLite fixture
+with eight apps; Atomic Tasks uses a disposable HOME and task file.
+
 ## Regenerating
 
 The captures use the real app binaries through Rofi dmenu, not mockups. The
@@ -74,7 +110,7 @@ DISPLAY=:99 import -window root docs/screenshots/ui/calendar-gruvbox.png
 ```
 
 Use the app binary directly (`rofi-calendar`, `rofi-clipboard`,
-`rofi-keybinds`, `rofi-network`, `rofi-screen-time`) or the optional menu
+`rofi-keybinds`, `rofi-network`, `atomic-note`, `rofi-screen-time`) or the optional menu
 (`rofi-hub-menu`). Theme selection uses the user base theme
 `~/.config/rofi/theme.rasi`, an app override `~/.config/rofi/<app>.rasi`,
 `ROFI_THEME`, or the menu's own `rofi-hub-menu theme set` state. Apps do not

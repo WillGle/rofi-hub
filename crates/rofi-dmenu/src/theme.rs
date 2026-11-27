@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use serde_json::Value;
@@ -113,7 +113,7 @@ impl ChromeProfile {
         match app {
             "screen-time" => Self::new(144, 18, false, 26),
             "calendar" => {
-                let mut profile = Self::new(46, 1, false, 16);
+                let mut profile = Self::new(51, 1, false, 16);
                 profile.columns = 3;
                 profile.placeholder = "DD/MM/YYYY";
                 profile.message_first = true;
@@ -122,9 +122,13 @@ impl ChromeProfile {
                 profile
             }
             "clipboard" => Self::new(110, 16, false, 18),
-            "keybinds" => Self::new(110, 16, false, 18),
+            "keybinds" => {
+                let mut profile = Self::new(110, 10, false, 18);
+                profile.columns = 3;
+                profile
+            }
             "network" => {
-                let mut profile = Self::new(62, 6, false, 16);
+                let mut profile = Self::new(62, 13, false, 16);
                 profile.placeholder = "\u{2026}";
                 profile.message_first = true;
                 profile
@@ -308,19 +312,14 @@ impl Theme {
             )
         };
         let element_layout = if profile.compact_list {
-            "    padding: 4px 8px;\n    border: 0;\n    border-radius: 6px;\n".to_owned()
+            "    padding: 6px 8px;\n    border: 0;\n    border-radius: 6px;\n".to_owned()
         } else {
             format!(
-                "    padding: 4px 10px;\n    border: 0px 0px 1px 0px;\n    border-color: {border};\n    border-radius: 0;\n"
+                "    padding: 6px 10px;\n    border: 0px 0px 1px 0px;\n    border-color: {border};\n    border-radius: 0;\n"
             )
         };
-        let selected_layout = if profile.compact_list {
-            "    border: 0;\n    border-radius: 6px;\n".to_owned()
-        } else {
-            format!(
-                "    border: 0px 0px 1px 2px;\n    border-color: {accent};\n    border-radius: 4px;\n"
-            )
-        };
+        let selected_layout =
+            format!("    border: 1px;\n    border-color: {accent};\n    border-radius: 6px;\n");
 
         let mut out = String::new();
         let _ = write!(
@@ -360,21 +359,21 @@ window {{
     border: 1px;
     border-color: {border};
     border-radius: 12px;
-    padding: 12px;
+    padding: 16px;
     background-color: {base};
 }}
 
 mainbox {{
     background-color: {base};
     children: [ {mainbox_children} ];
-    spacing: 8px;
+    spacing: 12px;
     padding: 0;
 }}
 
 inputbar {{
     background-color: {mantle};
     text-color: {text};
-    padding: 6px 12px;
+    padding: 8px 12px;
     border: 1px;
     border-color: {border};
     border-radius: 8px;
@@ -421,6 +420,7 @@ listview {{
 /* Section rows are marked active by the apps; the band separates zones. */
 element normal.active, element alternate.active, element selected.active {{
     background-color: {surface_alt};
+    text-color: {text};
     border: 0px 0px 1px 0px;
     border-color: {border};
     border-radius: 4px;
@@ -436,10 +436,6 @@ element {{
 element selected {{
     background-color: {surface_alt};
     text-color: {text};
-{selected_layout}}}
-
-element selected.active {{
-    background-color: {surface_alt};
 {selected_layout}}}
 
 element-icon {{
@@ -739,13 +735,19 @@ pub fn active() -> Theme {
 /// Generated files are app-scoped because each app has its own geometry, and
 /// are only rewritten when their content changes.
 pub fn resolve_theme_file(app: &str) -> Option<std::path::PathBuf> {
+    resolve_theme_file_with(app, &Theme::active())
+}
+
+/// Resolve the app theme with an explicit palette for the built-in fallback.
+/// User overrides, `ROFI_THEME`, and the user base theme keep precedence.
+pub fn resolve_theme_file_with(app: &str, theme: &Theme) -> Option<std::path::PathBuf> {
     resolve_theme_file_in(
         app,
         &paths::config_home(),
         &paths::data_dirs_with_system_fallback(),
         paths::global_theme_override().as_deref(),
         &paths::rofi_runtime_dir(),
-        &Theme::active(),
+        theme,
     )
 }
 
@@ -790,6 +792,67 @@ pub fn generate_theme(app: &str, theme: &Theme) -> Option<std::path::PathBuf> {
     write_generated_theme(app, &theme.rasi_with(ChromeProfile::for_app(app)))
 }
 
+/// Layer a palette over the configured app theme so a theme shortcut
+/// retains the user's fonts, widget sizes, spacing, and borders.
+pub fn write_palette_theme(app: &str, base_theme: &Path, theme: &Theme) -> Option<PathBuf> {
+    let import = escape_rasi(&base_theme.display().to_string());
+    let Theme {
+        base,
+        mantle,
+        surface_alt,
+        border,
+        text,
+        muted,
+        accent,
+        ..
+    } = theme;
+    let selected_text = if contrast_ratio(accent, base) >= contrast_ratio(accent, text) {
+        base
+    } else {
+        text
+    };
+    let content = format!(
+        r#"@import "{import}"
+
+* {{
+    text-color: {text};
+    border-color: {border};
+    background: {base};
+    foreground: {text};
+    normal-background: {mantle};
+    normal-foreground: {text};
+    selected-normal-background: {accent};
+    selected-normal-foreground: {selected_text};
+}}
+window {{ background-color: {base}; border-color: {border}; }}
+mainbox, listview {{ background-color: transparent; }}
+inputbar, message {{ background-color: {mantle}; border-color: {border}; text-color: {text}; }}
+prompt {{ background-color: {accent}; text-color: {selected_text}; }}
+entry {{ text-color: {text}; placeholder-color: {muted}; }}
+textbox {{ text-color: {text}; }}
+element, element normal.normal, element alternate.normal {{
+    background-color: transparent;
+    border-color: {border};
+    text-color: {text};
+}}
+element normal.active, element alternate.active, element selected.active {{
+    background-color: {surface_alt};
+    text-color: {text};
+    border: 0px 0px 1px 0px;
+    border-color: {border};
+    border-radius: 4px;
+}}
+element selected, element selected.normal {{
+    background-color: {accent};
+    border-color: {accent};
+    text-color: {selected_text};
+}}
+element-text {{ text-color: inherit; }}
+"#
+    );
+    write_generated_theme(app, &content)
+}
+
 /// A base theme plus layout-only rules. Colors and fonts stay owned by the
 /// base theme; the app only contributes geometry.
 fn layered_theme(app: &str, base: &std::path::Path) -> String {
@@ -822,9 +885,9 @@ fn layout_rasi(profile: ChromeProfile) -> String {
         "    padding: 4px;\n    border: 1px;\n    border-radius: 8px;\n    spacing: 0;\n"
     };
     let element_layout = if profile.compact_list {
-        "    padding: 4px 8px;\n    border: 0;\n    border-radius: 6px;\n"
+        "    padding: 6px 8px;\n    border: 0;\n    border-radius: 6px;\n"
     } else {
-        "    padding: 4px 10px;\n    border: 0px 0px 1px 0px;\n    border-radius: 0;\n"
+        "    padding: 6px 10px;\n    border: 0px 0px 1px 0px;\n    border-radius: 0;\n"
     };
     format!(
         r#"configuration {{
@@ -841,17 +904,17 @@ window {{
     anchor: center;
     border: 1px;
     border-radius: 12px;
-    padding: 12px;
+    padding: 16px;
 }}
 
 mainbox {{
     children: [ {mainbox_children} ];
-    spacing: 8px;
+    spacing: 12px;
     padding: 0;
 }}
 
 inputbar {{
-    padding: 6px 12px;
+    padding: 8px 12px;
     border: 1px;
     border-radius: 8px;
     children: [ prompt, entry ];
@@ -1021,15 +1084,33 @@ mod tests {
     fn generated_theme_has_zoned_chrome() {
         let rasi = Theme::nord().rasi();
         // Shared visual tokens with crates/screen-time/src/theme.rs.
-        assert!(rasi.contains("padding: 12px;"));
+        assert!(rasi.contains("padding: 16px;"));
         assert!(rasi.contains("width: calc( ( 96ch + 64px ) min 94% );"));
         assert!(rasi.contains("border-radius: 12px;"));
-        assert!(rasi.contains("border: 0px 0px 1px 2px;"));
+        assert!(rasi.contains("border: 1px;"));
         assert!(rasi.contains("border-color: #88c0d0;"));
         assert!(rasi.contains("hover-select: false;"));
         assert!(rasi.contains("lines: 20;"));
-        assert!(rasi.contains("padding: 4px 10px;"));
+        assert!(rasi.contains("padding: 6px 10px;"));
         assert!(rasi.contains("border-radius: 8px;"));
+    }
+
+    #[test]
+    fn generated_theme_keeps_active_headers_out_of_the_selection_style() {
+        let rasi = Theme::nord().rasi();
+        let active = rasi
+            .split("element normal.active")
+            .nth(1)
+            .and_then(|rest| rest.split('}').next())
+            .expect("active header rule");
+        assert!(active.contains("text-color: #eceff4;"), "{active}");
+        assert!(active.contains("border-radius: 4px;"), "{active}");
+        assert!(
+            !rasi.contains(
+                "element selected.active {{\n    background-color: #434c5e;\n    border: 1px;"
+            ),
+            "selected active header must not inherit the row outline"
+        );
     }
 
     #[test]

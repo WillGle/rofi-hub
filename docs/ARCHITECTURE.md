@@ -15,7 +15,7 @@ Menu (optional) ──reads manifests, execs apps──► app packages
 
 | Component | Responsibility | Must not do |
 |---|---|---|
-| `installer/install.sh` | verify index/tarballs, copy files, record per-app state, uninstall/update one app | install dependencies, set env/PATH, launch apps, own themes |
+| `install.sh` | verify index/tarballs, copy files, record per-app state, uninstall/update one app | install dependencies, set env/PATH, launch apps, own themes |
 | `rofi-hub-menu` | read provider manifests, show a menu, exec apps | inject theme/env, own app dependencies, break apps when removed |
 | `rofi-dmenu` | dmenu protocol, theme resolver, paths, UI helpers | depend on the menu or installer |
 | `rofi-<app>` | binary + provider + app.toml + own dependencies | depend on the menu or installer |
@@ -29,6 +29,7 @@ Menu (optional) ──reads manifests, execs apps──► app packages
 | `crates/rofi-clipboard` | Clipboard 0.8.0 |
 | `crates/rofi-keybinds` | Keybinds 1.0.0 |
 | `crates/rofi-network` | Network 0.3.0 |
+| `crates/atomic-note` | Atomic Tasks 0.1.0 shell app |
 | `crates/screen-time` | Screen Time 0.5.0, daemon and Rofi UI |
 | `crates/rofi-hub-menu` | optional menu 0.3.0 |
 | `modules/nixos` | per-app and umbrella modules |
@@ -91,8 +92,17 @@ not set a theme, provider id, config, or `PATH` variable.
 
 Generated runtime themes live in `$XDG_RUNTIME_DIR/rofi/theme-<app>.rasi`
 (mode 0600, directory 0700). The generator compares content before writing, so
-a cache hit does not rewrite the file. The menu has its own theme and state
-under `~/.config/rofi-hub-menu`; it never touches an app's theme.
+a cache hit does not rewrite the file. Apps expose `Ctrl+1–4` through the
+shared helper and persist the choice in
+`$XDG_STATE_HOME/rofi-apps/<app>/theme-choice`; Atomic Tasks writes the same
+layout from Bash and `Ctrl+4` removes the lock. The menu has its own theme and
+state under
+`~/.config/rofi-hub-menu`; it never touches an app's theme. Menu theme keys
+write a palette layer (`theme-hub.rasi`) over the resolved menu theme so the
+base layout and font stay intact. Screen Time writes its restored Rofi row to
+`$XDG_RUNTIME_DIR/screen-time/rofi-selection`; the launcher passes that index
+with `-selected-row` after a theme/detail reopen because not every Rofi build
+honors script `new-selection` metadata.
 
 ## Installer
 

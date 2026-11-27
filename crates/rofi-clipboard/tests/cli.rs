@@ -20,7 +20,7 @@ esac
     );
     env.script("wl-copy", r#"cat > "$WL_COPY_OUT""#);
 
-    env.set_reply("1");
+    env.set_reply("1:two");
     let output = env
         .command(BIN)
         .env("DECODE_INPUT", &decode_input)
@@ -41,7 +41,7 @@ esac
 
     let args = env.args_log();
     assert!(args.contains("ARG:FILTER"), "{args}");
-    assert!(args.contains("ARG:-no-custom"), "{args}");
+    assert!(!args.contains("ARG:-no-custom"), "{args}");
     assert!(args.contains("Alt+d"), "{args}");
     let stdin = env.stdin_log();
     assert!(stdin.contains("one"));
@@ -95,8 +95,9 @@ esac
     );
     env.script("wl-copy", "cat >/dev/null\n");
 
-    // Alt+d opens the delete picker; row 1 is the second entry.
-    env.set_replies(&["@custom:2", "1"]);
+    // Rofi row 2 is the second entry, after the section header. The typed
+    // filter must survive the reopen after deleting.
+    env.set_replies(&["@custom:2:2:two", "@cancel"]);
     let output = env
         .command(BIN)
         .env("CLIPHIST_LOG", &calls)
@@ -113,7 +114,76 @@ esac
     assert_eq!(
         std::fs::read_to_string(deleted).unwrap(),
         "8\ttwo\n",
-        "delete picked the wrong entry"
+        "delete removed the wrong selected entry"
+    );
+    let args = env.args_log();
+    assert!(args.contains("ARG:-filter"), "{args}");
+    assert!(args.contains("ARG:two"), "{args}");
+}
+
+#[test]
+fn header_is_static_and_never_copies() {
+    let env = TestEnv::new();
+    let decode = env.home().join("decode-called");
+    let copy = env.home().join("copy-called");
+    env.script(
+        "cliphist",
+        r#"case "$1" in
+  list) printf '7\tone\n8\ttwo\n' ;;
+  decode) : > "$DECODE_CALLED"; cat ;;
+esac
+"#,
+    );
+    env.script("wl-copy", r#": > "$COPY_CALLED"; cat >/dev/null"#);
+
+    env.set_replies(&["section-history", "@cancel"]);
+    let output = env
+        .command(BIN)
+        .env("DECODE_CALLED", &decode)
+        .env("COPY_CALLED", &copy)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    assert!(!decode.exists(), "header decode must not run");
+    assert!(!copy.exists(), "header copy must not run");
+    let args = env.args_log();
+    assert_eq!(args.matches("INVOCATION").count(), 2, "{args}");
+    assert!(args.contains("ARG:-a\nARG:0"), "{args}");
+    assert!(args.contains("element selected.active"), "{args}");
+}
+
+#[test]
+fn main_screen_uses_ras_buttons_for_every_action() {
+    let env = TestEnv::new();
+    env.script(
+        "cliphist",
+        "case \"$1\" in list) printf '7\\tone\\n8\\ttwo\\n' ;; esac\n",
+    );
+    env.script("wl-copy", "cat >/dev/null\n");
+
+    let output = env.run(BIN, &[]);
+    assert!(output.status.success());
+    let args = env.args_log();
+    for button in [
+        "button-copy",
+        "button-delete",
+        "button-clear",
+        "button-refresh",
+    ] {
+        assert!(args.contains(button), "missing {button}: {args}");
+    }
+    for pair in [
+        ("button-copy {", "kb-accept-entry"),
+        ("button-delete {", "kb-custom-3"),
+        ("button-clear {", "kb-custom-1"),
+        ("button-refresh {", "kb-custom-2"),
+    ] {
+        assert!(args.contains(pair.0), "missing {}: {args}", pair.0);
+        assert!(args.contains(pair.1), "missing {}: {args}", pair.1);
+    }
+    assert!(
+        !args.contains("Copy  \u{00b7}"),
+        "text chips remain: {args}"
     );
 }
 
@@ -162,6 +232,50 @@ fn empty_history_shows_an_empty_state() {
         "{}",
         env.stdin_log()
     );
+}
+
+#[test]
+fn theme_choice_is_locked_and_ctrl4_restores_the_configuration() {
+    let env = TestEnv::new();
+    env.script(
+        "cliphist",
+        "case \"$1\" in list) printf '7\\tone\\n8\\ttwo\\n' ;; esac\n",
+    );
+    env.script("wl-copy", "cat >/dev/null\n");
+    env.write_config(
+        "rofi/theme.rasi",
+        "* { font: \"JetBrainsMono Nerd Font 12\"; }\n",
+    );
+    let choice = env.state_home().join("rofi-apps/clipboard/theme-choice");
+
+    // Ctrl+1 is the fourth custom binding: Alt+x, Alt+r and Alt+d come first.
+    env.set_replies(&["@custom:3", "@cancel"]);
+    let output = env.run(BIN, &[]);
+    assert!(output.status.success());
+    assert_eq!(std::fs::read_to_string(&choice).unwrap(), "nord\n");
+
+    env.set_reply("@cancel");
+    let output = env.run(BIN, &[]);
+    assert!(output.status.success());
+    assert!(
+        env.args_log().contains("theme-clipboard-nord.rasi"),
+        "the saved choice was not used on the next launch: {}",
+        env.args_log()
+    );
+
+    env.set_replies(&["@custom:6", "@cancel"]);
+    let output = env.run(BIN, &[]);
+    assert!(output.status.success());
+    assert!(!choice.exists(), "Ctrl+4 must remove the theme lock");
+
+    let args_log = env.home().parent().unwrap().join("rofi-args.log");
+    let _ = std::fs::remove_file(&args_log);
+    env.set_reply("@cancel");
+    let output = env.run(BIN, &[]);
+    assert!(output.status.success());
+    let args = env.args_log();
+    assert!(args.contains("theme-clipboard.rasi"), "{args}");
+    assert!(!args.contains("theme-clipboard-nord.rasi"), "{args}");
 }
 
 #[test]

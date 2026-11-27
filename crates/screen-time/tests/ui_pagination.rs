@@ -37,6 +37,9 @@ fn main_view_pages_apps_and_survives_detail_round_trip() {
         &["render", "--format", "rofi"],
         &[("ROFI_RETV", "1"), ("ROFI_INFO", "Code")],
     );
+    assert!(detail.contains("APP TIMELINE"));
+    assert!(detail.contains("apps 6-8 of 8"));
+    assert!(detail.contains("APP DETAILS"));
     assert!(detail.contains("APP ACTIVITY"));
     assert!(detail.contains("BURSTS"));
 
@@ -81,6 +84,61 @@ fn next_page_on_empty_list_keeps_page_zero() {
     let state: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&fixture.paths.ui_state_path).unwrap()).unwrap();
     assert_eq!(state["page"], 0);
+}
+
+#[test]
+fn theme_change_keeps_page_cursor_and_detail_state() {
+    let fixture = Fixture::new();
+    fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
+    fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "21")]);
+
+    let themed = fixture.render_env(
+        &["render", "--format", "rofi"],
+        &[("ROFI_RETV", "17"), ("ROFI_INFO", "Zoom")],
+    );
+    assert!(themed.contains("apps 6-8 of 8"), "{themed}");
+    assert!(themed.contains("\0new-selection\x1f8"), "{themed}");
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&fixture.paths.ui_state_path).unwrap()).unwrap();
+    assert_eq!(state["page"], 1);
+    assert_eq!(state["cursor"], "Zoom");
+    assert_eq!(
+        std::fs::read_to_string(fixture.paths.runtime_dir.join("rofi-selection")).unwrap(),
+        "8\n"
+    );
+
+    let detail = fixture.render_env(
+        &["render", "--format", "rofi"],
+        &[("ROFI_RETV", "1"), ("ROFI_INFO", "Zoom")],
+    );
+    assert!(detail.contains("APP DETAILS"), "{detail}");
+    assert!(detail.contains("\0new-selection\x1f8"), "{detail}");
+
+    let reopened = fixture.render_env(
+        &["render", "--format", "rofi"],
+        &[("SCREEN_TIME_ROFI_REOPEN", "1"), ("ROFI_RETV", "0")],
+    );
+    assert!(reopened.contains("apps 6-8 of 8"), "{reopened}");
+    assert!(reopened.contains("APP DETAILS"), "{reopened}");
+    assert!(reopened.contains("\0new-selection\x1f8"), "{reopened}");
+}
+
+#[test]
+fn theme_change_falls_back_to_the_first_row_when_the_cursor_is_gone() {
+    let fixture = Fixture::new();
+    fixture.render_env(&["render", "--format", "rofi"], &[("ROFI_RETV", "0")]);
+    let themed = fixture.render_env(
+        &["render", "--format", "rofi"],
+        &[("ROFI_RETV", "18"), ("ROFI_INFO", "Removed App")],
+    );
+    assert!(themed.contains("\0new-selection\x1f6"), "{themed}");
+    let state: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&fixture.paths.ui_state_path).unwrap()).unwrap();
+    assert_eq!(state["cursor"], "Removed App");
+    assert_eq!(
+        std::fs::read_to_string(fixture.paths.runtime_dir.join("rofi-selection")).unwrap(),
+        "6\n"
+    );
 }
 
 #[test]

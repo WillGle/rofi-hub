@@ -21,7 +21,7 @@ fi
 
 cd "$ROOT"
 SYSTEM="$(nix eval --raw --impure --expr builtins.currentSystem)"
-APPS=(rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time rofi-hub-menu)
+APPS=(rofi-calendar rofi-clipboard rofi-keybinds rofi-network atomic-note screen-time rofi-hub-menu)
 
 for app in "${APPS[@]}"; do
     out="$(nix build --no-link --print-out-paths ".#$app" 2>/dev/null)" || out=""
@@ -37,7 +37,7 @@ for app in "${APPS[@]}"; do
     else
         pass "NIX-01 $app closure excludes hub/menu"
     fi
-    if grep -qE -- '-rofi-calendar-|-rofi-clipboard-|-rofi-keybinds-|-rofi-network-|-screen-time-' <<<"$closure" |
+    if grep -qE -- '-rofi-calendar-|-rofi-clipboard-|-rofi-keybinds-|-rofi-network-|-atomic-note-|-screen-time-' <<<"$closure" |
         grep -v "$app-" | grep -q .; then
         fail "NIX-01 $app closure contains another app"
     else
@@ -58,7 +58,7 @@ if [[ -n "$calendar_eval" ]] && grep -q -- '-rofi-calendar-' "$calendar_eval"; t
 else
     fail "NIX-02 calendar module installs the calendar package"
 fi
-if [[ -n "$calendar_eval" ]] && grep -qE -- '-rofi-clipboard-|-rofi-keybinds-|-rofi-network-|-screen-time-|-rofi-hub' "$calendar_eval"; then
+if [[ -n "$calendar_eval" ]] && grep -qE -- '-rofi-clipboard-|-rofi-keybinds-|-rofi-network-|-atomic-note-|-screen-time-|-rofi-hub' "$calendar_eval"; then
     fail "NIX-02 calendar module pulls another app"
 else
     pass "NIX-02 calendar module pulls no other app"

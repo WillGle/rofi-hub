@@ -1205,8 +1205,8 @@ Các exit criteria của M1–M8 được chứng minh bằng `scripts/check-dep
 - Consumer `/etc/nixos`: `flake.lock` đã trỏ `rofi-hub` rev `5977985` (refactor
   commit), `nix flake check --no-build` pass. Live switch generation 1041
   (`/nix/store/l2lfaf297kk546wwk6ks7dhpnci106j3-nixos-system-laptop-...`) active;
-  đủ 6 app (`rofi-calendar`, `rofi-clipboard`, `rofi-keybinds`, `rofi-network`,
-  `screen-time`, `rofi-hub-menu`), `rofi-hub` cũ absent; `screen-time` user unit
+  đủ 6 app ở generation 1041 (`rofi-calendar`, `rofi-clipboard`, `rofi-keybinds`,
+  `rofi-network`, `screen-time`, `rofi-hub-menu`; chưa có `atomic-note`), `rofi-hub` cũ absent; `screen-time` user unit
   active. Generation cũ 1039 vẫn có `rofi-hub`, chưa có `rofi-hub-menu`/`rofi-network`
   — dùng làm mốc rollback CON-05. Link generation 1039 đã bị GC, nhưng closure
   `/nix/store/n4lbs...-nixos-system-think14gryzen-...` vẫn tồn tại và có GC root
@@ -1252,18 +1252,20 @@ Các exit criteria của M1–M8 được chứng minh bằng `scripts/check-dep
 
 ## 17. Thiết kế lại giao diện Calendar và Network
 
-**Trạng thái** · Bản redesign đầu tiên của Calendar và Network đã được triển khai, với bằng chứng ở §17.5. Yêu cầu bổ sung ngày 2026-11-27 về điều khiển trực tiếp và đổi theme trong phiên đang chờ triển khai và nghiệm thu.
+Mọi thay đổi UI tuân theo [AGENTS.md](AGENTS.md#required-ui-rules) và [chuẩn UI](docs/UI_STYLE.md). Phần này ghi thiết kế và bằng chứng triển khai của từng app.
+
+**Trạng thái** · Bản redesign đầu tiên có bằng chứng ở §17.5. Điều khiển trực tiếp và đổi theme trong phiên đã được triển khai và kiểm tra bằng Rofi thật. Kết quả ở §17.6.
 
 ### 17.1. Mục tiêu và ranh giới
 
 Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt tìm một ngày trong tháng. Network cần giúp người dùng nhận biết kết nối hiện tại và chọn mạng từ lần nhìn đầu. Screen Time là tham chiếu cho cách đặt dữ liệu quan trọng vào trung tâm: trục giờ phục vụ việc so sánh thời gian. Lịch có trục tuần riêng, còn bộ chọn mạng cần danh sách dọc.
 
-Áp dụng quyền sở hữu theme và khả năng chạy độc lập trong [goal.md §3.6](goal.md). Dùng palette, font người dùng, màu chọn và cơ chế override hiện hành. Với hai app này, bố cục bên dưới thay cho mẫu header ba dòng và section band trong [UI_STYLE.md](docs/UI_STYLE.md). Screen Time, Hub, Clipboard và Keybinds nằm ngoài phạm vi. Dùng Rust, Rofi dmenu, Pango markup và RASI sẵn có. Chỉ đọc dữ liệu khi mở màn hình hoặc thực hiện thao tác cần nó. Tránh daemon, polling, trình duyệt nhúng và dependency giao diện mới.
+Áp dụng quyền sở hữu theme và khả năng chạy độc lập trong [goal.md §3.6](goal.md). Dùng palette, font người dùng, màu chọn và cơ chế override hiện hành. Với hai app này, bố cục bên dưới thay cho mẫu header ba dòng và section band trong [UI_STYLE.md](docs/UI_STYLE.md). Screen Time, Hub, Clipboard và Keybinds dùng chung khoảng cách, palette và dấu hiệu chọn hàng với bố cục riêng của mỗi app. Dùng Rust, Rofi dmenu, Pango markup và RASI sẵn có. Chỉ đọc dữ liệu khi mở màn hình hoặc thực hiện thao tác cần nó. Tránh daemon, polling, trình duyệt nhúng và dependency giao diện mới.
 
 **Điều khiển và theme trong phiên (2026-11-27)**
 
-- Dùng Atomic Tasks làm tham chiếu cho thao tác: đặt phím ngay cạnh tên hành động, cho gõ ngay khi mở, hiển thị rõ mục đang chọn. Calendar giữ lưới tháng và ba nút điều hướng gọn ở dưới. Network đặt hai nút Scan và Manage ngoài danh sách lọc. Bấm nút hoặc dùng phím tương ứng đều kích hoạt cùng hành động. Hàng SSID đang chọn có nền tương phản phủ toàn chiều ngang, chữ và số vẫn đọc được ở cả theme sáng lẫn tối.
-- Mỗi app mở theo cấu hình theme hiện hành (§3.6). Hiện gợi ý ngắn `Alt+1–4 Theme`. Theo thứ tự phím của Screen Time, `Alt+1` chọn Nord, `Alt+2` Solarized Light, `Alt+3` Gruvbox Dark và `Alt+4` trở về Auto theo cấu hình người dùng. Áp dụng ngay trong app đang mở, kể cả các màn hình con mở tiếp. Chỉ giữ lựa chọn trong phiên của app. Đóng rồi mở lại sẽ dùng cấu hình ban đầu. Hub và các app khác có thể chạy độc lập với lựa chọn này.
+- Dùng Atomic Tasks làm tham chiếu cho thao tác: đặt phím ngay cạnh tên hành động, cho gõ ngay khi mở, hiển thị rõ mục đang chọn. Calendar giữ lưới tháng và ba nút điều hướng gọn ở dưới. Network đặt hai nút Scan và Actions ngoài danh sách lọc. Bấm nút hoặc dùng phím tương ứng đều kích hoạt cùng hành động. Hàng SSID đang chọn có nền tương phản phủ toàn chiều ngang, chữ và số vẫn đọc được ở cả theme sáng lẫn tối.
+- Mỗi app mở theo cấu hình theme hiện hành (§3.6). Hiện gợi ý ngắn `Ctrl+1–4 Theme`. Theo cùng thứ tự palette với Screen Time, `Ctrl+1` chọn Nord, `Ctrl+2` Solarized Light, `Ctrl+3` Gruvbox Dark và `Ctrl+4` trở về Auto theo cấu hình người dùng. Áp dụng palette ngay trong phiên. Giữ nguyên font, kích thước cửa sổ, khoảng cách và bố cục của theme đã cấu hình khi đổi màu. Lưu lựa chọn vào state riêng của app tại `~/.local/state/rofi-apps/<app>/theme-choice` (theme lock), để lần mở sau vẫn dùng palette đã chọn; `Ctrl+4` xóa khóa và trở về cấu hình. Các app khác không đọc state này và vẫn chạy độc lập. Calendar, Network, Screen Time và Hub Menu cùng dùng `Ctrl+1–4` cho theme; ba app đầu giữ khóa trong state của mình, Hub giữ trong state menu. Atomic Tasks vẫn dùng `Alt+1–4` cho mức ưu tiên.
 - Đổi màu giữ nguyên tác vụ. Calendar giữ tháng, ngày tra cứu, chuỗi đang gõ và thông báo hiện tại. Network giữ màn hình, bộ lọc và SSID đang chọn theo định danh, kể cả khi tên hiển thị bị rút gọn. Chuyển theme không kích hoạt scan, connect hay submit. Phân biệt trạng thái bằng cả hình thức và nội dung: ngày tra có gạch dưới, dòng mạng có nhãn Open/Secured.
 
 ### 17.2. Calendar · Đọc tháng rồi nhảy tới ngày
@@ -1296,8 +1298,8 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
 
 ```text
   Connected · Example WiFi
-  [Scan Alt+r]     [Manage Alt+m]
-  Find network   …
+  [Scan Alt+r]     [Actions Alt+m]
+  Find network or action   …
 
   › Neighbor 5G                         92%    Secured
     IoT 2.4G                            69%    Secured
@@ -1305,30 +1307,33 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
     Cafe Open                           45%    Open
     Guest Network                       41%    Secured
 
-  Enter Connect     Alt+1–4 Theme
+  ▌ NETWORK ACTIONS
+  Connection details · Show
+  Connect to hidden network
+  …
 ```
 
-- **Thứ tự và kích thước.** Hiện SSID đang dùng một lần ở dòng trạng thái. Danh sách bên dưới dành cho các mạng có thể chuyển sang. Dùng kết quả gom SSID hiện có, loại SSID đang dùng khỏi danh sách kết nối, sắp tín hiệu giảm dần và dùng tên để phân xử khi bằng nhau. Chọn dòng đầu khả dụng. Dùng một cột dọc, khoảng 56–68ch ở font mặc định, tối đa 94% chiều rộng. Hiện đủ năm mạng khác trong fixture trên màn hình 1280×800. Danh sách dài cuộn riêng. Gợi ý phím nằm ngoài danh sách lọc và cuộn.
-- **Đọc một hàng.** SSID dùng màu chữ chính, tín hiệu căn phải, Open/Secured có vị trí cố định. Tránh dùng icon làm dấu hiệu duy nhất. Tên dài được rút gọn theo chiều rộng hiển thị sau khi dành chỗ cho hai trường bên phải. Lọc theo tên đầy đủ, kết nối bằng SSID gốc, escape markup cho tên hiển thị. Giữ loại bảo mật và băng tần của AP trong dữ liệu, hiển thị chi tiết mạng đang dùng ở Manage.
-- **Thao tác.** Gõ để lọc, ↑/↓ chọn, Enter kết nối. Mạng mở đi thẳng đến thao tác kết nối. Mạng bảo mật mở prompt mật khẩu che ký tự. Esc ở prompt quay về danh sách và hủy thao tác. Báo lỗi kết nối trong một dòng trạng thái, cho phép chọn lại. Thành công thì đọc lại trạng thái và đưa SSID vừa kết nối lên đầu màn hình. Alt+r yêu cầu scan. Alt+m mở quản lý ngay cả khi danh sách đang lọc hoặc rỗng. Esc tại màn hình chính đóng app.
-- **Manage.** Dùng danh sách hành động có nhãn cụ thể. Gồm Connection details khi có dữ liệu, bật/tắt Wi-Fi theo trạng thái, mạng ẩn, sửa profile đã lưu, ngắt Wi-Fi hiện tại, kết nối/ngắt Ethernet theo interface. Chỉ hiện hành động có đối tượng thích hợp. Kết nối Ethernet giữ cả đường chọn interface và thao tác nhanh khi có interface khả dụng. Esc từ chi tiết quay về Manage, Esc từ Manage quay về bộ chọn mạng. Luồng profile giữ editor hiện có. Với mạng ẩn, hủy ở bước SSID hoặc mật khẩu đều quay lại, chỉ chuỗi mật khẩu rỗng được xác nhận chủ động mới biểu thị mạng mở.
-- **Connection details.** Tiêu đề là tên kết nối. Mỗi dòng một cặp nhãn–giá trị cho interface, băng tần/bảo mật khi có, địa chỉ IP/prefix, gateway, subnet, broadcast, DNS và MAC. Cho giá trị dài xuống dòng. Dữ liệu thiếu dùng dấu gạch. Chỉ truy vấn các thông số chi tiết khi mở màn này nếu phần đọc trạng thái hiện tại cho phép tách riêng.
+- **Thứ tự và kích thước.** Hiện SSID đang dùng một lần ở dòng trạng thái. Danh sách bên dưới dành cho các mạng có thể chuyển sang. Dùng kết quả gom SSID hiện có, loại SSID đang dùng khỏi danh sách kết nối, sắp tín hiệu giảm dần và dùng tên để phân xử khi bằng nhau. Chọn dòng đầu khả dụng. Dùng một cột dọc, 74ch ở font mặc định, tối đa 94% chiều rộng. Hiện đủ năm mạng khác trong fixture trên màn hình 1280×800. Danh sách dài cuộn riêng. Gợi ý phím nằm ngoài danh sách lọc và cuộn.
+- **Đọc một hàng.** SSID dùng màu chữ chính, tín hiệu căn phải, Open/Secured có vị trí cố định. Tránh dùng icon làm dấu hiệu duy nhất. Tên dài được rút gọn theo chiều rộng hiển thị sau khi dành chỗ cho hai trường bên phải. Lọc theo tên đầy đủ, kết nối bằng SSID gốc, escape markup cho tên hiển thị. Giữ loại bảo mật và băng tần của AP trong dữ liệu, hiển thị chi tiết mạng đang dùng trong khối Details.
+- **Thao tác.** Gõ để lọc, ↑/↓ chọn, Enter kết nối. Mạng mở đi thẳng đến thao tác kết nối. Mạng bảo mật mở prompt mật khẩu che ký tự. Esc ở prompt quay về danh sách và hủy thao tác. Báo lỗi kết nối trong một dòng trạng thái, cho phép chọn lại. Thành công thì đọc lại trạng thái và đưa SSID vừa kết nối lên đầu màn hình. Alt+r yêu cầu scan. Alt+m đưa con trỏ tới nhóm Actions trong cùng danh sách và xóa bộ lọc để thấy các hành động. Esc tại màn hình chính đóng app.
+- **Actions.** Nhóm thao tác nằm ngay sau danh sách Wi-Fi và dùng chung bộ lọc. Gồm Connection details khi có dữ liệu, bật/tắt Wi-Fi theo trạng thái, mạng ẩn, sửa profile đã lưu, ngắt Wi-Fi hiện tại, kết nối/ngắt Ethernet theo interface. Chỉ hiện hành động có đối tượng thích hợp. Kết nối Ethernet giữ cả đường chọn interface và thao tác nhanh khi có interface khả dụng. Nút Details hoặc `Alt+i` mở và thu gọn một khối thông tin phía trên danh sách. Saved connections mở rộng ngay dưới hàng tương ứng. Luồng profile giữ editor hiện có. Với mạng ẩn, hủy ở bước SSID hoặc mật khẩu đều quay lại, chỉ chuỗi mật khẩu rỗng được xác nhận chủ động mới biểu thị mạng mở.
+- **Connection details.** Tiêu đề là tên kết nối. Mỗi dòng một cặp nhãn–giá trị cho interface, băng tần/bảo mật khi có, địa chỉ IP/prefix, gateway, subnet, broadcast, DNS và MAC. Cho giá trị dài xuống dòng. Dữ liệu thiếu dùng dấu gạch. Chỉ truy vấn thông số khi mở rộng Connection details.
 - **Trạng thái đặc biệt.** Wi-Fi bật nhưng chưa nối hiện “Wi-Fi disconnected” và danh sách. Chỉ có mạng đang dùng thì hiện “No other networks found”. Quét rỗng hiện “No networks found” cùng phím Scan. Lọc rỗng vẫn cho sửa/xóa bộ lọc. Radio tắt hiện “Wi-Fi off” với hành động Turn Wi-Fi on. Thiếu adapter hiện “No Wi-Fi adapter” và các lựa chọn Ethernet khả dụng. Có Ethernet đang nối thì ghi interface trên dòng trạng thái, kể cả khi Wi-Fi tắt. Các câu thông báo rỗng là văn bản tĩnh. Chọn chúng tuyệt đối không kích hoạt lệnh thay đổi radio hoặc kết nối.
 
 ### 17.4. Handoff cho agent triển khai
 
 1. Chạy từng binary với cấu hình mặc định, lưu ảnh trước ở cùng độ phân giải. Xem [cách chụp Rofi thật và fixtures](docs/screenshots/ui/README.md). Dùng fixture nmcli cho kiểm tra tương tác, kể cả biến thể lỗi/hủy trong thư mục tạm, tránh đổi mạng đang sử dụng.
 2. Làm Calendar riêng. Bắt đầu từ [run, render_sheet và render_note](crates/rofi-calendar/src/main.rs). Giữ parser và quy tắc lịch. Xác minh widget order, ba cột một hàng, điều hướng qua cuối năm và nhập trực tiếp trong Rofi thật. Một lưới căn đúng trong chuỗi Rust vẫn có thể lệch khi Pango render.
-3. Làm Network riêng. Bắt đầu từ [vòng lặp màn hình, build_menu và Action](crates/rofi-network/src/main.rs). Tách các lựa chọn chính, quản lý và chi tiết. Kiểm tra ánh xạ lựa chọn sau lọc về đúng action. Kiểm tra hủy prompt bằng log đối số của nmcli giả với dữ liệu giả, xác nhận không có lệnh connect. Kiểm tra luồng Ethernet và profile từ Manage.
+3. Làm Network riêng. Bắt đầu từ [vòng lặp màn hình, build_menu và Action](crates/rofi-network/src/main.rs). Giữ Wi-Fi, hành động và chi tiết trong cùng danh sách. Kiểm tra ánh xạ lựa chọn sau lọc về đúng action. Kiểm tra hủy prompt bằng log đối số của nmcli giả với dữ liệu giả, xác nhận không có lệnh connect. Kiểm tra luồng Ethernet và profile trong nhóm Actions.
 4. Đối chiếu [bộ sinh theme và ChromeProfile](crates/rofi-dmenu/src/theme.rs) với hai fallback [calendar.rasi](crates/rofi-calendar/share/rofi/calendar.rasi) và [network.rasi](crates/rofi-network/share/rofi/network.rasi). Đặt thay đổi widget order/geometry đúng app, đồng bộ theme sinh ra và fallback. Giữ thứ tự ưu tiên theme trong goal.md. Dùng lại helper khi đáp ứng bố cục.
 5. Chạy kiểm tra hiện có từ root: `cargo test -p rofi-calendar -p rofi-network -p rofi-dmenu` và `bash scripts/test-theme.sh`. Nếu assertion cũ khóa một bố cục đã được thay thế, đối chiếu với hành vi mới trước khi cập nhật. Chạy trực tiếp entry point của hai app để kiểm tra tương tác.
-6. Nghiệm thu bằng ảnh Rofi thật ở 1280×800, cùng font và scale cho cặp trước/sau. Xem Gruvbox, Nord, Solarized Light và Auto theo quy trình repo. Với Calendar, ảnh chính phải đọc rõ bảy cột và hôm nay, ảnh nhập ngày phải phân biệt ngày tìm được. Với Network, ảnh fixture phải hiện kết nối hiện tại và năm lựa chọn, ảnh Manage/details phải đọc được giá trị dài. Thu hẹp màn hình để kiểm tra cuộn, cắt SSID và mép phải lưới lịch. Ghi riêng kết quả quan sát và ca chưa chạy. Ảnh ở nhiều theme chỉ xác minh màu sắc khi chưa thử hành vi bàn phím.
+6. Nghiệm thu bằng ảnh Rofi thật ở 1280×800, cùng font và scale cho cặp trước/sau. Xem Gruvbox, Nord, Solarized Light và Auto theo quy trình repo. Với Calendar, ảnh chính phải đọc rõ bảy cột và hôm nay, ảnh nhập ngày phải phân biệt ngày tìm được. Với Network, ảnh fixture phải hiện kết nối hiện tại và năm lựa chọn, phần chi tiết mở rộng phải đọc được giá trị dài. Thu hẹp màn hình để kiểm tra cuộn, cắt SSID và mép phải lưới lịch. Ghi riêng kết quả quan sát và ca chưa chạy. Ảnh ở nhiều theme chỉ xác minh màu sắc khi chưa thử hành vi bàn phím.
 
-**Nghiệm thu bổ sung trong Rofi thật** (đang mở)
+**Nghiệm thu bổ sung trong Rofi thật**
 
-- [ ] Calendar: chuyển sang tháng khác, tra một ngày rồi đổi theme. Kiểm tra tháng, ngày tra và dấu gạch dưới. Gõ tiếp một ngày khác, đổi theme trước Enter rồi xác nhận đúng chuỗi đã nhập. Thử cả ba nút bằng chuột và bằng phím ghi trên nút.
-- [ ] Network: dùng fixture có ít nhất hai SSID cùng khớp bộ lọc. Gõ lọc, chọn dòng thứ hai, đổi theme rồi Enter. Kiểm tra bộ lọc, nền chọn và log của nmcli giả: đúng SSID ban đầu, chỉ phát sinh yêu cầu kết nối sau Enter. Thử Scan và Manage bằng chuột lẫn phím khi danh sách đang lọc.
-- [ ] Cả hai app: thử đủ bốn phím theme, mở màn hình con của Network rồi quay lại. Mở đồng thời hai app, đổi theme ở một app và kiểm tra app kia. Đóng, mở lại và đối chiếu cấu hình theme cùng giao diện ban đầu. Ghi kết quả thao tác cạnh ảnh Rofi trước/sau của cùng một trạng thái.
+- [x] Calendar: chuyển sang tháng khác, tra một ngày rồi đổi theme. Kiểm tra tháng, ngày tra và dấu gạch dưới. Gõ tiếp một ngày khác, đổi theme trước Enter rồi xác nhận đúng chuỗi đã nhập. Thử cả ba nút bằng chuột và bằng phím ghi trên nút.
+- [x] Network: dùng fixture có ít nhất hai SSID cùng khớp bộ lọc. Gõ lọc, chọn dòng thứ hai, đổi theme rồi Enter. Kiểm tra bộ lọc, nền chọn và log của nmcli giả: đúng SSID ban đầu, chỉ phát sinh yêu cầu kết nối sau Enter. Thử Scan và Manage bằng chuột lẫn phím khi danh sách đang lọc.
+- [x] Cả hai app: thử đủ bốn phím theme, mở màn hình con của Network rồi quay lại. Mở đồng thời hai app, đổi theme ở một app và kiểm tra app kia. Đóng, mở lại và đối chiếu cấu hình theme cùng giao diện ban đầu. Ghi kết quả thao tác cạnh ảnh Rofi trước/sau của cùng một trạng thái.
 
 ### 17.5. Kết quả triển khai (2026-11-26)
 
@@ -1336,7 +1341,7 @@ Người dùng chọn Rofi để các mini app nhẹ. Calendar cần giúp mắt
 
 - Thứ tự widget: message (tháng + lưới) → inputbar `Go to date` → listview 3
   nút trên một hàng; theme sinh và fallback `calendar.rasi` cùng profile
-  46ch, `columns: 3`, `lines: 1`.
+  51ch, `columns: 3`, `lines: 1`.
 - Lưới 7 cột monospace, số căn phải, tiêu đề/lưới canh giữa; hôm nay dùng nền
   accent; ngày tìm được dùng chữ đậm + gạch dưới và dòng `Thứ, dd/mm/yyyy`.
   Tháng 6 tuần, tháng 2 nhuận và chuyển 12→1 có unit test.
@@ -1396,3 +1401,279 @@ native ARM trên runner (job `nix-arm` đã thêm nhưng chưa có run), và ký
 bằng minisign key offline.
 
 **Điểm kết thúc.** Agent bàn giao ảnh trước/sau của từng app, kết quả thao tác và kết quả các lệnh đã chạy. Nếu báo cáo cải thiện RAM hoặc thời gian mở, kèm số đo cùng máy, cùng fixture và cùng cấu hình. Mục tiêu của đợt này là khả năng đọc và thao tác trong Rofi.
+
+### 17.6. Kiểm tra điều khiển và đổi theme (2026-11-27)
+
+- Calendar giữ tháng 10/2026 và ngày tra 15/10 khi đổi theme, đồng thời giữ chuỗi `19` đang nhập. Enter sau khi đổi theme xác nhận 19/10. Đã dùng cả chuột và phím cho Prev, Today và Next. [Mặc định](docs/screenshots/ui/redesign/calendar-session-default.png) · [Đổi sang Nord khi đang nhập](docs/screenshots/ui/redesign/calendar-session-nord.png)
+- Network lọc `Cafe`, chọn `Cafe Open` ở hàng thứ hai rồi đổi theme. Log `nmcli` giả giữ nguyên trong lúc đổi. Enter gửi đúng một lệnh kết nối cho `Cafe Open`. Với truy vấn rỗng kết quả, Enter giữ danh sách và Alt+m vẫn mở Manage. Đã dùng chuột và phím cho Scan và Manage, mở Connection details rồi đổi theme và quay lại. [Mặc định](docs/screenshots/ui/redesign/network-session-default.png) · [Đổi sang Nord với hai kết quả](docs/screenshots/ui/redesign/network-session-nord.png)
+- Dùng Xvfb và Rofi 2.0.0 với hai màn hình 1280×800 và 1024×700. Đã thử đủ bốn phím trên cả hai app. Hai app chạy đồng thời trên hai display dùng cùng thư mục runtime. Đổi theme ở một app giữ nguyên theme app kia. Mở lại từng app dùng file override gốc. SHA-256 của cả hai file cấu hình giữ nguyên.
+- Rust 1.89: workspace test pass 266 test trong 24 nhóm. Clippy cho ba crate liên quan pass với `-D warnings`. `scripts/test-apps.sh` pass 31/0 và `scripts/test-theme.sh` pass 14/0.
+
+### 17.7. Bố cục một màn hình và phím Screen Time
+
+- Các app dùng chung bộ sinh RASI cho khoảng cách, viền và trạng thái hàng được chọn. Calendar giữ lưới tháng và đặt Prev/Today/Next thành nút RASI ngoài danh sách lọc. Keybinds và Hub giữ danh sách có lọc; Clipboard dùng nút RASI cho các thao tác. Screen Time giữ header và timeline, với phần chi tiết mở rộng bên dưới. Atomic Tasks đưa thao tác task vào vùng mở rộng ngay trên danh sách.
+- Network đặt danh sách Wi-Fi và Actions cùng vùng cuộn. `Alt+m` nhảy đến Actions. `Alt+i` hoặc nút Details hiện hoặc ẩn IP, gateway, VPN và DNS dưới trạng thái kết nối. Thông số kết nối chỉ xuất hiện trong khối Details. Saved connections mở rộng trong danh sách. Các prompt nhập mật khẩu và xác nhận giữ riêng.
+- Clipboard dùng `Alt+d` để xóa hàng đang chọn trong danh sách đã lọc; các nút Copy/Delete/Clear/Refresh dùng cùng đường xử lý với Enter/`Alt+d`/`Alt+x`/`Alt+r`. Xóa toàn bộ lịch sử vẫn yêu cầu xác nhận.
+- Screen Time dùng `Ctrl+1–4` để chọn theme và `Ctrl+PgUp/PgDn` để chuyển nhóm timeline. Enter mở chi tiết bên dưới timeline. Backspace hoặc Enter lại trên app đó thu gọn. Đổi theme giữ ngày, trang, app đang trỏ và chi tiết đang mở. Atomic Tasks giữ bộ phím riêng và mở vùng thao tác bằng Enter/Actions.
+
+## 18. Báo cáo UI và lộ trình đạt 10/10
+
+**Trạng thái** · Đã triển khai và xác minh bản trong working tree ngày 2026-11-27.
+Mục này áp dụng cho bảy app và bổ sung tiêu chí nghiệm thu theo
+[AGENTS.md](AGENTS.md#required-ui-rules) và [chuẩn UI](docs/UI_STYLE.md). Các
+điểm dưới đây là điểm sau khi UI-01..08 pass trên Rofi thật; ảnh và log nằm
+trong [bộ ảnh §18](docs/screenshots/ui/README.md).
+
+### 18.1. Cách chấm và kết quả
+
+Mỗi nhóm tối đa 2 điểm. Điểm 10 yêu cầu cả năm nhóm đạt đủ điểm trên luồng đã
+xác minh.
+
+| App | Bố cục, dễ đọc | Một màn hình | Điều khiển, header | Theme, trạng thái | Chạy độc lập | Tổng |
+|---|---:|---:|---:|---:|---:|---:|
+| Network | 2 | 2 | 2 | 2 | 2 | **10** |
+| Calendar | 2 | 2 | 2 | 2 | 2 | **10** |
+| Screen Time | 2 | 2 | 2 | 2 | 2 | **10** |
+| Atomic Tasks | 2 | 2 | 2 | 2 | 2 | **10** |
+| Hub Menu | 2 | 2 | 2 | 2 | 2 | **10** |
+| Clipboard | 2 | 2 | 2 | 2 | 2 | **10** |
+| Keybinds | 2 | 2 | 2 | 2 | 2 | **10** |
+
+- **Bố cục, dễ đọc.** Nội dung phục vụ tác vụ chính, đủ khoảng cách, chữ đọc
+  được ở cả hàng thường và hàng đang chọn.
+- **Một màn hình.** Hoàn tất tác vụ thường dùng hoặc mở rộng chi tiết ngay
+  trong app. Prompt riêng cho nhập liệu hoặc xác nhận được phép.
+- **Điều khiển, header.** Phím ghi trên UI đúng với hành vi. Nút bấm được.
+  Header giữ nguyên hình thức và không kích hoạt hành động.
+- **Theme, trạng thái.** Tôn trọng cấu hình. Nếu có đổi theme, dùng `Ctrl+1–4`
+  và giữ kích thước, font, bộ lọc, lựa chọn và phần chi tiết đang mở. App chưa
+  có đổi theme trong phiên được chấm trên khả năng tuân thủ theme hiện có.
+- **Chạy độc lập.** Khởi động được từ entry point riêng. App sở hữu cấu hình và
+  dependency. Hub Menu là launcher tùy chọn.
+
+### 18.2. Phát hiện theo mức độ ưu tiên
+
+Bảng dưới giữ nguyên hiện tượng audit ban đầu để đối chiếu. Trạng thái hiện tại:
+cả tám mục đã đóng và có ca kiểm chứng trong §18.3.
+
+| ID | Mức | App | Hiện tượng đã kiểm tra |
+|---|---|---|---|
+| UI-01 | Cao | Keybinds | Fixture có hàng `Super+Enter Terminal`. Gõ `Terminal` làm danh sách rỗng. Rofi lọc chuỗi dòng đầu vào, hiện là ID số. |
+| UI-02 | Cao | Clipboard, Keybinds | Theme desktop có nền chọn xanh nhạt. Màu chữ gắn cứng trong Pango vẫn sáng trên nền đó, khiến nội dung hàng đang chọn khó đọc. |
+| UI-03 | Trung bình | Clipboard, Keybinds, Hub Menu | Click `HISTORY`, `BASIC`, `PRODUCTIVITY` làm header có nền hoặc viền chọn. Đánh dấu `nonselectable` chưa đủ để giữ hình thức cố định. |
+| UI-04 | Trung bình | Clipboard | `Copy`, `Delete`, `Clear`, `Refresh` trông như chip thao tác, nhưng hiện được dựng bằng văn bản trong message. Bàn phím đã có luồng riêng. |
+| UI-05 | Trung bình | Hub Menu | Lọc `calendar` rồi bấm `Ctrl+1` làm mất bộ lọc, danh sách quay về ba app và chiều cao tăng từ 236 lên 470 px trên fixture. |
+| UI-06 | Trung bình | Screen Time | Chọn hàng `Brave`, bấm `Ctrl+1`, rồi Enter mở `Code`. Ngày và trang vẫn còn nhưng vị trí app đang chọn bị đặt lại lúc popup mở lại. |
+| UI-07 | Trung bình | Atomic Tasks | Enter mở menu Task riêng với Done, Edit, Priority và Move to top. Đây là lần chọn thứ hai cho các thao tác thường dùng. |
+| UI-08 | Thấp | Calendar | Khi nhập truy vấn ngày, bộ lọc Rofi ẩn hàng Prev / Today / Next. Điều hướng bằng phím vẫn hoạt động. |
+
+**Network** đạt trên phạm vi đã kiểm tra. `Alt+i` bật/tắt một khối chi tiết,
+các loại hàng đọc được, header giữ hình thức, và đổi đủ bốn theme giữ kích
+thước. Hạng mục Network của đợt này là kiểm tra hồi quy sau thay đổi dùng chung.
+
+### 18.3. Thứ tự triển khai
+
+Các mục dưới đây đã hoàn tất. Ghi kết quả sau từng mục và giữ các thay đổi có
+sẵn trong working tree.
+
+#### Đợt 1 · Tìm kiếm, tương phản và header
+
+- [x] **UI-01 — Keybinds.** Sửa [dựng danh sách và xử lý lựa chọn](crates/rofi-keybinds/src/main.rs).
+  Đưa tổ hợp phím và mô tả vào phần được dmenu lập chỉ mục, đồng thời giữ chỉ
+  số gốc hoặc ID ổn định để dispatch về đúng binding. Vẫn phân biệt hàng chạy
+  được và hàng chỉ tra cứu. Kiểm tra trong Rofi bằng fixture
+  [hyprland.conf](docs/screenshots/ui/fixtures/hyprland.conf). Tìm lần lượt
+  `Terminal` và `Super+Enter`, xác nhận cùng một hàng. Enter với executable giả
+  phải chạy đúng một lần. Header và kết quả rỗng không được chạy lệnh.
+  **Kết quả:** row id dạng `<index>\t<combo>\t<description>`; Rofi thật lọc
+  `Terminal` còn đúng `Super+Enter`, Enter chạy `foot` một lần; click/Enter
+  trên `BASIC` giữ menu mở.
+  [Ảnh](docs/screenshots/ui/redesign/ui01-keybinds-search.png).
+- [x] **UI-02 — Clipboard và Keybinds.** Sửa nơi dựng dòng hoặc
+  [helper hiển thị](crates/rofi-dmenu/src/ui.rs). Cho nội dung chữ và metadata
+  thừa hưởng foreground của hàng, giữ trọng lượng chữ, ký hiệu và vai trò màu
+  cần thiết. Xem cả hàng thường và hàng chọn trên theme nền xanh của desktop và
+  ít nhất một theme sáng. Kiểm tra hàng text, URL và ảnh giả của Clipboard, tổ
+  hợp phím và mô tả của Keybinds. Nếu sửa helper dùng chung, đối chiếu Hub và
+  Network trước khi bàn giao.
+  **Kết quả:** title/detail/metadata dùng foreground kế thừa, metadata dùng
+  `alpha`; leading marker giữ vai trò màu. Đã thử nền chọn xanh nhạt trên
+  Clipboard và Keybinds, cùng Network/Hub.
+  [Keybinds](docs/screenshots/ui/redesign/ui02-keybinds-light-selection.png) ·
+  [Clipboard](docs/screenshots/ui/redesign/ui02-clipboard-light-selection.png).
+- [x] **UI-03 — Clipboard, Keybinds và Hub.** Đặt header vào trạng thái tĩnh
+  như Network. Xem cách Network truyền chỉ số hàng active và áp dụng cùng style
+  cho các trạng thái của header trong [màn hình Network](crates/rofi-network/src/main.rs).
+  Kiểm tra cả theme mặc định và theme người dùng. Hover, click và điều hướng
+  qua header phải giữ nguyên nền, chữ và viền. Enter trên header giữ app mở và
+  không chạy lệnh. Hàng dữ liệu cạnh header vẫn phải có highlight dễ nhận ra.
+  Shell/CLI trả về header cũng phải được bỏ qua an toàn.
+  **Kết quả:** `-a` đánh dấu header, rule `element normal.active`,
+  `alternate.active`, `selected.active` giống nhau; app bỏ qua id `section-*`.
+  Click/Enter header trên Keybinds và Hub giữ app mở, không chạy lệnh.
+  [Keybinds](docs/screenshots/ui/redesign/ui03-keybinds-header.png).
+- [x] **UI-04 — Clipboard.** Đổi chip văn bản thành nút RASI thật trên màn hình
+  lịch sử. Nút và phím tương ứng dùng cùng một đường xử lý, gồm Copy với Enter,
+  Delete với `Alt+d`, Clear với `Alt+x`, Refresh với `Alt+r`. Mở với fixture có
+  ít nhất hai mục cùng khớp bộ lọc. Sau khi chọn hàng thứ hai, bấm Copy hoặc
+  Delete phải tác động đúng mục và giữ nguyên hành vi của phím tắt. Clear vẫn
+  qua xác nhận, Cancel giữ toàn bộ mục. Refresh hoạt động cả khi kết quả lọc
+  rỗng. Dùng `cliphist` và `wl-copy` giả để kiểm tra cả đường chuột và bàn phím.
+  [Mã Clipboard](crates/rofi-clipboard/src/main.rs)
+  **Kết quả:** bốn nút RASI dùng `content`/`action` trên dòng riêng; Copy
+  (`kb-accept-entry`), Delete, Clear và Refresh đi đúng đường phím. Click Copy
+  copy đúng hàng; Delete xóa đúng hàng thứ hai; Clear mở xác nhận và Cancel
+  giữ đủ 3 mục; Refresh giữ bộ lọc khi danh sách rỗng.
+  [Nút](docs/screenshots/ui/redesign/ui04-clipboard-actions.png) ·
+  [Clear](docs/screenshots/ui/redesign/ui04-clipboard-clear-confirm.png) ·
+  [Refresh](docs/screenshots/ui/redesign/ui04-clipboard-refresh-empty.png).
+
+#### Đợt 2 · Giữ trạng thái khi đổi theme
+
+- [x] **UI-05 — Hub Menu.** Sửa [vòng lặp mở launcher](crates/rofi-hub-menu/src/hub.rs)
+  và [resolve theme](crates/rofi-hub-menu/src/theme.rs). Dùng cơ chế giữ
+  input/lựa chọn hiện có của `rofi-dmenu`, giữ ID provider thay vì coi chỉ số
+  nhìn thấy là định danh. Áp palette lên theme đã resolve. Giữ font, chiều rộng,
+  chiều cao và nội dung list. `Ctrl+4` khôi phục theme theo cấu hình. Giữ quyền
+  sở hữu theme ở menu. Fixture phải có ít nhất hai provider khớp cùng từ khóa.
+  Chọn provider thứ hai, bấm lần lượt bốn phím, đối chiếu bộ lọc và kích thước.
+  Enter chỉ gọi provider thứ hai và chỉ gọi sau khi xác nhận.
+  **Kết quả:** dùng `dmenu_with_input`, giữ `selected_id` và `filter`; palette
+  được ghi đè lên theme resolve (`theme-hub.rasi`), `listview { dynamic: false }`
+  giữ chiều cao. Thử Nord/Solarized/Gruvbox/Auto: bộ lọc `Alpha`, provider thứ
+  hai, kích thước 1024×353 giữ nguyên; `Ctrl+4` về Auto; Enter chạy provider
+  thứ hai.
+  [Nord](docs/screenshots/ui/redesign/ui05-hub-filter-nord.png) ·
+  [Ctrl+4](docs/screenshots/ui/redesign/ui05-hub-auto-restored.png).
+- [x] **UI-06 — Screen Time.** Sửa [xử lý giao diện script mode](crates/screen-time/src/ui.rs),
+  [renderer](crates/screen-time/src/render.rs) và
+  [launcher](crates/screen-time/share/rofi-screen-time) nếu cần. Kiểm tra Rofi
+  thật trả định danh nào khi nhận phím theme trước khi chọn cách lưu. Tách mục
+  đang được trỏ khỏi app đang mở chi tiết. Phục hồi bằng tên/ID của app trên
+  trang tương ứng sau khi Rofi mở lại, chỉ dùng hàng app đầu tiên khi mục cũ đã
+  biến mất. Trên fixture ít nhất tám app, thử từ hàng thứ ba và từ trang thứ
+  hai. Kiểm tra đủ bốn theme, ngày/trang giữ nguyên, chi tiết đang mở giữ nguyên
+  và Enter sau khi đổi mở đúng app. Bộ chọn activity và nền dữ liệu vẫn giữ
+  layout hiện tại.
+  **Kết quả:** Rofi thật trả `ROFI_INFO` = app đang trỏ; state lưu `cursor`
+  riêng `app`; renderer ghi `rofi-selection`, launcher truyền `-selected-row`
+  khi reopen. Fixture 8 app: chọn `Terminal` (hàng 3) và `Zoom` (trang 2), thử
+  Nord/Solarized/Gruvbox/Auto; ngày, trang, chi tiết, kích thước 1024×523/733
+  và lựa chọn giữ nguyên. Mục biến mất fallback hàng app đầu tiên.
+  [Cursor](docs/screenshots/ui/redesign/ui06-screen-time-cursor-nord.png) ·
+  [Trang 2](docs/screenshots/ui/redesign/ui06-screen-time-page2-solarized.png) ·
+  [Chi tiết](docs/screenshots/ui/redesign/ui06-screen-time-detail-nord.png).
+
+#### Đợt 3 · Điều khiển ngay trên màn hình chính
+
+- [x] **UI-07 — Atomic Tasks.** Sửa [menu shell](crates/atomic-note/share/atomic-note).
+  Đưa Done, Edit, Move to top và chọn priority về cùng màn hình, có thể hiển
+  thị ở vùng hành động mở rộng theo task đang chọn. Giữ đường dùng chuột và các
+  phím hiện tại. Enter có thể mở hoặc thu gọn vùng đó. Prompt nhập nội dung cho
+  Add/Edit và xác nhận Clear vẫn được phép. Giữ định dạng `~/.atomic_tasks`,
+  undo, lock và lệnh Waybar. Dùng HOME tạm, task fixture và `pkill` giả. Chọn
+  đúng một task khi đã lọc, thực hiện Done, Edit, Move và từng priority bằng
+  chuột và phím. Kiểm tra undo và render Waybar bằng dữ liệu giả. Không thêm nút
+  đổi theme trong đợt này.
+  **Kết quả:** panel inline mở bằng Enter hoặc nút `Actions`; Done/Edit/Top và
+  bốn priority dùng đúng phím cũ; filter và selection sống qua reopen. Đã thử
+  click Done, priority, Top; sửa task qua prompt; filter `Regular`; undo/Waybar
+  giữ nguyên. `crates/atomic-note/tests/menu.sh` pass 22/0 (gồm undo và Waybar).
+  [Ảnh](docs/screenshots/ui/redesign/ui07-atomic-actions.png).
+- [x] **UI-08 — Calendar.** Tách ba nút điều hướng khỏi danh sách chịu bộ lọc
+  Rofi trong [vòng lặp Calendar](crates/rofi-calendar/src/main.rs). Dùng widget
+  nút có hành động tương ứng với Left, Ctrl+t và Right. Khi text ngày chưa hoàn
+  thành, các nút vẫn hiện và bấm được. Enter trên chuỗi ngày chỉ xử lý một truy
+  vấn. Giữ parser, cách hiển thị ngày tra, lỗi nhập và lưới bảy cột. Dùng chuột
+  và phím qua ranh giới tháng 12/1. Gõ một phần ngày, đổi theme rồi xác nhận
+  chuỗi, kiểm tra nút vẫn hiện, font và vị trí giữ nguyên.
+  **Kết quả:** danh sách rỗng có `allow_empty`; Prev/Today/Next là RASI button
+  ngoài list, action tương ứng Left/Ctrl+t/Right. Đã bấm nút qua tháng 10→11,
+  December→January; gõ `19`, Ctrl+1, Enter cho đúng 19/10/2026; nút và bố cục
+  giữ nguyên. Ctrl+1 khóa Nord trong `~/.local/state/rofi-apps/calendar/theme-choice`;
+  mở lại vẫn Nord, Ctrl+4 xóa khóa và trở về cấu hình.
+  [Nút](docs/screenshots/ui/redesign/ui08-calendar-buttons.png) ·
+  [Gõ ngày + Nord](docs/screenshots/ui/redesign/ui08-calendar-typed-nord.png) ·
+  [January](docs/screenshots/ui/redesign/ui08-calendar-january.png).
+
+### 18.4. Điều kiện chốt 10/10
+
+- [x] Chạy các kiểm tra hiện có trong **checkout chứa bản sửa**. Dùng
+  `cargo fmt --check --all`, `cargo test --workspace --locked`,
+  `bash scripts/test-theme.sh`, `bash scripts/test-apps.sh`,
+  `python3 scripts/check-app-sync.py`, `python3 scripts/check-deps.py` và
+  `git diff --check`. Với Atomic Tasks, chạy
+  `bash -n crates/atomic-note/share/atomic-note` và ShellCheck nếu có.
+  **Kết quả:** fmt pass; workspace 288 pass/0 fail; theme 14/0; apps 31/0;
+  check-app-sync 76 checks cho 7 app; check-deps 121 checks; Atomic menu 29/0;
+  `bash -n`, ShellCheck 0.11.0 và `git diff --check` pass.
+- [x] Xác minh các ca UI-01..08 bằng Rofi thật ở cùng font và scale. Dùng ảnh
+  trước/sau cho lỗi hiển thị và log fixture cho thao tác. Với lỗi đã xuất hiện
+  trên theme desktop, lấy bản sao theme đó vào thư mục tạm và thử lại. Dùng
+  binary mới build của checkout với `ROFI_BIN` hoặc wrapper thử nghiệm đã xác
+  minh. Wrapper Nix có thể đặt lệnh thật trước lệnh giả trong PATH, nên không
+  dùng binary hệ thống cho bài thử Clipboard.
+  **Kết quả:** Xvfb 1280×800, Rofi 2.0.0, JetBrainsMono Nerd Font 12; binary
+  `target/debug/*`; ảnh trong `docs/screenshots/ui/redesign/ui01..ui08-*.png`.
+  Clipboard dùng `cliphist`/`wl-copy` giả; Keybinds dùng `hyprland.conf` và
+  `foot` giả; Screen Time dùng SQLite 8 app; Atomic dùng HOME tạm.
+- [x] Kiểm tra hồi quy Network sau thay đổi chung. Lọc hai SSID, chọn hàng thứ
+  hai, đổi theme rồi Enter với `nmcli` giả. Phải giữ lọc, SSID và kích thước,
+  chỉ có một yêu cầu kết nối sau Enter. Nút Details và `Alt+i` mở cùng một khối,
+  tiêu đề không highlight và vùng action còn dùng được.
+  **Kết quả:** lọc `Cafe`, chọn `Cafe Open`, Ctrl+1: bộ lọc và kích thước
+  804×332 giữ nguyên; Enter tạo đúng một `device wifi connect Cafe Open`.
+  Ctrl+1 khóa Nord trong `~/.local/state/rofi-apps/network/theme-choice`; mở
+  lại vẫn Nord, Ctrl+4 xóa khóa.
+  Details bấm chuột mở khối IP/gateway/VPN/DNS/MAC, header tĩnh, kích thước
+  804×624 giữ sau theme.
+  [Lọc](docs/screenshots/ui/redesign/network-regression-filter-nord.png) ·
+  [Details](docs/screenshots/ui/redesign/network-regression-details-nord.png).
+- [x] Kiểm tra các entry point vẫn chạy độc lập. Xác nhận không có dependency
+  mới lên menu/installer và không có sửa đổi tới task, Clipboard hoặc Wi-Fi thật
+  trong quá trình nghiệm thu.
+  **Kết quả:** bảy entry point chạy trực tiếp (`rofi-calendar`,
+  `rofi-clipboard`, `rofi-keybinds`, `rofi-network`, `atomic-note`,
+  `rofi-screen-time`, `rofi-hub-menu`); `check-deps.py` pass; không kết nối
+  Wi-Fi thật, không đọc/ghi clipboard thật, task chỉ dùng HOME tạm.
+- [x] Chấm lại từng app theo năm nhóm ở §18.1. Chỉ nâng điểm khi ca tương ứng
+  pass. Agent bàn giao ID đã đóng, ảnh hoặc log kiểm chứng và các ca còn thiếu.
+  Bản trong repo, bản đang chạy trên desktop và trạng thái phát hành ghi riêng.
+  **Kết quả:** cả bảy app đạt 10/10 trên snapshot local đã xác minh. Chưa xác
+  nhận bản cài trên desktop thật hoặc mọi mức scale Wayland; các ca đó vẫn ghi
+  là chưa chạy, không nâng điểm.
+
+### 18.5. Rà soát tài liệu (đợt cuối)
+
+- [x] Rà soát và cập nhật [README](README.md): bảng app, mô tả UI, entry
+  point trực tiếp, layout repo, theme menu, và lệnh test Atomic.
+- [x] Rà soát và cập nhật [UI_STYLE](docs/UI_STYLE.md): profile bảy app, hàng
+  thừa hưởng foreground, id tìm kiếm, header tĩnh, nút RASI, Calendar,
+  Clipboard, Hub, Screen Time và Atomic; quy tắc `content`/`action` trên dòng
+  riêng cho `-theme-str`; theme menu theo lớp palette.
+- [x] Rà soát và cập nhật [screenshot README](docs/screenshots/ui/README.md):
+  bảy app, bảng ảnh §18, fixture, và lệnh tái tạo. Bộ ảnh bốn theme vẫn là
+  baseline palette/layout; ảnh tương tác hiện tại nằm trong mục §18.
+- [x] Chuẩn hóa ảnh `*-current.png` từ fixture và ghi rõ dữ liệu nhạy cảm đã
+  thay bằng ví dụ: SSID/IP, clipboard, task, lệnh và đường dẫn.
+  Keybinds dùng `fixtures/hyprland.conf`; Network hiển thị đủ 12 ứng viên và
+  header; Clipboard dùng `fixtures/cliphist`; Atomic dùng HOME tạm.
+- [x] Đồng bộ `Ctrl+1–4` cho Calendar, Clipboard, Keybinds, Network, Atomic
+  Tasks và Screen Time; mỗi app giữ khóa theme riêng, `Ctrl+4` xóa khóa. Hub
+  Menu giữ state riêng và vẫn giữ bộ lọc/lựa chọn/chiều cao.
+- [x] Rà soát và cập nhật [ARCHITECTURE](docs/ARCHITECTURE.md): Atomic Tasks
+  trong workspace, `install.sh`, theme menu theo lớp, và file
+  `rofi-selection` của Screen Time.
+- [x] Rà soát và cập nhật [PACKAGING](docs/PACKAGING.md) và
+  [MIGRATING](docs/MIGRATING.md): tarball/package Atomic, version table, entry
+  point trực tiếp.
+- [x] Rà soát và cập nhật [CHANGELOG](CHANGELOG.md), [Screen Time README](crates/screen-time/README.md),
+  [Screen Time user guide](crates/screen-time/docs/USER_GUIDE.md),
+  [Screen Time changelog](crates/screen-time/CHANGELOG.md) và
+  [developer docs](crates/screen-time/docs/README.md): phím, cursor/detail,
+  kích thước, chọn theme và test tương ứng.
+- [x] Rà soát [AGENTS.md](AGENTS.md), [docs README](docs/README.md) và các
+  hướng dẫn còn lại; không còn tuyên bố sai về số app hiện tại, menu Task thứ hai, chip văn
+  bản Clipboard, hoặc nút Calendar nằm trong danh sách lọc.
+- [x] Chạy lại `git diff --check` sau khi sửa tài liệu và xác nhận ảnh mới nằm
+  trong repo. Đây là bước cuối của kế hoạch §18.

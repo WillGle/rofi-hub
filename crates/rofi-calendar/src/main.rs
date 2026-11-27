@@ -11,14 +11,11 @@ use std::process::ExitCode;
 
 use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate, Weekday};
-use rofi_dmenu::{Item, Level, Outcome, Rofi, Theme, app, escape_markup, ui};
+use rofi_dmenu::{Item, Level, MenuInput, Outcome, Rofi, Theme, app, escape_markup, ui};
 
-const BTN_PREV_ID: &str = "prev";
-const BTN_TODAY_ID: &str = "today";
-const BTN_NEXT_ID: &str = "next";
-const BTN_PREV: &str = "\u{25c0} Prev";
-const BTN_TODAY: &str = "Today";
-const BTN_NEXT: &str = "Next \u{25b6}";
+const BTN_PREV: &str = "Prev \u{2190}";
+const BTN_TODAY: &str = "Today Ctrl+t";
+const BTN_NEXT: &str = "Next \u{2192}";
 const WEEKDAY_SHORT: [&str; 7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const WEEKDAYS: [&str; 7] = [
     "Monday",
@@ -29,12 +26,9 @@ const WEEKDAYS: [&str; 7] = [
     "Saturday",
     "Sunday",
 ];
-/// Visible width of the seven day columns including the gaps between them.
-const GRID_WIDTH: usize = 20;
-/// Approximate character width inside the message box at the calendar profile
-/// (46ch window minus window/message padding). Used for explicit centering;
-/// Rofi does not reliably stretch the message textbox across the window.
-const CONTENT_WIDTH: usize = 40;
+const DAY_GAP: &str = "   ";
+#[cfg(test)]
+const GRID_WIDTH: usize = 7 * 2 + 6 * DAY_GAP.len();
 
 fn main() -> ExitCode {
     match run() {
@@ -83,23 +77,27 @@ fn run() -> Result<()> {
     let today = local_today();
     let mut view = View::today(today);
     let mut note: Option<String> = None;
+    let mut input = MenuInput::default();
+    let (mut palette, theme_file) = app::initial_theme("calendar");
+    let mut options = app::dmenu_options("calendar", "Go to date");
+    options.theme = theme_file;
+    options.allow_custom = true;
+    options.allow_empty = true;
 
     loop {
-        let palette = Theme::active();
-        let items = vec![
-            Item::new(BTN_PREV_ID, BTN_PREV),
-            Item::new(BTN_TODAY_ID, BTN_TODAY),
-            Item::new(BTN_NEXT_ID, BTN_NEXT),
-        ];
+        // Navigation lives in RASI buttons outside the filterable list. An
+        // empty list is intentional: typing a date must never hide the three
+        // controls, and Enter accepts the current date string.
+        let items: Vec<Item> = Vec::new();
 
-        let mesg = render_sheet(&view, today, note.as_deref(), &palette);
-        let mut options = app::dmenu_options("calendar", "Go to date");
-        options.allow_custom = true;
+        let mut mesg = render_sheet(&view, today, note.as_deref(), &palette);
+        mesg.truncate(mesg.trim_end_matches('\n').len());
+        mesg.push('\n');
+        mesg.push_str(&ui::hint(&[("Ctrl+1–4", "Theme")], &palette));
+        mesg.push('\n');
         options.extra_args = vec![
             "-matching".to_owned(),
             "normal".to_owned(),
-            "-selected-row".to_owned(),
-            "1".to_owned(),
             "-mesg".to_owned(),
             mesg,
             // Reserve Left/Right for month navigation.
@@ -118,33 +116,36 @@ fn run() -> Result<()> {
             "-kb-custom-3".to_owned(),
             "Control+t".to_owned(),
         ];
+        options.theme_str.push(calendar_theme(&palette));
 
-        match rofi.dmenu(&items, &options)? {
+        input.restore(&mut options, 0);
+        app::bind_theme_shortcuts(&mut options, 3);
+
+        let (outcome, current_input) = rofi.dmenu_with_input(&items, &options)?;
+        input = MenuInput::default();
+        match outcome {
             Outcome::Cancelled => return Ok(()),
             Outcome::Custom(0) => {
                 view.shift(-1);
                 note = None;
+                input = current_input;
             }
             Outcome::Custom(1) => {
                 view.shift(1);
                 note = None;
+                input = current_input;
             }
             Outcome::Custom(2) => {
                 view = View::today(today);
                 note = None;
+                input = current_input;
             }
-            Outcome::Custom(_) => return Ok(()),
-            Outcome::Selected(id) if id == BTN_PREV_ID => {
-                view.shift(-1);
-                note = None;
-            }
-            Outcome::Selected(id) if id == BTN_NEXT_ID => {
-                view.shift(1);
-                note = None;
-            }
-            Outcome::Selected(id) if id == BTN_TODAY_ID => {
-                view = View::today(today);
-                note = None;
+            Outcome::Custom(binding) => {
+                let Some(choice) = app::session_theme("calendar", binding, 3) else {
+                    return Ok(());
+                };
+                (palette, options.theme) = choice;
+                input = current_input;
             }
             Outcome::Selected(query) => {
                 let query = query.trim();
@@ -169,6 +170,76 @@ fn run() -> Result<()> {
             }
         }
     }
+}
+
+/// Three real RASI buttons replace the old list rows. Their actions mirror the
+/// Left, Right, and Ctrl+t shortcuts and stay visible while the date entry is
+/// filtered or incomplete.
+fn calendar_theme(theme: &Theme) -> String {
+    format!(
+        r#"
+window {{
+    width: calc( ( 51ch + 68px ) min 94% );
+    location: center;
+    anchor: center;
+    padding: 20px;
+}}
+mainbox {{
+    children: [ message, inputbar, box-calendar-actions ];
+    spacing: 16px;
+}}
+message {{ padding: 12px 14px 8px; }}
+textbox {{ horizontal-align: 0.5; }}
+listview {{ enabled: false; }}
+inputbar {{ padding: 10px 14px; }}
+box-calendar-actions {{
+    background-color: transparent;
+    orientation: horizontal;
+    expand: false;
+    spacing: 12px;
+    padding: 4px 0 0;
+    children: [ button-prev, button-today, button-next ];
+}}
+button-prev, button-today, button-next {{
+    expand: true;
+    padding: 9px 12px;
+    margin: 0;
+    border: 1px;
+    border-radius: 6px;
+    border-color: {muted};
+    background-color: {mantle};
+    text-color: {text};
+    horizontal-align: 0.5;
+}}
+button-prev {{
+    content: "{prev}";
+    action: "kb-custom-1";
+}}
+button-today {{
+    content: "{today}";
+    action: "kb-custom-3";
+    border-color: {accent};
+}}
+button-next {{
+    content: "{next}";
+    action: "kb-custom-2";
+}}
+button-prev selected, button-prev selected.normal,
+button-today selected, button-today selected.normal,
+button-next selected, button-next selected.normal {{
+    background-color: {accent};
+    text-color: {base};
+}}
+"#,
+        muted = theme.muted,
+        mantle = theme.mantle,
+        text = theme.text,
+        accent = theme.accent,
+        base = theme.base,
+        prev = BTN_PREV,
+        today = BTN_TODAY,
+        next = BTN_NEXT,
+    )
 }
 
 /// Turn typed text into `(year, month, optional day)`.
@@ -248,16 +319,9 @@ fn render_sheet(view: &View, today: NaiveDate, note: Option<&str>, palette: &The
         palette.text,
         escape_markup(&month)
     );
-    let title = format!("{}{title_span}", center_pad(month.chars().count()));
-
-    let mut mesg = format!("{title}\n{}\n", render_grid(view, today, palette));
+    let mut mesg = format!("{title_span}\n{}\n", render_grid(view, today, palette));
     mesg.push_str(&render_note(view, note, palette));
     mesg
-}
-
-/// Leading spaces that center a plain-text line inside the message box.
-fn center_pad(plain_width: usize) -> String {
-    " ".repeat(CONTENT_WIDTH.saturating_sub(plain_width) / 2)
 }
 
 fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
@@ -272,15 +336,14 @@ fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
         .iter()
         .map(|day| format!("{day:^2}"))
         .collect::<Vec<_>>()
-        .join(" ");
+        .join(DAY_GAP);
     sheet.push_str(&format!(
-        "{}<span foreground=\"{}\">{header}</span>\n",
-        center_pad(GRID_WIDTH),
+        "<span foreground=\"{}\">{header}</span>\n",
         palette.muted
     ));
 
     for row in 0..rows {
-        let mut line = center_pad(GRID_WIDTH);
+        let mut line = String::new();
         for column in 0..7 {
             let index = row * 7 + column;
             if index < offset || index >= offset + days {
@@ -317,7 +380,7 @@ fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
                 }
             }
             if column < 6 {
-                line.push(' ');
+                line.push_str(DAY_GAP);
             }
         }
         sheet.push_str(&line);
@@ -332,11 +395,7 @@ fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
 fn render_note(view: &View, note: Option<&str>, palette: &Theme) -> String {
     if let Some(query) = note {
         let text = format!("Invalid date: {query}");
-        return format!(
-            "{}{}",
-            center_pad(text.chars().count()),
-            ui::status(&text, Level::Danger, palette)
-        );
+        return ui::status(&text, Level::Danger, palette);
     }
     let Some(day) = view.focus else {
         return String::new();
@@ -351,12 +410,11 @@ fn render_note(view: &View, note: Option<&str>, palette: &Theme) -> String {
         view.month,
         view.year
     );
-    let span = format!(
+    format!(
         "<span foreground=\"{}\" size=\"small\">{}</span>",
         palette.accent,
         escape_markup(&text)
-    );
-    format!("{}{span}", center_pad(text.chars().count()))
+    )
 }
 
 fn weekday_name(weekday: Weekday) -> &'static str {
@@ -451,14 +509,11 @@ mod tests {
         let palette = Theme::gruvbox();
         let mesg = render_sheet(&view(), today(), None, &palette);
         assert!(mesg.contains("November 2026"));
-        assert!(mesg.contains("Mo Tu We Th Fr Sa Su"));
+        assert!(mesg.contains(&WEEKDAY_SHORT.join(DAY_GAP)));
         assert!(mesg.contains("background=\"#fabd2f\""));
         assert!(mesg.contains("30"));
         for line in render_grid(&view(), today(), &palette).lines() {
-            assert!(
-                ui::display_width(&strip_markup(line)) <= CONTENT_WIDTH,
-                "grid line is wider than {CONTENT_WIDTH}: {line}"
-            );
+            assert_eq!(ui::display_width(&strip_markup(line)), GRID_WIDTH);
         }
     }
 

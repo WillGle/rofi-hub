@@ -9,7 +9,7 @@ use std::fs;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_dmenu::{Item, Outcome, Rofi, Theme, app, paths, ui};
+use rofi_dmenu::{Item, MenuInput, Outcome, Rofi, Theme, app, paths, ui};
 
 fn main() -> ExitCode {
     match run() {
@@ -62,42 +62,67 @@ fn run() -> Result<()> {
         bail!("no bindings found in {}", config.display());
     }
 
-    let theme = Theme::active();
-    let items = build_items(&bindings, &theme);
-
+    let (mut theme, mut theme_path) = app::initial_theme("keybinds");
     let rofi = Rofi::find()?;
-    let mut options = app::dmenu_options("keybinds", "SHORTCUTS");
-    options.extra_args = vec![
-        "-selected-row".to_owned(),
-        "1".to_owned(),
-        "-mesg".to_owned(),
-        format!(
-            "{}\n",
-            ui::header(
-                "SHORTCUTS",
-                &format!("{} bindings", bindings.len()),
-                "hyprland.conf",
-                &theme,
-            )
-        ),
-    ];
+    let mut input = MenuInput::default();
 
-    match rofi.dmenu(&items, &options)? {
-        Outcome::Selected(id) if id == "hint" => Ok(()),
-        Outcome::Selected(id) => {
-            let index = id
-                .parse::<usize>()
-                .with_context(|| format!("rofi selected an unknown keybinding row: {id}"))?;
-            let Some(binding) = bindings.get(index) else {
-                bail!("rofi selected keybinding row {index}, which is out of range");
-            };
-            if let Some(command) = &binding.command {
-                run_command(command)?;
+    loop {
+        let items = build_items(&bindings, &theme);
+        let mut options = app::dmenu_options("keybinds", "SHORTCUTS");
+        options.theme = theme_path.clone();
+        options.extra_args = vec![
+            "-mesg".to_owned(),
+            format!(
+                "{}\n",
+                ui::header(
+                    "SHORTCUTS",
+                    &format!("{} bindings", bindings.len()),
+                    "hyprland.conf",
+                    &theme,
+                )
+            ),
+            "-a".to_owned(),
+            ui::active_rows(&items),
+        ];
+        options.theme_str.push(ui::static_header_theme(&theme));
+        app::bind_theme_shortcuts(&mut options, 0);
+        input.restore(&mut options, 1);
+
+        let (outcome, current_input) = rofi.dmenu_with_input(&items, &options)?;
+        input = current_input;
+        match outcome {
+            Outcome::Selected(id) if id == "hint" => return Ok(()),
+            Outcome::Selected(id) if id.starts_with("section-") => {
+                // A header is not an action. Keep the app open instead of
+                // treating the header token as a binding.
             }
-            Ok(())
+            Outcome::Custom(binding) if binding < 4 => {
+                if let Some((next, path)) = app::session_theme("keybinds", binding, 0) {
+                    theme = next;
+                    theme_path = path;
+                }
+            }
+            Outcome::Selected(id) => {
+                let index = row_index(&id)
+                    .with_context(|| format!("rofi selected an unknown keybinding row: {id}"))?;
+                let Some(binding) = bindings.get(index) else {
+                    bail!("rofi selected keybinding row {index}, which is out of range");
+                };
+                if let Some(command) = &binding.command {
+                    run_command(command)?;
+                }
+                return Ok(());
+            }
+            Outcome::Cancelled | Outcome::Custom(_) => return Ok(()),
         }
-        Outcome::Cancelled | Outcome::Custom(_) => Ok(()),
     }
+}
+
+/// Rofi indexes the row id before the first NUL. Keybind rows put the stable
+/// list index first and the shortcut/description after it, so both visible
+/// fields are searchable while dispatch still uses the original binding.
+fn row_index(id: &str) -> Option<usize> {
+    id.split('\t').next()?.parse().ok()
 }
 
 /// Parse `hyprland.conf` text into menu rows.
@@ -403,7 +428,7 @@ fn build_items(bindings: &[Binding], theme: &Theme) -> Vec<Item> {
             section = &binding.section;
             items.push(
                 Item::new(
-                    format!("section-{index}"),
+                    format!("section-{index}\t{}", section),
                     ui::section(section, "", 98, theme),
                 )
                 .active()
@@ -415,15 +440,22 @@ fn build_items(bindings: &[Binding], theme: &Theme) -> Vec<Item> {
         } else {
             "\u{2022}"
         };
+        // Rofi filters the text before the first NUL (the id), not the display
+        // markup. Keep the stable list index first, then the visible fields so
+        // `Terminal` and `Super+Enter` both find the same binding.
+        let searchable = format!("{index}\t{}\t{}", binding.combo, binding.description);
         items.push(Item::new(
-            index.to_string(),
+            searchable,
             ui::row(marker, &binding.combo, &binding.description, "", theme),
         ));
     }
     items.push(
         Item::new(
             "hint",
-            ui::hint(&[("Enter", "run"), ("esc", "close")], theme),
+            ui::hint(
+                &[("Enter", "run"), ("Ctrl+1–4", "theme"), ("esc", "close")],
+                theme,
+            ),
         )
         .nonselectable(),
     );
@@ -543,5 +575,23 @@ bind = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
                 .any(|item| item.display.contains("Super+Enter"))
         );
         assert!(!items.iter().any(|item| item.display.contains("[Basic]")));
+    }
+
+    #[test]
+    fn row_ids_are_searchable_and_keep_the_original_index() {
+        let bindings = parse_config(SAMPLE);
+        let items = build_items(&bindings, &Theme::gruvbox());
+        let terminal = items
+            .iter()
+            .find(|item| item.display.contains("Terminal"))
+            .expect("terminal row");
+        assert!(terminal.id.contains("Super+Enter"), "{}", terminal.id);
+        assert!(terminal.id.contains("Terminal"), "{}", terminal.id);
+        assert_eq!(row_index(&terminal.id), Some(0));
+        assert_eq!(row_index("0"), Some(0));
+        let section = items.iter().find(|item| item.active).expect("section row");
+        assert!(section.id.starts_with("section-"));
+        assert!(section.id.contains("Basic"), "{}", section.id);
+        assert_eq!(row_index(&section.id), None);
     }
 }

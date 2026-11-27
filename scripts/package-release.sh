@@ -24,18 +24,13 @@ DIST="${DIST:-$ROOT/dist}"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/rofi-apps-release.XXXXXX")"
 trap 'rm -rf -- "$STAGE"' EXIT INT TERM
 
-crate_version() {
-    local crate="$1"
-    sed -n '/^\[package\]/,/^\[/p' "$ROOT/crates/$crate/Cargo.toml" |
-        sed -n 's/^version = "\(.*\)"/\1/p' | head -n1
-}
-
 # app_id:crate:bin
 APPS=(
     "calendar:rofi-calendar:rofi-calendar"
     "clipboard:rofi-clipboard:rofi-clipboard"
     "keybinds:rofi-keybinds:rofi-keybinds"
     "network:rofi-network:rofi-network"
+    "atomic-note:atomic-note:atomic-note"
     "screen-time:screen-time:screen-time"
     "hub-menu:rofi-hub-menu:rofi-hub-menu"
 )
@@ -54,13 +49,17 @@ mkdir -p "$DIST"
 
 for spec in "${APPS[@]}"; do
     IFS=: read -r id crate bin <<<"$spec"
-    version="$(crate_version "$crate")"
+    version="$(sed -n 's/^version = "\([^"]*\)"$/\1/p' "$ROOT/crates/$crate/app.toml")"
     [ -n "$version" ] || { printf 'cannot read version for %s\n' "$crate" >&2; exit 1; }
 
     app_stage="$STAGE/$id"
     mkdir -p "$app_stage/bin" "$app_stage/share/rofi" \
         "$app_stage/share/rofi-apps/providers" "$app_stage/share/rofi-apps/apps/$id"
-    install -m 755 "$ROOT/target/release/$bin" "$app_stage/bin/$bin"
+    executable="$ROOT/target/release/$bin"
+    if [ "$id" = "atomic-note" ]; then
+        executable="$ROOT/crates/$crate/share/$bin"
+    fi
+    install -m 755 "$executable" "$app_stage/bin/$bin"
     install -m 644 "$ROOT/crates/$crate/app.toml" "$app_stage/app.toml"
     install -m 644 "$ROOT/crates/$crate/app.toml" "$app_stage/share/rofi-apps/apps/$id/app.toml"
     install -m 644 "$ROOT/crates/$crate/share/rofi/$id.rasi" \
@@ -101,6 +100,7 @@ specs = [
     ("clipboard", "rofi-clipboard", False),
     ("keybinds", "rofi-keybinds", False),
     ("network", "rofi-network", False),
+    ("atomic-note", "atomic-note", False),
     ("screen-time", "screen-time", False),
     ("hub-menu", "rofi-hub-menu", True),
 ]

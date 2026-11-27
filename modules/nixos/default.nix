@@ -21,6 +21,11 @@
       app = "network";
       package = "rofi-network";
     })
+    (import ./app.nix {
+      inherit self;
+      app = "atomic-note";
+      package = "atomic-note";
+    })
     (import ./screen-time.nix { inherit self; })
     (import ./menu.nix { inherit self; })
   ];

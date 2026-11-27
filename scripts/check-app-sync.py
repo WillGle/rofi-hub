@@ -46,12 +46,15 @@ for crate_dir in sorted((ROOT / "crates").iterdir()):
     app_id = metadata["id"]
     apps[app_id] = metadata
     crate = crate_dir.name
-    check(crate in members, f"{crate}: missing from workspace members")
-    manifest = load_toml(crate_dir / "Cargo.toml")
-    check(
-        manifest["package"]["version"] == metadata["version"],
-        f"{app_id}: Cargo.toml and app.toml versions differ",
-    )
+    if script := metadata.get("script"):
+        check((crate_dir / script).is_file(), f"{app_id}: missing script {script}")
+    else:
+        check(crate in members, f"{crate}: missing from workspace members")
+        manifest = load_toml(crate_dir / "Cargo.toml")
+        check(
+            manifest["package"]["version"] == metadata["version"],
+            f"{app_id}: Cargo.toml and app.toml versions differ",
+        )
     provider = crate_dir / metadata["provider"] if metadata.get("provider") else None
     if provider is not None:
         check(provider.is_file(), f"{app_id}: missing provider {provider}")
@@ -111,7 +114,7 @@ for script in (
     check(script in workflow or script == "scripts/test-nix.sh",
           f"CI workflow does not run {script}")
 
-check(len(apps) == 6, f"expected 6 app packages, found {len(apps)}")
+check(len(apps) == 7, f"expected 7 app packages, found {len(apps)}")
 check("rofi-hub-menu" in flake, "missing optional rofi-hub-menu package")
 check("rofi-hub-installer" in flake, "missing rofi-hub-installer package")
 

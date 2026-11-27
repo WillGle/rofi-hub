@@ -18,6 +18,7 @@ pub struct TestEnv {
     config: PathBuf,
     data: PathBuf,
     runtime: PathBuf,
+    state: PathBuf,
     bin: PathBuf,
 }
 
@@ -34,10 +35,12 @@ impl TestEnv {
         let config = root.path().join("config");
         let data = root.path().join("data");
         let runtime = root.path().join("run");
+        let state = root.path().join("state");
         let bin = root.path().join("bin");
-        for dir in [&home, &config, &data, &runtime, &bin] {
+        for dir in [&home, &config, &data, &runtime, &state, &bin] {
             fs::create_dir_all(dir).expect("create test directory");
         }
+        fs::create_dir_all(root.path().join("data-dirs")).expect("create test data dirs");
 
         let env = Self {
             root,
@@ -45,6 +48,7 @@ impl TestEnv {
             config,
             data,
             runtime,
+            state,
             bin,
         };
         env.write_fake_rofi();
@@ -64,6 +68,8 @@ impl TestEnv {
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.config)
             .env("XDG_DATA_HOME", &self.data)
+            .env("XDG_DATA_DIRS", self.root.path().join("data-dirs"))
+            .env("XDG_STATE_HOME", &self.state)
             .env("XDG_RUNTIME_DIR", &self.runtime)
             .env("ROFI_BIN", self.bin.join("rofi"))
             .env("ROFI_ARGS_LOG", self.root.path().join("rofi-args.log"))
@@ -111,6 +117,10 @@ impl TestEnv {
 
     pub fn config_home(&self) -> &Path {
         &self.config
+    }
+
+    pub fn state_home(&self) -> &Path {
+        &self.state
     }
 
     pub fn bin_path(&self) -> &Path {
@@ -161,6 +171,15 @@ impl TestEnv {
                  rm -f \"$ROFI_REPLY\"\n\
                fi\n\
                case \"$first\" in\n\
+                 @custom:*:*:*)\n\
+                   rest=${{first#@custom:}}\n\
+                   code=${{rest%%:*}}\n\
+                   rest=${{rest#*:}}\n\
+                   row=${{rest%%:*}}\n\
+                   filter=${{rest#*:}}\n\
+                   printf '%s\\n%s\\n' \"$row\" \"$filter\"\n\
+                   exit $((10 + code)) ;;\n\
+                 @custom:*:*) rest=${{first#@custom:}}; printf '%s\\n\\n' \"${{rest#*:}}\"; exit $((10 + ${{rest%%:*}})) ;;\n\
                  @custom:*) exit $((10 + ${{first#@custom:}})) ;;\n\
                  @cancel) exit 1 ;;\n\
                  *) printf '%s\\n' \"$first\"; exit 0 ;;\n\

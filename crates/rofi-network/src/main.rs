@@ -3,10 +3,8 @@
 //! `rofi-network` is an independent app: it resolves its own theme and config
 //! and does not depend on the optional hub menu or installer.
 //!
-//! The default screen is for choosing a network: one connection line, a filter
-//! box, the available SSIDs, and a fixed shortcut line. Manage and Connection
-//! details are separate screens so the first view stays small. The app talks
-//! to NetworkManager through `nmcli`.
+//! Available networks and connection actions share one filterable list.
+//! Details and saved profiles expand inline. Network operations use `nmcli`.
 
 use std::env;
 use std::process::{Command, Stdio};
@@ -14,7 +12,8 @@ use std::process::{Command, Stdio};
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use rofi_dmenu::{
-    DmenuOptions, Item, Level, Outcome, Rofi, Theme, app, escape_markup, paths, ui, which,
+    DmenuOptions, Item, Level, MenuInput, Outcome, Rofi, Theme, app, escape_markup, paths, ui,
+    which,
 };
 
 /// Visible width of the content area used by wrapped detail values.
@@ -29,21 +28,11 @@ enum Action {
     DisconnectEthernet(String),
     DisconnectWifi,
     Rescan,
-    Details,
     EditSaved,
     EditSavedProfile(String),
     WifiOn,
     WifiOff,
-    Back,
     Noop,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Screen {
-    Main,
-    Manage,
-    Details,
-    Saved,
 }
 
 #[derive(Debug, Default)]
@@ -56,12 +45,14 @@ struct WifiState {
     ethernet: Vec<Ethernet>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 struct ConnectionDetails {
-    connection: String,
     iface: String,
     address: Option<String>,
     gateway: Option<String>,
+    ipv6: Option<String>,
+    ipv6_gateway: Option<String>,
+    vpn: String,
     subnet: Option<String>,
     broadcast: Option<String>,
     dns: Vec<String>,
@@ -83,10 +74,8 @@ struct Choice {
 }
 
 fn resolve_choice() -> Choice {
-    Choice {
-        theme: Theme::active(),
-        path: app::theme_path("network"),
-    }
+    let (theme, path) = app::initial_theme("network");
+    Choice { theme, path }
 }
 
 fn main() {
@@ -100,89 +89,129 @@ fn main() {
 fn run(cli: Cli) -> Result<()> {
     which::require("nmcli")?;
     let rofi = Rofi::find()?;
-    let choice = resolve_choice();
+    let mut choice = resolve_choice();
     let no_theme = cli.no_theme;
 
-    let mut screen = Screen::Main;
     let mut status = String::new();
-    let mut details: Option<ConnectionDetails> = None;
+    let mut details = None;
+    let mut saved = None;
+    let mut focus = None;
 
     loop {
         let state = wifi_state()?;
-        let (items, actions, message, prompt_label) = match screen {
-            Screen::Main => {
-                let (items, actions) = build_main(&state, &choice.theme);
-                (
-                    items,
-                    actions,
-                    main_message(&state, &status, &choice.theme),
-                    "Find network",
-                )
-            }
-            Screen::Manage => {
-                let (items, actions) = build_manage(&state, &choice.theme);
-                (
-                    items,
-                    actions,
-                    manage_message(&state, &status, &choice.theme),
-                    "Manage network",
-                )
-            }
-            Screen::Details => {
-                let details = details.as_ref();
-                (
-                    details_items(&choice.theme),
-                    vec![("back".to_owned(), Action::Back)],
-                    details_message(&state, details, &choice.theme),
-                    "Connection details",
-                )
-            }
-            Screen::Saved => {
-                let saved = saved_connections();
-                let (items, actions) = saved_items(&saved, &choice.theme);
-                (
-                    items,
-                    actions,
-                    saved_message(&choice.theme),
-                    "Saved connections",
-                )
-            }
-        };
+        let mut input = MenuInput::default();
+        let (outcome, actions) = loop {
+            let (mut items, mut actions) = build_main(&state, &choice.theme);
+            let first_action = items.len() + 1;
+            items.push(section_row("actions", "Network actions", &choice.theme));
+            add_actions(
+                &state,
+                saved.as_deref(),
+                &choice.theme,
+                &mut items,
+                &mut actions,
+            );
 
-        let mut options = DmenuOptions::new(prompt_label);
-        if !no_theme {
-            options.theme = choice.path.clone();
-        }
-        options.config = app::config_path();
-        let runtime = paths::rofi_runtime_dir();
-        let _ = std::fs::create_dir_all(&runtime);
-        options.pid = Some(runtime.join("rofi-network.pid"));
-        let selected_row = items
-            .iter()
-            .position(|item| !item.nonselectable)
-            .unwrap_or(0)
-            .to_string();
-        options.extra_args = vec![
-            "-selected-row".to_owned(),
-            selected_row,
-            "-mesg".to_owned(),
-            message,
-            "-kb-custom-1".to_owned(),
-            "Alt+r".to_owned(),
-            "-kb-custom-2".to_owned(),
-            "Alt+m".to_owned(),
-        ];
+            let mut options = DmenuOptions::new("Find network or action");
+            if !no_theme {
+                options.theme = choice.path.clone();
+            }
+            options.config = app::config_path();
+            options.pid = app::pid_path("network");
+            // Rofi suppresses custom keys when -no-custom has no matching rows.
+            options.allow_custom = true;
+            let selected_row = focus
+                .as_deref()
+                .and_then(|id| items.iter().position(|item| item.id == id))
+                .unwrap_or_else(|| {
+                    items
+                        .iter()
+                        .position(|item| !item.nonselectable)
+                        .unwrap_or(0)
+                });
+            let sections = items
+                .iter()
+                .enumerate()
+                .filter(|(_, item)| item.active)
+                .map(|(index, _)| index.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let mut message = main_message(&state, &status, &choice.theme, no_theme);
+            if let Some(details) = &details {
+                message.push('\n');
+                message.push_str(&connection_summary(&state, details, &choice.theme));
+            }
+            options.extra_args = vec![
+                "-mesg".to_owned(),
+                message,
+                "-a".to_owned(),
+                sections,
+                "-no-hover-select".to_owned(),
+                "-kb-custom-1".to_owned(),
+                "Alt+r".to_owned(),
+                "-kb-custom-2".to_owned(),
+                "Alt+m".to_owned(),
+                "-kb-custom-7".to_owned(),
+                "Alt+i".to_owned(),
+            ];
 
-        let selected = match rofi.dmenu(&items, &options)? {
-            Outcome::Cancelled => {
-                screen = match screen {
-                    Screen::Main => return Ok(()),
-                    Screen::Manage => Screen::Main,
-                    Screen::Details => Screen::Manage,
-                    Screen::Saved => Screen::Manage,
+            input.restore(&mut options, selected_row);
+            if !no_theme {
+                app::bind_theme_shortcuts(&mut options, 2);
+                options.extra_args.extend([
+                    "-theme-str".to_owned(),
+                    network_toolbar(
+                        &choice.theme,
+                        state.enabled && state.iface.is_some(),
+                        details.is_some(),
+                    ),
+                ]);
+            }
+
+            let (outcome, current_input) = rofi.dmenu_with_input(&items, &options)?;
+            if outcome == Outcome::Custom(1) {
+                // Jump to the actions below the networks in the same list.
+                input = MenuInput {
+                    text: String::new(),
+                    row: Some(first_action),
                 };
                 continue;
             }
+            if outcome == Outcome::Custom(6) {
+                details = if details.is_some() {
+                    None
+                } else {
+                    Some(load_connection_details(&state))
+                };
+                input = current_input;
+                continue;
+            }
+            if let Outcome::Custom(binding) = outcome
+                && !no_theme
+                && let Some((theme, path)) = app::session_theme("network", binding, 2)
+            {
+                choice = Choice { theme, path };
+                input = current_input;
+                continue;
+            }
+            // Header rows and unmatched input cannot trigger a network action.
+            if matches!(outcome, Outcome::Selected(_))
+                && current_input
+                    .row
+                    .and_then(|row| items.get(row))
+                    .is_none_or(|item| item.nonselectable)
+            {
+                input = MenuInput {
+                    row: None,
+                    ..current_input
+                };
+                continue;
+            }
+            break (outcome, actions);
+        };
+
+        let selected = match outcome {
+            Outcome::Cancelled => return Ok(()),
             Outcome::Custom(0) => {
                 // Alt+r requests a scan from any screen.
                 if let Some(iface) = &state.iface {
@@ -195,11 +224,6 @@ fn run(cli: Cli) -> Result<()> {
                 }
                 continue;
             }
-            Outcome::Custom(1) => {
-                // Alt+m opens Manage even with an empty or filtered list.
-                screen = Screen::Manage;
-                continue;
-            }
             Outcome::Custom(_) => return Ok(()),
             Outcome::Selected(id) => id,
         };
@@ -210,40 +234,22 @@ fn run(cli: Cli) -> Result<()> {
             .map(|(_, action)| action.clone())
             .with_context(|| format!("network menu returned unknown row `{selected}`"))?;
 
+        focus = Some(selected.clone());
+        if matches!(
+            action,
+            Action::WifiOn
+                | Action::WifiOff
+                | Action::DisconnectWifi
+                | Action::DisconnectEthernet(_)
+                | Action::ConnectEthernet(_)
+                | Action::QuickConnectEthernet
+                | Action::ConnectAp { .. }
+                | Action::ConnectHidden
+        ) {
+            details = None;
+        }
         match action {
             Action::Noop => {}
-            Action::Back => {
-                screen = match screen {
-                    Screen::Details => Screen::Manage,
-                    Screen::Saved => Screen::Manage,
-                    _ => Screen::Main,
-                };
-            }
-            Action::Details => {
-                let wifi_active = state.active_ssid.is_some() || state.active.is_some();
-                let iface = if wifi_active {
-                    state.iface.clone()
-                } else {
-                    state
-                        .ethernet
-                        .iter()
-                        .find(|iface| iface.connected)
-                        .map(|iface| iface.name.clone())
-                        .or_else(|| state.iface.clone())
-                };
-                match iface {
-                    Some(iface) => {
-                        details = connection_details(&iface);
-                        if details.is_some() {
-                            screen = Screen::Details;
-                            status.clear();
-                        } else {
-                            status = format!("No connection details for {iface}.");
-                        }
-                    }
-                    None => status = "No active interface to inspect.".to_owned(),
-                }
-            }
             Action::Rescan => {
                 if let Some(iface) = &state.iface {
                     match nmcli(&["device", "wifi", "rescan", "ifname", iface]) {
@@ -251,99 +257,83 @@ fn run(cli: Cli) -> Result<()> {
                         Err(error) => status = format!("Scan failed: {error}"),
                     }
                 }
-                screen = Screen::Main;
             }
-            Action::WifiOn => {
-                match nmcli(&["radio", "wifi", "on"]) {
-                    Ok(_) => status = "Wi-Fi turned on.".to_owned(),
-                    Err(error) => status = format!("Could not turn Wi-Fi on: {error}"),
-                }
-                screen = Screen::Main;
-            }
-            Action::WifiOff => {
-                match nmcli(&["radio", "wifi", "off"]) {
-                    Ok(_) => status = "Wi-Fi turned off.".to_owned(),
-                    Err(error) => status = format!("Could not turn Wi-Fi off: {error}"),
-                }
-                screen = Screen::Main;
-            }
+            Action::WifiOn => match nmcli(&["radio", "wifi", "on"]) {
+                Ok(_) => status = "Wi-Fi turned on.".to_owned(),
+                Err(error) => status = format!("Could not turn Wi-Fi on: {error}"),
+            },
+            Action::WifiOff => match nmcli(&["radio", "wifi", "off"]) {
+                Ok(_) => status = "Wi-Fi turned off.".to_owned(),
+                Err(error) => status = format!("Could not turn Wi-Fi off: {error}"),
+            },
             Action::DisconnectWifi => {
                 let Some(iface) = &state.iface else {
                     status = "No Wi-Fi adapter detected.".to_owned();
-                    screen = Screen::Main;
+
                     continue;
                 };
                 match nmcli(&["device", "disconnect", iface]) {
                     Ok(_) => status = format!("Disconnected Wi-Fi {iface}."),
                     Err(error) => status = format!("Could not disconnect Wi-Fi: {error}"),
                 }
-                screen = Screen::Main;
             }
-            Action::ConnectEthernet(iface) => {
-                match nmcli(&["device", "connect", &iface]) {
-                    Ok(_) => status = format!("Connected {iface}."),
-                    Err(error) => status = format!("Could not connect {iface}: {error}"),
-                }
-                screen = Screen::Main;
-            }
-            Action::DisconnectEthernet(iface) => {
-                match nmcli(&["device", "disconnect", &iface]) {
-                    Ok(_) => status = format!("Disconnected {iface}."),
-                    Err(error) => status = format!("Could not disconnect {iface}: {error}"),
-                }
-                screen = Screen::Main;
-            }
+            Action::ConnectEthernet(iface) => match nmcli(&["device", "connect", &iface]) {
+                Ok(_) => status = format!("Connected {iface}."),
+                Err(error) => status = format!("Could not connect {iface}: {error}"),
+            },
+            Action::DisconnectEthernet(iface) => match nmcli(&["device", "disconnect", &iface]) {
+                Ok(_) => status = format!("Disconnected {iface}."),
+                Err(error) => status = format!("Could not disconnect {iface}: {error}"),
+            },
             Action::QuickConnectEthernet => {
                 let Some(iface) = state.ethernet.iter().find(|iface| !iface.connected) else {
                     status = "No wired interface available.".to_owned();
-                    screen = Screen::Manage;
+
                     continue;
                 };
                 match nmcli(&["device", "connect", &iface.name]) {
                     Ok(_) => status = format!("Connected {}.", iface.name),
                     Err(error) => status = format!("Could not connect {}: {error}", iface.name),
                 }
-                screen = Screen::Main;
             }
             Action::ConnectHidden => {
                 let Some(iface) = &state.iface else {
                     status = "No Wi-Fi adapter detected.".to_owned();
-                    screen = Screen::Manage;
+
                     continue;
                 };
                 let Some(ssid) = prompt(&rofi, &choice, no_theme, "Hidden network SSID", false)?
                 else {
                     status.clear();
-                    screen = Screen::Manage;
+
                     continue;
                 };
                 let ssid = ssid.trim();
                 if ssid.is_empty() {
                     status = "Hidden network name cannot be empty.".to_owned();
-                    screen = Screen::Manage;
+
                     continue;
                 }
                 let Some(password) =
                     prompt(&rofi, &choice, no_theme, "Password (blank if open)", true)?
                 else {
                     status.clear();
-                    screen = Screen::Manage;
+
                     continue;
                 };
                 if password.is_empty()
                     && !confirm_open(&rofi, &choice, no_theme, "Connect without a password?")?
                 {
                     status.clear();
-                    screen = Screen::Manage;
+
                     continue;
                 }
                 connect_ap(iface, ssid, &password, true, &mut status)?;
-                screen = Screen::Main;
             }
             Action::ConnectAp { ssid, security } => {
                 let Some(iface) = &state.iface else {
                     status = "No Wi-Fi adapter detected.".to_owned();
-                    screen = Screen::Main;
+
                     continue;
                 };
                 let open = is_open(&security);
@@ -359,26 +349,29 @@ fn run(cli: Cli) -> Result<()> {
                     )?
                     else {
                         status.clear();
-                        screen = Screen::Main;
+
                         continue;
                     };
                     if password.is_empty() {
                         status = "Password entry cancelled.".to_owned();
-                        screen = Screen::Main;
+
                         continue;
                     }
                     password
                 };
                 connect_ap(iface, &ssid, &password, false, &mut status)?;
-                screen = Screen::Main;
             }
             Action::EditSaved => {
-                screen = Screen::Saved;
-                status.clear();
+                if saved.take().is_none() {
+                    let profiles = saved_connections();
+                    if let Some(first) = profiles.first() {
+                        focus = Some(format!("saved:{}", first.name));
+                    }
+                    saved = Some(profiles);
+                }
             }
             Action::EditSavedProfile(name) => {
                 edit_connection(&name, &mut status)?;
-                screen = Screen::Manage;
             }
         }
     }
@@ -478,113 +471,163 @@ fn status_line(state: &WifiState, message: &str, theme: &Theme) -> String {
     lines.join("\n")
 }
 
-fn main_message(state: &WifiState, status: &str, theme: &Theme) -> String {
-    let hints = if !state.enabled {
-        ui::hint(&[("Enter", "Turn Wi-Fi on"), ("Alt+m", "Manage")], theme)
-    } else if state.iface.is_none() {
-        ui::hint(&[("Alt+m", "Manage")], theme)
+fn network_toolbar(theme: &Theme, can_scan: bool, show_details: bool) -> String {
+    let buttons = if can_scan {
+        "button-scan, button-details, button-actions"
     } else {
-        ui::hint(
-            &[("Enter", "Connect"), ("Alt+r", "Scan"), ("Alt+m", "Manage")],
+        "button-details, button-actions"
+    };
+    let details_label = if show_details {
+        "Hide details"
+    } else {
+        "Details"
+    };
+    let lines = if show_details { 5 } else { 13 };
+    // Leave room below the button borders at fractional display scaling.
+    format!(
+        r#"
+window {{ width: calc( ( 74ch + 64px ) min 94% ); padding: 18px; }}
+mainbox {{
+    children: [ message, box-network-actions, inputbar, listview ];
+    spacing: 16px;
+}}
+message {{ padding: 10px 16px; }}
+inputbar {{ padding: 8px 16px; }}
+listview {{ lines: {lines}; scrollbar: true; spacing: 2px; }}
+element {{ padding: 4px 14px; }}
+element normal.active, element alternate.active, element selected.active {{
+    background-color: {mantle};
+    text-color: {text};
+    border: 1px;
+    border-color: transparent;
+    border-radius: 6px;
+}}
+box-network-actions {{
+    background-color: transparent;
+    orientation: horizontal;
+    expand: false;
+    spacing: 14px;
+    padding: 0 0 2px;
+    children: [ {buttons} ];
+}}
+button-scan, button-details, button-actions {{
+    expand: false;
+    padding: 7px 12px;
+    margin: 0 0 2px;
+    border: 1px;
+    border-radius: 6px;
+    border-color: {muted};
+    background-color: {mantle};
+    text-color: {text};
+}}
+button-scan {{
+    content: "Scan Alt+r";
+    action: "kb-custom-1";
+}}
+button-details {{
+    content: "{details_label} Alt+i";
+    action: "kb-custom-7";
+}}
+button-actions {{
+    content: "Actions Alt+m";
+    action: "kb-custom-2";
+}}
+"#,
+        muted = theme.muted,
+        mantle = theme.mantle,
+        text = theme.text,
+    )
+}
+
+fn main_message(state: &WifiState, status: &str, theme: &Theme, no_theme: bool) -> String {
+    let mut keys = Vec::new();
+    if !state.enabled {
+        keys.push(("Enter", "Turn Wi-Fi on"));
+    } else if state.iface.is_some() {
+        keys.push(("Enter", "Select"));
+        if no_theme {
+            keys.push(("Alt+r", "Scan"));
+        }
+    }
+    keys.push(if no_theme {
+        ("Alt+m", "Actions")
+    } else {
+        ("Ctrl+1–4", "Theme")
+    });
+    if no_theme {
+        keys.push(("Alt+i", "Details"));
+    }
+    let hints = ui::hint(&keys, theme);
+    format!("{}\n{hints}", status_line(state, status, theme))
+}
+
+fn connection_summary(state: &WifiState, details: &ConnectionDetails, theme: &Theme) -> String {
+    let addresses = joined_values(
+        [details.address.as_deref(), details.ipv6.as_deref()]
+            .into_iter()
+            .flatten(),
+    );
+    let gateways = joined_values(
+        [details.gateway.as_deref(), details.ipv6_gateway.as_deref()]
+            .into_iter()
+            .flatten(),
+    );
+    let dns = joined_values(details.dns.iter().map(String::as_str));
+    let mut lines = detail_lines("IP/prefix", &addresses);
+    lines.extend(detail_lines("Gateway", &gateways));
+    lines.extend(detail_lines("VPN", &details.vpn));
+    lines.extend(detail_lines("DNS", &dns));
+    if !details.iface.is_empty() {
+        let mut link = vec![("Interface", details.iface.as_str())];
+        if state.iface.as_deref() == Some(details.iface.as_str())
+            && let Some(active) = &state.active
+        {
+            let band = active.band();
+            if !band.is_empty() {
+                link.push(("Band", band));
+            }
+            if !active.security.is_empty() && active.security != "--" {
+                link.push(("Security", &active.security));
+            }
+        }
+        lines.push(ui::inline_detail(&link, theme));
+        lines.push(ui::inline_detail(
+            &[
+                ("Subnet", details.subnet.as_deref().unwrap_or("--")),
+                ("Broadcast", details.broadcast.as_deref().unwrap_or("--")),
+            ],
             theme,
-        )
-    };
-    format!("{}\n{hints}", status_line(state, status, theme))
-}
-
-fn manage_message(state: &WifiState, status: &str, theme: &Theme) -> String {
-    let hints = ui::hint(&[("Enter", "Select"), ("Esc", "Back")], theme);
-    format!("{}\n{hints}", status_line(state, status, theme))
-}
-
-fn saved_message(theme: &Theme) -> String {
-    ui::hint(&[("Enter", "Edit"), ("Esc", "Back")], theme)
-}
-
-fn details_message(
-    state: &WifiState,
-    details: Option<&ConnectionDetails>,
-    theme: &Theme,
-) -> String {
-    let Some(details) = details else {
-        return format!(
-            "No connection details\n{}",
-            ui::hint(&[("Esc", "Back")], theme)
-        );
-    };
-    let title = escape_markup(&details.connection);
-    let mut lines = vec![format!(
-        "<span foreground=\"{}\" weight=\"bold\" size=\"14000\">{title}</span>",
-        theme.text
-    )];
-
-    let mut qualified = vec![("Interface", details.iface.clone())];
-    if state.iface.as_deref() == Some(details.iface.as_str())
-        && let Some(active) = &state.active
-    {
-        let band = active.band();
-        if !band.is_empty() {
-            qualified.push(("Band", band.to_owned()));
-        }
-        if !active.security.is_empty() && active.security != "--" {
-            qualified.push(("Security", active.security.clone()));
-        }
+        ));
+        lines.push(ui::inline_detail(
+            &[("MAC", details.mac.as_deref().unwrap_or("--"))],
+            theme,
+        ));
     }
-    for (label, value) in qualified {
-        lines.extend(detail_lines(label, &value, theme));
-    }
-    lines.extend(detail_lines(
-        "IP/prefix",
-        details.address.as_deref().unwrap_or("--"),
-        theme,
-    ));
-    lines.extend(detail_lines(
-        "Gateway",
-        details.gateway.as_deref().unwrap_or("--"),
-        theme,
-    ));
-    lines.extend(detail_lines(
-        "Subnet",
-        details.subnet.as_deref().unwrap_or("--"),
-        theme,
-    ));
-    lines.extend(detail_lines(
-        "Broadcast",
-        details.broadcast.as_deref().unwrap_or("--"),
-        theme,
-    ));
-    let dns = if details.dns.is_empty() {
+    lines.join("\n")
+}
+
+fn joined_values<'a>(values: impl Iterator<Item = &'a str>) -> String {
+    let text = values.collect::<Vec<_>>().join(", ");
+    if text.is_empty() {
         "--".to_owned()
     } else {
-        details.dns.join(", ")
-    };
-    lines.extend(detail_lines("DNS", &dns, theme));
-    lines.extend(detail_lines(
-        "MAC",
-        details.mac.as_deref().unwrap_or("--"),
-        theme,
-    ));
-    lines.push(ui::hint(&[("Esc", "Back")], theme));
-    lines.join("\n")
+        text
+    }
 }
 
 /// A label/value pair, with the value wrapped under the value column when a
 /// long address or DNS list would otherwise be clipped.
-fn detail_lines(label: &str, value: &str, theme: &Theme) -> Vec<String> {
+fn detail_lines(label: &str, value: &str) -> Vec<String> {
     let value_width = DETAIL_WIDTH.saturating_sub(14).max(16);
     let wrapped = wrap_value(value, value_width);
     let mut lines = Vec::with_capacity(wrapped.len());
     for (index, part) in wrapped.iter().enumerate() {
         let left = if index == 0 {
-            format!("<span foreground=\"{}\">{label:>10}</span>  ", theme.muted)
+            format!("<b>{label:>10}</b>  ")
         } else {
             "            ".to_owned()
         };
-        lines.push(format!(
-            "{left}<span foreground=\"{}\">{}</span>",
-            theme.text,
-            escape_markup(part)
-        ));
+        lines.push(format!("{left}{}", escape_markup(part)));
     }
     lines
 }
@@ -621,13 +664,6 @@ fn build_main(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<(String, Acti
     let mut actions = Vec::new();
 
     if !state.enabled {
-        push_row(
-            &mut items,
-            &mut actions,
-            "action:wifi-on".to_owned(),
-            Item::new("", label("Turn Wi-Fi on", theme)),
-            Action::WifiOn,
-        );
         return (items, actions);
     }
 
@@ -640,8 +676,6 @@ fn build_main(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<(String, Acti
                 Item::new("", ui::empty("No Wi-Fi adapter", theme)).nonselectable(),
                 Action::Noop,
             );
-        } else {
-            push_ethernet_rows(state, &mut items, &mut actions, theme);
         }
         return (items, actions);
     }
@@ -672,12 +706,13 @@ fn build_main(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<(String, Acti
             &mut items,
             &mut actions,
             "action:scan".to_owned(),
-            Item::new("", label_row("Scan for networks", theme)),
+            Item::new("", label_row("Scan for networks", "", false, theme)),
             Action::Rescan,
         );
         return (items, actions);
     }
 
+    items.push(section_row("wifi", "Nearby Wi-Fi", theme));
     for ap in networks {
         let open = is_open(&ap.security);
         let security = if open { "Open" } else { "Secured" };
@@ -696,86 +731,75 @@ fn build_main(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<(String, Acti
     (items, actions)
 }
 
-fn build_manage(state: &WifiState, theme: &Theme) -> (Vec<Item>, Vec<(String, Action)>) {
-    let mut items = Vec::new();
-    let mut actions = Vec::new();
-
-    if state.active_ssid.is_some()
-        || state.active.is_some()
-        || state.ethernet.iter().any(|iface| iface.connected)
-    {
+fn add_actions(
+    state: &WifiState,
+    saved: Option<&[Saved]>,
+    theme: &Theme,
+    items: &mut Vec<Item>,
+    actions: &mut Vec<(String, Action)>,
+) {
+    if state.enabled && state.iface.is_some() {
         push_row(
-            &mut items,
-            &mut actions,
-            "manage:details".to_owned(),
-            Item::new("", label_row("Connection details", theme)),
-            Action::Details,
-        );
-    }
-    if state.enabled {
-        push_row(
-            &mut items,
-            &mut actions,
-            "manage:wifi-off".to_owned(),
-            Item::new("", label_row("Turn Wi-Fi off", theme)),
-            Action::WifiOff,
-        );
-    } else {
-        push_row(
-            &mut items,
-            &mut actions,
-            "manage:wifi-on".to_owned(),
-            Item::new("", label_row("Turn Wi-Fi on", theme)),
-            Action::WifiOn,
-        );
-    }
-    if state.iface.is_some() {
-        push_row(
-            &mut items,
-            &mut actions,
+            items,
+            actions,
             "manage:hidden".to_owned(),
-            Item::new("", label_row("Connect to hidden network", theme)),
+            Item::new("", label_row("Connect to hidden network", "", false, theme)),
             Action::ConnectHidden,
         );
     }
-    if !saved_connections().is_empty() {
+    if state.enabled && state.iface.is_some() {
         push_row(
-            &mut items,
-            &mut actions,
-            "manage:saved".to_owned(),
-            Item::new("", label_row("Edit saved connection", theme)),
-            Action::EditSaved,
+            items,
+            actions,
+            "manage:wifi-off".to_owned(),
+            Item::new("", label_row("Turn Wi-Fi off", "", true, theme)),
+            Action::WifiOff,
+        );
+    } else if state.iface.is_some() || !state.enabled {
+        push_row(
+            items,
+            actions,
+            "action:wifi-on".to_owned(),
+            Item::new("", label_row("Turn Wi-Fi on", "", false, theme)),
+            Action::WifiOn,
         );
     }
     if state.active_ssid.is_some() {
         push_row(
-            &mut items,
-            &mut actions,
+            items,
+            actions,
             "manage:disconnect-wifi".to_owned(),
-            Item::new("", label_row("Disconnect current Wi-Fi", theme)),
+            Item::new("", label_row("Disconnect current Wi-Fi", "", true, theme)),
             Action::DisconnectWifi,
         );
     }
 
     if state.ethernet.iter().any(|iface| !iface.connected) {
         push_row(
-            &mut items,
-            &mut actions,
+            items,
+            actions,
             "manage:quick-wired".to_owned(),
-            Item::new("", label_row("Connect wired network", theme)),
+            Item::new("", label_row("Connect wired network", "", false, theme)),
             Action::QuickConnectEthernet,
         );
     }
-    push_ethernet_rows(state, &mut items, &mut actions, theme);
+    push_ethernet_rows(state, items, actions, theme);
 
+    let label = if saved.is_some() {
+        "Saved connections  ·  Hide"
+    } else {
+        "Saved connections  ·  Show"
+    };
     push_row(
-        &mut items,
-        &mut actions,
-        "back".to_owned(),
-        Item::new("", label_row("Back", theme)),
-        Action::Back,
+        items,
+        actions,
+        "manage:saved".to_owned(),
+        Item::new("", label_row(label, "", false, theme)).meta("saved profiles edit connection"),
+        Action::EditSaved,
     );
-    (items, actions)
+    if let Some(saved) = saved {
+        add_saved_rows(saved, theme, items, actions);
+    }
 }
 
 fn push_ethernet_rows(
@@ -798,28 +822,29 @@ fn push_ethernet_rows(
                 format!("ethernet:connect:{}", iface.name),
             )
         };
-        let detail = if iface.state.is_empty() {
-            ""
-        } else {
-            &iface.state
-        };
         push_row(
             items,
             actions,
             id,
-            Item::new("", ui::row("", &label_text, detail, "", theme)),
+            Item::new(
+                "",
+                label_row(&label_text, &iface.state, iface.connected, theme),
+            ),
             action,
         );
     }
 }
 
-fn saved_items(saved: &[Saved], theme: &Theme) -> (Vec<Item>, Vec<(String, Action)>) {
-    let mut items = Vec::new();
-    let mut actions = Vec::new();
+fn add_saved_rows(
+    saved: &[Saved],
+    theme: &Theme,
+    items: &mut Vec<Item>,
+    actions: &mut Vec<(String, Action)>,
+) {
     if saved.is_empty() {
         push_row(
-            &mut items,
-            &mut actions,
+            items,
+            actions,
             "static:no-saved".to_owned(),
             Item::new("", ui::empty("No saved connections", theme)).nonselectable(),
             Action::Noop,
@@ -827,57 +852,52 @@ fn saved_items(saved: &[Saved], theme: &Theme) -> (Vec<Item>, Vec<(String, Actio
     } else {
         for entry in saved {
             push_row(
-                &mut items,
-                &mut actions,
+                items,
+                actions,
                 format!("saved:{}", entry.name),
-                Item::new("", ui::row("", &entry.name, &entry.kind, "", theme)),
+                Item::new("", label_row(&entry.name, &entry.kind, false, theme)),
                 Action::EditSavedProfile(entry.name.clone()),
             );
         }
     }
-    push_row(
-        &mut items,
-        &mut actions,
-        "back".to_owned(),
-        Item::new("", label_row("Back", theme)),
-        Action::Back,
-    );
-    (items, actions)
 }
 
 /// One compact row: a bold SSID, right-aligned signal, and fixed security
 /// position. `ui::truncate` only shortens what the user sees; the row id
 /// carries the full SSID so Rofi's filter matches the whole name.
 fn network_row(ssid: &str, signal: u8, security: &str, theme: &Theme) -> String {
-    let ssid_width = 33;
+    let ssid_width = 39;
     let name = ui::truncate(ssid, ssid_width);
     let name_pad = " ".repeat(ssid_width.saturating_sub(ui::display_width(&name)));
-    let signal = format!("{signal:>3}%");
     format!(
-        "<span foreground=\"{}\" weight=\"600\">{}</span>{name_pad}  \
-         <span foreground=\"{}\">{signal}</span>   \
-         <span foreground=\"{}\">{security:>7}</span>",
-        theme.text,
+        "<span foreground=\"{}\">●</span>  <b>{}</b>{name_pad}  {signal:>3}%   {security:>7}",
+        theme.browser,
         escape_markup(&name),
-        theme.muted,
-        theme.muted,
     )
 }
 
-fn label(text: &str, theme: &Theme) -> String {
-    format!(
-        "<span foreground=\"{}\" weight=\"600\">{}</span>",
-        theme.text,
+fn section_row(id: &str, title: &str, theme: &Theme) -> Item {
+    Item::new(format!("section:{id}"), ui::section(title, "", 34, theme))
+        .active()
+        .nonselectable()
+}
+
+fn label_row(text: &str, detail: &str, destructive: bool, theme: &Theme) -> String {
+    let (marker, color) = if destructive {
+        ("!", &theme.danger)
+    } else {
+        ("›", &theme.accent)
+    };
+    // Keep the label in Rofi's row foreground for contrast on selection.
+    let title = format!(
+        "<span foreground=\"{color}\">{marker}</span>  {}",
         escape_markup(text)
-    )
-}
-
-fn label_row(text: &str, theme: &Theme) -> String {
-    ui::row("", text, "", "", theme)
-}
-
-fn details_items(theme: &Theme) -> Vec<Item> {
-    vec![Item::new("back", label_row("Back", theme))]
+    );
+    if detail.is_empty() {
+        title
+    } else {
+        format!("{title}  {}", escape_markup(detail))
+    }
 }
 
 fn push_row(
@@ -1008,40 +1028,54 @@ fn dedupe_access_points(access_points: &mut Vec<AccessPoint>) {
     *access_points = deduped;
 }
 
+fn load_connection_details(state: &WifiState) -> ConnectionDetails {
+    let iface = if state.active_ssid.is_some() || state.active.is_some() {
+        state.iface.as_deref()
+    } else {
+        state
+            .ethernet
+            .iter()
+            .find(|iface| iface.connected)
+            .map(|iface| iface.name.as_str())
+            .or(state.iface.as_deref())
+    };
+    let mut details = iface.and_then(connection_details).unwrap_or_default();
+    details.vpn = vpn_status();
+    details
+}
+
 fn connection_details(iface: &str) -> Option<ConnectionDetails> {
     let output = nmcli(&[
         "-t",
         "-f",
-        "GENERAL.CONNECTION,GENERAL.HWADDR,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS",
+        "GENERAL.HWADDR,IP4.ADDRESS,IP4.GATEWAY,IP4.DNS,IP6.ADDRESS,IP6.GATEWAY,IP6.DNS",
         "device",
         "show",
         iface,
     ])
     .ok()?;
     let mut details = ConnectionDetails {
-        connection: iface.to_owned(),
         iface: iface.to_owned(),
-        address: None,
-        gateway: None,
-        subnet: None,
-        broadcast: None,
-        dns: Vec::new(),
-        mac: None,
+        ..ConnectionDetails::default()
     };
     for line in output.lines() {
-        let Some((key, value)) = line.split_once(':') else {
+        let fields = split_fields(line, 2);
+        let [key, value] = fields.as_slice() else {
             continue;
         };
         let value = value.trim();
-        if value.is_empty() {
+        if value.is_empty() || value == "--" {
             continue;
         }
-        match key {
-            "GENERAL.CONNECTION" => details.connection = value.to_owned(),
+        match key.as_str() {
             "GENERAL.HWADDR" => details.mac = Some(value.to_owned()),
             "IP4.ADDRESS[1]" | "IP4.ADDRESS" => details.address = Some(value.to_owned()),
             "IP4.GATEWAY" => details.gateway = Some(value.to_owned()),
-            key if key.starts_with("IP4.DNS") => details.dns.push(value.to_owned()),
+            "IP6.ADDRESS[1]" | "IP6.ADDRESS" => details.ipv6 = Some(value.to_owned()),
+            "IP6.GATEWAY" => details.ipv6_gateway = Some(value.to_owned()),
+            key if key.starts_with("IP4.DNS") || key.starts_with("IP6.DNS") => {
+                details.dns.push(value.to_owned());
+            }
             _ => {}
         }
     }
@@ -1090,6 +1124,27 @@ fn ethernet_ifaces() -> Vec<Ethernet> {
             }
         })
         .collect()
+}
+
+fn vpn_status() -> String {
+    let Ok(output) = nmcli(&["-t", "-f", "NAME,TYPE", "connection", "show", "--active"]) else {
+        return "Unavailable".to_owned();
+    };
+    let names: Vec<_> = output
+        .lines()
+        .filter_map(|line| {
+            let fields = split_fields(line, 2);
+            match fields.as_slice() {
+                [name, kind] if matches!(kind.as_str(), "vpn" | "wireguard") => Some(name.clone()),
+                _ => None,
+            }
+        })
+        .collect();
+    if names.is_empty() {
+        "None in NetworkManager".to_owned()
+    } else {
+        names.join(", ")
+    }
 }
 
 fn saved_connections() -> Vec<Saved> {
@@ -1338,15 +1393,21 @@ mod tests {
 
     #[test]
     fn network_rows_keep_full_ssid_in_the_filtered_text() {
-        let theme = Theme::gruvbox();
         let row = network_row(
             "A very long network name that should be shortened",
             92,
             "Secured",
-            &theme,
+            &Theme::gruvbox(),
         );
         assert!(row.contains("A very long network name"));
         assert!(row.contains("92%"));
         assert!(row.contains("Secured"));
+    }
+
+    #[test]
+    fn main_view_reserves_twelve_candidate_rows_plus_the_header() {
+        let toolbar = network_toolbar(&Theme::gruvbox(), true, false);
+        assert!(toolbar.contains("listview { lines: 13;"), "{toolbar}");
+        assert!(!toolbar.contains("lines: 12;"), "{toolbar}");
     }
 }

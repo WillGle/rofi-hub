@@ -27,6 +27,6 @@ pub use error::{Error, Result};
 pub use item::{Item, escape_markup};
 #[cfg(feature = "manifest")]
 pub use manifest::{ManifestSet, ProviderManifest};
-pub use rofi::{DmenuOptions, Outcome, Rofi};
+pub use rofi::{DmenuOptions, MenuInput, Outcome, Rofi};
 pub use theme::{ChromeProfile, Mode, Theme};
 pub use ui::Level;

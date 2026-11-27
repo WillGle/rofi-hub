@@ -119,6 +119,44 @@
               };
             });
 
+          atomicNoteMetadata = builtins.fromTOML (builtins.readFile ./crates/atomic-note/app.toml);
+          atomicNote = pkgs.stdenvNoCC.mkDerivation {
+            pname = "atomic-note";
+            inherit (atomicNoteMetadata) version;
+            src = ./crates/atomic-note;
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            dontBuild = true;
+            installPhase = ''
+              runHook preInstall
+              install -Dm755 share/atomic-note "$out/bin/atomic-note"
+              install -Dm644 app.toml "$out/share/rofi-apps/apps/atomic-note/app.toml"
+              install -Dm644 providers/atomic-note.toml "$out/share/rofi-apps/providers/atomic-note.toml"
+              install -Dm644 share/rofi/atomic-note.rasi "$out/share/rofi/atomic-note.rasi"
+              runHook postInstall
+            '';
+            postFixup = ''
+              wrapProgram "$out/bin/atomic-note" --prefix PATH : "${
+                lib.makeBinPath (
+                  with pkgs;
+                  [
+                    rofi
+                    coreutils
+                    gawk
+                    jq
+                    procps
+                    util-linux
+                  ]
+                )
+              }"
+            '';
+            meta = {
+              description = "Rofi task queue with optional Waybar integration";
+              license = lib.licenses.mit;
+              mainProgram = "atomic-note";
+              platforms = systems;
+            };
+          };
+
           rofiCalendar = mkApp pkgs {
             crate = "rofi-calendar";
             id = "calendar";
@@ -278,6 +316,7 @@
               rofiClipboard
               rofiKeybinds
               rofiNetwork
+              atomicNote
               screenTime
             ];
             meta.description = "Compatibility bundle of every rofi-app";
@@ -308,6 +347,7 @@
           rofi-clipboard = rofiClipboard;
           rofi-keybinds = rofiKeybinds;
           rofi-network = rofiNetwork;
+          atomic-note = atomicNote;
           screen-time = screenTime;
           rofi-hub-menu = rofiHubMenu;
           rofi-hub-installer = rofiHubInstaller;
@@ -360,6 +400,11 @@
           app = "network";
           package = "rofi-network";
         };
+        atomic-note = import ./modules/nixos/app.nix {
+          inherit self;
+          app = "atomic-note";
+          package = "atomic-note";
+        };
         screen-time = import ./modules/nixos/screen-time.nix { inherit self; };
         rofi-hub-menu = import ./modules/nixos/menu.nix { inherit self; };
         rofi-apps = import ./modules/nixos/default.nix { inherit self; };
@@ -393,6 +438,11 @@
           inherit self;
           app = "network";
           package = "rofi-network";
+        };
+        atomic-note = import ./modules/home-manager/app.nix {
+          inherit self;
+          app = "atomic-note";
+          package = "atomic-note";
         };
         screen-time = import ./modules/home-manager/screen-time.nix { inherit self; };
         rofi-hub-menu = import ./modules/home-manager/menu.nix { inherit self; };

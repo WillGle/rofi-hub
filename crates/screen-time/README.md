@@ -48,9 +48,11 @@ for charts, sandbox benchmarks, and a comparison with UI-capable Linux trackers.
 
 - `←` / `→` browse days, `T` returns to today, and `R` refreshes.
 - `↑` / `↓` selects an app, `Enter` opens its details, and `Backspace` returns.
-  `Esc` closes the popup.
-- `Alt+1` through `Alt+3` select and remember Nord, Solarized Light, or Gruvbox Dark.
-  `Alt+4` clears the saved choice and restores the configured theme.
+  `Esc` closes the popup. The row under the cursor is separate from the
+  expanded detail and stays selected after a theme change.
+- `Ctrl+1` through `Ctrl+3` select and remember Nord, Solarized Light, or Gruvbox Dark.
+  `Ctrl+4` clears the saved choice and restores the configured theme. The
+  current date, page, detail, and app cursor are preserved.
 
 To set a default theme, edit `~/.config/screen-time/config.toml` and reopen Rofi:
 

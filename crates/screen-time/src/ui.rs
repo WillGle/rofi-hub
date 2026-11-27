@@ -20,6 +20,10 @@ pub struct UiState {
     pub app: Option<String>,
     #[serde(default)]
     pub page: usize,
+    /// The app row under the Rofi cursor. Kept separate from `app`, which is
+    /// the detail panel currently expanded.
+    #[serde(default)]
+    pub cursor: Option<String>,
 }
 
 pub fn handle_rofi(paths: &Paths, args: &RenderArgs, now: DateTime<Local>) -> Result<String> {
@@ -27,30 +31,40 @@ pub fn handle_rofi(paths: &Paths, args: &RenderArgs, now: DateTime<Local>) -> Re
         .ok()
         .and_then(|value| value.parse::<u8>().ok())
         .unwrap_or(0);
+    let hovered = std::env::var("ROFI_INFO")
+        .ok()
+        .filter(|value| !value.is_empty() && value != "__none__" && value != "__back__");
     let today = now.date_naive();
     let mut state = read_state(paths).unwrap_or_default();
 
+    let mut reopen = false;
     if retv == 0 && !reopening() {
         state = UiState {
             date: None,
             app: None,
             page: 0,
+            cursor: None,
         };
         if let Some(date) = &args.date {
             state.date = Some(date.clone());
         }
         if let Some(app) = &args.app {
             state.app = Some(app.clone());
+            state.cursor = Some(app.clone());
         }
         write_state(paths, &state)?;
     } else if retv != 0 {
         let was_detail = state.app.is_some();
         match retv {
             1 => {
+                if let Some(info) = &hovered {
+                    state.cursor = Some(info.clone());
+                }
                 if let Ok(info) = std::env::var("ROFI_INFO") {
                     match info.as_str() {
                         "" | "__none__" => {}
                         "__back__" => state.app = None,
+                        _ if state.app.as_deref() == Some(info.as_str()) => state.app = None,
                         _ => state.app = Some(info),
                     }
                 }
@@ -58,20 +72,23 @@ pub fn handle_rofi(paths: &Paths, args: &RenderArgs, now: DateTime<Local>) -> Re
             10 => {
                 state.app = None;
                 state.page = 0;
+                state.cursor = None;
                 state.date = Some(shift_date(&state, today, -1));
             }
             11 => {
                 state.app = None;
                 state.page = 0;
+                state.cursor = None;
                 state.date = Some(shift_date(&state, today, 1));
             }
             12 => {
                 state.app = None;
                 state.page = 0;
+                state.cursor = None;
                 state.date = None;
             }
             13 => {
-                // Refresh: keep the viewed date and reopen state.
+                // Refresh: keep the viewed date, page, cursor, and detail.
             }
             14 => {
                 state.app = None;
@@ -79,27 +96,56 @@ pub fn handle_rofi(paths: &Paths, args: &RenderArgs, now: DateTime<Local>) -> Re
             15 => {
                 state.app = None;
                 state.page = 0;
+                state.cursor = None;
                 state.date = None;
             }
             16 => {
                 // Uppercase R refresh: keep the viewed date.
             }
-            17 => write_theme_choice(paths, Some("nord"))?,
-            18 => write_theme_choice(paths, Some("solarized"))?,
-            19 => write_theme_choice(paths, Some("gruvbox"))?,
-            20 => write_theme_choice(paths, None)?,
-            21 => state.page = state.page.saturating_add(1),
-            22 => state.page = state.page.saturating_sub(1),
+            17 => {
+                // Theme changes keep the cursor and the expanded detail.
+                if let Some(info) = &hovered {
+                    state.cursor = Some(info.clone());
+                }
+                write_theme_choice(paths, Some("nord"))?;
+            }
+            18 => {
+                if let Some(info) = &hovered {
+                    state.cursor = Some(info.clone());
+                }
+                write_theme_choice(paths, Some("solarized"))?;
+            }
+            19 => {
+                if let Some(info) = &hovered {
+                    state.cursor = Some(info.clone());
+                }
+                write_theme_choice(paths, Some("gruvbox"))?;
+            }
+            20 => {
+                if let Some(info) = &hovered {
+                    state.cursor = Some(info.clone());
+                }
+                write_theme_choice(paths, None)?;
+            }
+            21 => {
+                state.app = None;
+                state.page = state.page.saturating_add(1);
+                state.cursor = None;
+            }
+            22 => {
+                state.app = None;
+                state.page = state.page.saturating_sub(1);
+                state.cursor = None;
+            }
             _ => {}
         }
         write_state(paths, &state)?;
-        // The popup height is determined on open. Reload it when changing
-        // between the app list and the taller detail view.
+        // Rofi applies the new height when the inline detail section opens or closes.
         if (was_detail != state.app.is_some() || (17..=20).contains(&retv))
             && let Some(request) = std::env::var_os("SCREEN_TIME_ROFI_THEME_REQUEST")
         {
             fs::write(request, b"reopen")?;
-            return Ok(String::new());
+            reopen = true;
         }
     }
 
@@ -110,23 +156,51 @@ pub fn handle_rofi(paths: &Paths, args: &RenderArgs, now: DateTime<Local>) -> Re
         .unwrap_or(today)
         .min(today);
     let theme = Theme::load_with_mode(read_theme_choice(paths).as_deref());
-    let output = match state.app.as_deref() {
-        Some(app) if !app.is_empty() => {
-            let detail = view::load_detail(paths, date, app, now)?;
-            render::render_detail_with_theme(&detail, render::OutputMode::Rofi, &theme)
-        }
-        _ => {
-            let mut day = view::load_main(paths, date, now)?;
-            let page_count = day.rows.len().div_ceil(view::APP_PAGE_SIZE).max(1);
-            if state.page >= page_count {
-                state.page = page_count - 1;
-                write_state(paths, &state)?;
-            }
-            day.page = state.page;
-            render::render_main_with_theme(&day, render::OutputMode::Rofi, &theme)
-        }
-    };
-    Ok(output)
+    let mut day = view::load_main(paths, date, now)?;
+    let page_count = day.rows.len().div_ceil(view::APP_PAGE_SIZE).max(1);
+    if state.page >= page_count {
+        state.page = page_count - 1;
+        write_state(paths, &state)?;
+    }
+    day.page = state.page;
+    let detail = state
+        .app
+        .as_deref()
+        .filter(|app| !app.is_empty())
+        .map(|app| view::load_detail(paths, date, app, now))
+        .transpose()?;
+    let selection = selection_row(&day, &state);
+    write_atomic(
+        &paths.runtime_dir.join("rofi-selection"),
+        format!("{selection}\n").as_bytes(),
+    )?;
+    if reopen {
+        return Ok(String::new());
+    }
+    Ok(render::render_dashboard_with_cursor(
+        &day,
+        render::OutputMode::Rofi,
+        &theme,
+        detail.as_ref(),
+        state.cursor.as_deref(),
+    ))
+}
+
+/// Row Rofi should select after a reopen. App rows start after six fixed
+/// header/timeline rows; `6` is the first app row.
+fn selection_row(day: &view::DayView, state: &UiState) -> usize {
+    let start = state.page * view::APP_PAGE_SIZE;
+    let end = (start + view::APP_PAGE_SIZE).min(day.rows.len());
+    if start >= end {
+        return 6;
+    }
+    let page_rows = &day.rows[start..end];
+    let focus = state.cursor.as_deref().or(state.app.as_deref());
+    let offset = focus
+        .and_then(|app| page_rows.iter().position(|row| row.name == app))
+        // Only fall back to the first app when the old row disappeared.
+        .unwrap_or(0);
+    6 + offset
 }
 
 pub(crate) fn launcher_theme() -> Result<Theme> {
@@ -245,6 +319,7 @@ mod tests {
             date: Some("2026-11-21".to_owned()),
             app: None,
             page: 0,
+            cursor: None,
         };
         assert_eq!(shift_date(&state, today, 1), "2026-11-21");
         assert_eq!(shift_date(&state, today, -1), "2026-11-20");

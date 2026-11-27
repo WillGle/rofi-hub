@@ -1,0 +1,8 @@
+id = "atomic-note"
+version = "0.1.0"
+bin = "atomic-note"
+provider = "providers/atomic-note.toml"
+script = "share/atomic-note"
+requires = ["rofi", "bash", "jq", "awk", "flock"]
+optional_requires = ["pkill", "foot"]
+service = false

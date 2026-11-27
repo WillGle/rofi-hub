@@ -118,8 +118,20 @@ pub fn resolve(cli: Option<&str>, config: &Config) -> Result<Choice> {
     }
 
     let path = match &custom_path {
+        Some(path) if mode != Mode::Auto => {
+            rofi_dmenu::theme::write_palette_theme("hub", path, &theme).or(Some(path.clone()))
+        }
         Some(path) => Some(path.clone()),
-        None => rofi_dmenu::theme::generate_theme("hub", &theme),
+        None => {
+            let base = rofi_dmenu::theme::resolve_theme_file_with("hub-menu", &theme);
+            match (mode, base) {
+                (Mode::Auto, base) => base,
+                (_, Some(base)) => {
+                    rofi_dmenu::theme::write_palette_theme("hub", &base, &theme).or(Some(base))
+                }
+                (_, None) => rofi_dmenu::theme::generate_theme("hub", &theme),
+            }
+        }
     };
 
     Ok(Choice {
@@ -145,9 +157,18 @@ pub fn parse_mode(value: &str) -> Result<Mode, String> {
         .map_err(|_| format!("unknown theme `{}`", value.trim()))
 }
 
-/// Persist the menu choice without touching `config.toml`.
+/// Persist the menu choice without touching `config.toml`. `auto` is the
+/// absence of a menu override, so it removes the state file and lets the
+/// configured `[theme]` value resolve again.
 pub fn save_mode(mode: Mode) -> Result<()> {
     let path = state_path();
+    if mode == Mode::Auto {
+        return match std::fs::remove_file(&path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error).with_context(|| format!("cannot remove {}", path.display())),
+        };
+    }
     let dir = path.parent().context("menu theme path has no parent")?;
     std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     use std::os::unix::fs::PermissionsExt;

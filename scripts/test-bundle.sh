@@ -97,7 +97,7 @@ else
     fail "install.sh --all installs the bundle"
 fi
 
-for bin in rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time rofi-screen-time; do
+for bin in rofi-calendar rofi-clipboard rofi-keybinds rofi-network atomic-note screen-time rofi-screen-time; do
     assert_file "$E/home/.local/bin/$bin" "bundle installs $bin"
 done
 assert_no_file "$E/home/.local/bin/rofi-hub" "bundle does not install the old hub"
@@ -106,7 +106,7 @@ assert_no_file "$E/config/rofi-hub" "bundle does not write hub theme state"
 assert_file "$E/config/systemd/user/screen-time.service" "bundle installs the app service unit"
 
 # Each app must run with its own runtime tools and no hub.
-for app in rofi-calendar rofi-clipboard rofi-keybinds rofi-network; do
+for app in rofi-calendar rofi-clipboard rofi-keybinds rofi-network atomic-note; do
     rm -f "$E/rofi.args"
     if run_env "$E/home/.local/bin/$app" >/dev/null 2>&1; then
         pass "$app runs with fake rofi"

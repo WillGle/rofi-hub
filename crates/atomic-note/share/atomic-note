@@ -1,0 +1,1231 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# atomic-note — a small task queue on the waybar.
+#
+#   Storage   ~/.atomic_tasks, one task per line: "[Priority] body".
+#   Order     shown by priority (critical → low), then file order; a new task
+#             is prepended so it leads its group, "move to top" puts it first.
+#   Undo      done/clear move the lines to ~/.atomic_tasks.done as
+#             "<batch epoch><TAB>line"; `undo` (Alt+z in the menu) restores the
+#             most recent batch.
+#   Quick add one screen: a priority prefix in the text replaces the picker —
+#             "!! …" critical · "! …" high · "- …" low · none = moderate ·
+#             the "[critical] …" spelling still works.
+
+TASK_FILE="${HOME}/.atomic_tasks"
+TASK_LOCK_FILE="${TASK_FILE}.lock"
+DONE_FILE="${TASK_FILE}.done"
+CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"
+STATE_HOME="${XDG_STATE_HOME:-${HOME}/.local/state}"
+THEME_CHOICE="${STATE_HOME}/rofi-apps/atomic-note/theme-choice"
+THEME_STATIC_ENV="${CONFIG_HOME}/theme/static.env"
+ROFI_BIN="${ROFI_BIN:-rofi}"
+ROFI_ARGS=()
+if [ -r "${ROFI_CONFIG:-${CONFIG_HOME}/rofi/config.rasi}" ]; then
+  ROFI_ARGS=(-config "${ROFI_CONFIG:-${CONFIG_HOME}/rofi/config.rasi}")
+fi
+app_root="$(dirname -- "$(readlink -f -- "${BASH_SOURCE[0]}")")"
+BASE_THEME=""
+for theme in "${CONFIG_HOME}/rofi/atomic-note.rasi" "${ROFI_THEME:-}" \
+  "${CONFIG_HOME}/rofi/theme.rasi" "${XDG_DATA_HOME:-${HOME}/.local/share}/rofi/atomic-note.rasi" \
+  "$app_root/../share/rofi/atomic-note.rasi" "$app_root/rofi/atomic-note.rasi"; do
+  if [ -n "$theme" ] && [ -r "$theme" ]; then
+    BASE_THEME="$theme"
+    break
+  fi
+done
+
+show_rofi() {
+  "$ROFI_BIN" "${ROFI_ARGS[@]}" "$@"
+}
+
+prompt_rofi() {
+  local -a args=()
+  if [ -n "$BASE_THEME" ]; then
+    args=(-theme "$BASE_THEME")
+  fi
+  show_rofi "${args[@]}" "$@"
+}
+
+if [[ "${1:-}" != --help && "${1:-}" != -h && "${1:-}" != --version ]]; then
+  touch "$TASK_FILE"
+fi
+
+if [ -r "$THEME_STATIC_ENV" ]; then
+  # shellcheck disable=SC1090
+  . "$THEME_STATIC_ENV"
+fi
+
+ACTION_FG="${THEME_STATIC_BASE:-#1d2021}"
+ACTION_ADD_BG="${THEME_STATIC_ACCENT:-#fabd2f}"
+ACTION_OPEN_BG="${THEME_STATIC_CYAN:-#83a598}"
+ACTION_CLEAR_BG="#f85149"
+ACTION_EDIT_BG="${THEME_STATIC_PURPLE:-#d3869b}"
+ACTION_MOVE_BG="${THEME_STATIC_WARNING:-#fe8019}"
+ACTION_CANCEL_BG="${THEME_STATIC_SUBTEXT:-#a89984}"
+SECTION_BG="${THEME_STATIC_MANTLE:-#282828}"
+SECTION_FG="${THEME_STATIC_TEXT:-#fbf1c7}"
+INFO_FG="${THEME_STATIC_SUBTEXT:-#a89984}"
+TASK_CRITICAL_BG="#f85149"
+TASK_HIGH_BG="#d29922"
+TASK_MODERATE_BG="#58a6ff"
+TASK_LOW_BG="#3fb950"
+CHIP_ICON_FONT_DESC="${THEME_MONO_FONT:-JetBrainsMono Nerd Font} ${THEME_ROFI_FONT_SIZE:-12}"
+
+# Refresh action colours from the generated theme; static.env is the fallback.
+# Priority colours stay fixed because they carry meaning.
+THEME_PALETTE_FILE="${THEME_GENERATED_DIR:-${XDG_CONFIG_HOME:-${HOME}/.config}/theme/generated}/palette.json"
+load_runtime_palette() {
+  local values=""
+  local -a palette=()
+
+  [ -r "$THEME_PALETTE_FILE" ] || return 0
+  values="$(jq -er '
+    [
+      .colors.surface.default.color,
+      .colors.surface_container.default.color,
+      .colors.on_surface.default.color,
+      .colors.on_surface_variant.default.color,
+      .colors.primary.default.color,
+      .colors.secondary.default.color,
+      .colors.tertiary.default.color,
+      .colors.error.default.color,
+      .palettes.tertiary["70"].color,
+      .palettes.secondary["70"].color
+    ] as $palette
+    | if all($palette[]; type == "string" and test("^#[0-9A-Fa-f]{6}$"))
+      then $palette | @tsv
+      else error("invalid runtime palette")
+      end
+  ' "$THEME_PALETTE_FILE" 2>/dev/null
+  )" || return 0
+
+  IFS=$'\t' read -r -a palette <<< "$values"
+  [ "${#palette[@]}" -eq 10 ] || return 0
+
+  ACTION_FG="${palette[0]}"
+  ACTION_ADD_BG="${palette[4]}"
+  ACTION_OPEN_BG="${palette[9]}"
+  ACTION_EDIT_BG="${palette[8]}"
+  ACTION_MOVE_BG="${palette[6]}"
+  ACTION_CANCEL_BG="${palette[3]}"
+  SECTION_BG="${palette[1]}"
+  SECTION_FG="${palette[2]}"
+  INFO_FG="${palette[3]}"
+}
+load_runtime_palette
+
+# The palette variables above are the Auto choice. Ctrl+1–4 overlays a fixed
+# palette while keeping the user's base theme, font, and layout.
+AUTO_ACTION_FG="$ACTION_FG"
+AUTO_ACTION_ADD_BG="$ACTION_ADD_BG"
+AUTO_ACTION_OPEN_BG="$ACTION_OPEN_BG"
+AUTO_ACTION_CLEAR_BG="$ACTION_CLEAR_BG"
+AUTO_ACTION_EDIT_BG="$ACTION_EDIT_BG"
+AUTO_ACTION_MOVE_BG="$ACTION_MOVE_BG"
+AUTO_ACTION_CANCEL_BG="$ACTION_CANCEL_BG"
+AUTO_SECTION_BG="$SECTION_BG"
+AUTO_SECTION_FG="$SECTION_FG"
+AUTO_INFO_FG="$INFO_FG"
+THEME_MODE=""
+THEME_BASE=""
+THEME_MANTLE=""
+THEME_BORDER=""
+THEME_TEXT=""
+THEME_ACCENT=""
+
+# mode:base:mantle:surface_alt:border:text:muted:accent:power:work:browser:communication:entertainment:other:danger
+theme_palette() {
+  case "$1" in
+    nord)
+      printf '%s' '#2e3440:#3b4252:#434c5e:#4c566a:#eceff4:#d8dee9:#88c0d0:#d8dee9:#a3be8c:#8fbcdb:#ebcb8b:#dfacd0:#e5e9f0:#bf616a'
+      ;;
+    solarized)
+      printf '%s' '#fdf6e3:#eee8d5:#e4ddc8:#d5cdb6:#073642:#52676e:#00689d:#52676e:#516100:#00689d:#8d5c00:#a52e6f:#58636a:#b3302c'
+      ;;
+    gruvbox)
+      printf '%s' '#1d2021:#282828:#32302f:#3c3836:#fbf1c7:#a89984:#fabd2f:#d5c4a1:#b8bb26:#83a598:#fe8019:#d3869b:#928374:#fb4934'
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+apply_theme_mode() {
+  local mode="$1" values base mantle border text muted accent browser communication entertainment danger
+  if [ "$mode" = auto ]; then
+    THEME_MODE=""
+    THEME_BASE="" THEME_MANTLE="" THEME_BORDER="" THEME_TEXT="" THEME_ACCENT=""
+    ACTION_FG="$AUTO_ACTION_FG"
+    ACTION_ADD_BG="$AUTO_ACTION_ADD_BG"
+    ACTION_OPEN_BG="$AUTO_ACTION_OPEN_BG"
+    ACTION_CLEAR_BG="$AUTO_ACTION_CLEAR_BG"
+    ACTION_EDIT_BG="$AUTO_ACTION_EDIT_BG"
+    ACTION_MOVE_BG="$AUTO_ACTION_MOVE_BG"
+    ACTION_CANCEL_BG="$AUTO_ACTION_CANCEL_BG"
+    SECTION_BG="$AUTO_SECTION_BG"
+    SECTION_FG="$AUTO_SECTION_FG"
+    INFO_FG="$AUTO_INFO_FG"
+    return 0
+  fi
+  values="$(theme_palette "$mode")" || return 1
+  IFS=: read -r base mantle _ border text muted accent _ _ browser communication entertainment _ danger <<<"$values"
+  THEME_MODE="$mode"
+  THEME_BASE="$base" THEME_MANTLE="$mantle" THEME_BORDER="$border" THEME_TEXT="$text" THEME_ACCENT="$accent"
+  ACTION_FG="$base"
+  ACTION_ADD_BG="$accent"
+  ACTION_OPEN_BG="$browser"
+  ACTION_CLEAR_BG="$danger"
+  ACTION_EDIT_BG="$entertainment"
+  ACTION_MOVE_BG="$communication"
+  ACTION_CANCEL_BG="$muted"
+  SECTION_BG="$mantle"
+  SECTION_FG="$text"
+  INFO_FG="$muted"
+}
+
+save_theme_mode() {
+  local mode="$1" dir
+  dir="$(dirname -- "$THEME_CHOICE")"
+  if [ "$mode" = auto ]; then
+    rm -f -- "$THEME_CHOICE"
+    return 0
+  fi
+  mkdir -p -- "$dir" 2>/dev/null || return 0
+  chmod 700 "$dir" 2>/dev/null || true
+  printf '%s\n' "$mode" >"${THEME_CHOICE}.$$"
+  chmod 600 "${THEME_CHOICE}.$$" 2>/dev/null || true
+  mv -f -- "${THEME_CHOICE}.$$" "$THEME_CHOICE"
+}
+
+set_theme_mode() {
+  save_theme_mode "$1" || true
+  apply_theme_mode "$1" || true
+}
+
+if [ -r "$THEME_CHOICE" ]; then
+  saved_mode="$(tr -d '[:space:]' <"$THEME_CHOICE")"
+  case "$saved_mode" in
+    nord|solarized|gruvbox) apply_theme_mode "$saved_mode" ;;
+  esac
+fi
+
+# A saved mode only recolors the app; the resolved base theme still supplies
+# the font, window geometry, and component layout.
+theme_palette_rules() {
+  [ -n "$THEME_MODE" ] || return 0
+  cat <<EOF
+window {
+  background-color: ${THEME_BASE};
+  border-color: ${THEME_BORDER};
+  text-color: ${THEME_TEXT};
+}
+mainbox, listview {
+  background-color: transparent;
+}
+inputbar {
+  background-color: ${THEME_MANTLE};
+  border-color: ${THEME_BORDER};
+  text-color: ${THEME_TEXT};
+}
+entry, textbox {
+  text-color: ${THEME_TEXT};
+}
+prompt {
+  background-color: ${THEME_ACCENT};
+  text-color: ${THEME_BASE};
+}
+element, element normal.normal, element alternate.normal {
+  background-color: transparent;
+  border-color: ${THEME_BORDER};
+  text-color: ${THEME_TEXT};
+}
+element selected, element selected.normal {
+  background-color: ${THEME_ACCENT};
+  border-color: ${THEME_ACCENT};
+  text-color: ${THEME_BASE};
+}
+EOF
+}
+
+# Match exact process names so RT signals cannot kill Waybar helpers.
+# Nix wraps the binary, so try both names.
+refresh_waybar() {
+  command -v pkill >/dev/null 2>&1 || return 0
+  pkill -RTMIN+5 -x waybar >/dev/null 2>&1 || pkill -RTMIN+5 -x .waybar-wrapped >/dev/null 2>&1 || true
+}
+
+resolve_editor() {
+  if [ -n "${EDITOR:-}" ]; then
+    printf '%s\n' "$EDITOR"
+    return 0
+  fi
+
+  if command -v nano >/dev/null 2>&1; then
+    printf '%s\n' "nano"
+    return 0
+  fi
+
+  printf '%s\n' "vi"
+}
+
+trim_whitespace() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s\n' "$value"
+}
+
+normalize_priority() {
+  local raw="${1:-moderate}"
+  raw="$(trim_whitespace "${raw,,}")"
+  case "$raw" in
+    critical|crit|p0|a)
+      printf '%s\n' "critical"
+      ;;
+    high|p1|b)
+      printf '%s\n' "high"
+      ;;
+    moderate|medium|med|normal|default|p2|c|"")
+      printf '%s\n' "moderate"
+      ;;
+    low|p3|d)
+      printf '%s\n' "low"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+priority_label() {
+  case "$1" in
+    critical) printf '%s\n' "Critical" ;;
+    high)     printf '%s\n' "High" ;;
+    moderate) printf '%s\n' "Moderate" ;;
+    low)      printf '%s\n' "Low" ;;
+  esac
+}
+
+priority_icon() {
+  case "$1" in
+    critical) printf '%s\n' "◆" ;;
+    high)     printf '%s\n' "▲" ;;
+    moderate) printf '%s\n' "●" ;;
+    low)      printf '%s\n' "○" ;;
+  esac
+}
+
+priority_bg() {
+  case "$1" in
+    critical) printf '%s\n' "$TASK_CRITICAL_BG" ;;
+    high)     printf '%s\n' "$TASK_HIGH_BG" ;;
+    moderate) printf '%s\n' "$TASK_MODERATE_BG" ;;
+    low)      printf '%s\n' "$TASK_LOW_BG" ;;
+  esac
+}
+
+# Sort key: lower is shown first.
+priority_rank() {
+  case "$1" in
+    critical) printf '0\n' ;;
+    high)     printf '1\n' ;;
+    moderate) printf '2\n' ;;
+    low)      printf '3\n' ;;
+    *)        printf '2\n' ;;
+  esac
+}
+
+task_priority() {
+  local task="$1"
+  local lower="${task,,}"
+  case "$lower" in
+    \[critical\]*|\[a\]*) printf '%s\n' "critical" ;;
+    \[high\]*|\[b\]*)     printf '%s\n' "high" ;;
+    \[moderate\]*|\[medium\]*|\[c\]*) printf '%s\n' "moderate" ;;
+    \[low\]*|\[d\]*)      printf '%s\n' "low" ;;
+    *)                    printf '%s\n' "moderate" ;;
+  esac
+}
+
+task_body() {
+  local task="$1"
+  # Strip tags case-insensitively to avoid duplicating hand-edited prefixes.
+  if [[ "${task,,}" =~ ^\[(critical|high|moderate|medium|low|a|b|c|d)\][[:space:]]* ]]; then
+    printf '%s\n' "${task:${#BASH_REMATCH[0]}}"
+    return 0
+  fi
+  printf '%s\n' "$task"
+}
+
+format_task() {
+  local body="$1"
+  local priority="$2"
+  body="$(trim_whitespace "$body")"
+  if [ -z "$body" ]; then
+    return 1
+  fi
+  printf '[%s] %s\n' "$(priority_label "$priority")" "$body"
+}
+
+# Quick-add prefixes skip the picker. Prints "<priority><TAB><body>".
+parse_quick_add() {
+  local text priority body
+  text="$(trim_whitespace "$1")"
+  case "$text" in
+    '!!'*) priority="critical"; body="${text#!!}" ;;
+    '!'*)  priority="high";     body="${text#!}" ;;
+    '-'*)  priority="low";      body="${text#-}" ;;
+    *)     priority="$(task_priority "$text")"; body="$(task_body "$text")" ;;
+  esac
+  printf '%s\t%s\n' "$priority" "$(trim_whitespace "$body")"
+}
+
+escape_markup() {
+  local value="${1//&/"&amp;"}"
+  value="${value//</"&lt;"}"
+  value="${value//>/"&gt;"}"
+  printf '%s\n' "$value"
+}
+
+rasi_quote() {
+  jq -Rn --arg value "$1" '$value'
+}
+
+chip_label() {
+  local icon="$1"
+  local bg="$2"
+  local label="$3"
+  printf '<span bgcolor="%s" foreground="%s"><span font_desc="%s"> %s </span></span>  %s\n' \
+    "$bg" \
+    "$ACTION_FG" \
+    "$(escape_markup "$CHIP_ICON_FONT_DESC")" \
+    "$icon" \
+    "$(escape_markup "$label")"
+}
+
+icon_chip() {
+  local icon="$1"
+  local bg="$2"
+  printf '<span bgcolor="%s" foreground="%s"><span font_desc="%s"> %s </span></span>\n' \
+    "$bg" \
+    "$ACTION_FG" \
+    "$(escape_markup "$CHIP_ICON_FONT_DESC")" \
+    "$icon"
+}
+
+empty_task_label() {
+  printf '<span foreground="%s" weight="600">No active tasks</span>  <span foreground="%s" size="small">Alt+a to add one</span>\n' \
+    "$SECTION_FG" \
+    "$INFO_FG"
+}
+
+task_label() {
+  local task="$1"
+  local priority body
+  priority="$(task_priority "$task")"
+  body="$(task_body "$task")"
+  printf '%s  <span weight="600">%s</span>\n' \
+    "$(icon_chip "$(priority_icon "$priority")" "$(priority_bg "$priority")")" \
+    "$(escape_markup "$body")"
+}
+
+# ── prompts ──────────────────────────────────────────────────────────────────
+
+quick_add_prompt() {
+  printf '' | prompt_rofi -dmenu -p "Add" \
+    -theme-str 'entry { placeholder: "Task…   !! critical · ! high · - low · none = moderate"; }'
+}
+
+# ── storage ──────────────────────────────────────────────────────────────────
+
+read_tasks() {
+  mapfile -t TASKS < "$TASK_FILE"
+}
+
+# Rename atomically so Waybar cannot read a partial list.
+write_tasks() {
+  local tmp
+  tmp="$(mktemp "${TASK_FILE}.XXXXXX")"
+  if [ "$#" -gt 0 ]; then
+    printf '%s\n' "$@" > "$tmp"
+  fi
+  mv "$tmp" "$TASK_FILE"
+}
+
+# Lock read-modify-write operations against concurrent menu and add actions.
+# Keep prompts outside the lock so an open menu cannot block rendering.
+update_tasks() {
+  local mutator="$1"
+  shift
+  local status=0
+
+  exec 8>>"$TASK_LOCK_FILE"
+  flock 8
+  read_tasks
+  if "$mutator" "$@"; then
+    write_tasks ${TASKS[@]+"${TASKS[@]}"}
+  else
+    status=1
+  fi
+  exec 8>&-
+
+  if [ "$status" -eq 0 ]; then
+    refresh_waybar
+  fi
+  return "$status"
+}
+
+# Address tasks by text because concurrent edits can shift menu indices.
+task_index_of() {
+  local target="$1"
+  local i
+  for i in "${!TASKS[@]}"; do
+    if [ "${TASKS[$i]}" = "$target" ]; then
+      printf '%s\n' "$i"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# Indices of TASKS in display order: priority rank, then file order.
+sorted_task_indices() {
+  local i
+  for i in "${!TASKS[@]}"; do
+    printf '%s\t%s\n' "$(priority_rank "$(task_priority "${TASKS[$i]}")")" "$i"
+  done | sort -s -t $'\t' -k1,1n | cut -f2
+}
+
+# Completed lines go to the done log as "<batch epoch><TAB>line", so a whole
+# clear can be undone as one batch.
+log_done() {
+  local batch="$1"
+  shift
+  local line
+  for line in "$@"; do
+    printf '%s\t%s\n' "$batch" "$line"
+  done >> "$DONE_FILE"
+}
+
+# ── mutators (run under update_tasks) ────────────────────────────────────────
+
+task_prepend() {
+  TASKS=("$1" ${TASKS[@]+"${TASKS[@]}"})
+}
+
+task_drop() {
+  local index
+  index="$(task_index_of "$1")" || return 1
+  log_done "$(date +%s)" "$1"
+  TASKS=("${TASKS[@]:0:index}" "${TASKS[@]:index+1}")
+}
+
+task_promote() {
+  local index
+  index="$(task_index_of "$1")" || return 1
+  TASKS=("$1" "${TASKS[@]:0:index}" "${TASKS[@]:index+1}")
+}
+
+task_replace() {
+  local index
+  index="$(task_index_of "$1")" || return 1
+  TASKS[index]="$2"
+}
+
+task_truncate() {
+  if [ "${#TASKS[@]}" -gt 0 ]; then
+    log_done "$(date +%s)" "${TASKS[@]}"
+  fi
+  TASKS=()
+}
+
+# Put the most recent done batch back at the top and drop it from the log.
+task_undo_last() {
+  local batch tmp
+  local -a restored=()
+  [ -s "$DONE_FILE" ] || return 1
+  batch="$(tail -n 1 "$DONE_FILE" | cut -f1)"
+  mapfile -t restored < <(awk -F '\t' -v b="$batch" '$1 == b { sub(/^[^\t]*\t/, ""); print }' "$DONE_FILE")
+  [ "${#restored[@]}" -gt 0 ] || return 1
+  tmp="$(mktemp "${DONE_FILE}.XXXXXX")"
+  awk -F '\t' -v b="$batch" '$1 != b' "$DONE_FILE" > "$tmp"
+  mv "$tmp" "$DONE_FILE"
+  TASKS=("${restored[@]}" ${TASKS[@]+"${TASKS[@]}"})
+}
+
+# ── commands ─────────────────────────────────────────────────────────────────
+
+add_task() {
+  local note="${1:-}"
+  local priority_input="${2:-}"
+  local priority="" body="" parsed
+
+  if [ -z "$note" ]; then
+    note="$(quick_add_prompt)" || true
+  fi
+  note="$(trim_whitespace "$note")"
+  [ -n "$note" ] || return 0
+
+  # An explicit priority argument wins; otherwise the text itself says it.
+  if [ -n "$priority_input" ] && priority="$(normalize_priority "$priority_input" 2>/dev/null)"; then
+    body="$(task_body "$note")"
+  else
+    parsed="$(parse_quick_add "$note")"
+    priority="${parsed%%$'\t'*}"
+    body="${parsed#*$'\t'}"
+  fi
+
+  local formatted
+  formatted="$(format_task "$body" "$priority")" || return 0
+  update_tasks task_prepend "$formatted"
+}
+
+open_file_in_terminal() {
+  local editor_cmd
+  editor_cmd="$(resolve_editor)"
+  # The editor command may contain arguments, so split it into an array.
+  local -a editor_argv
+  read -r -a editor_argv <<< "$editor_cmd"
+  local terminal="${TERMINAL:-foot}"
+  if ! command -v "$terminal" >/dev/null 2>&1; then
+    printf 'atomic-note: terminal %s is unavailable; edit %s directly or set TERMINAL\n' "$terminal" "$TASK_FILE" >&2
+    return 0
+  fi
+  # The editor bypasses update_tasks, so refresh after it closes.
+  (
+    "$terminal" -e "${editor_argv[@]}" "$TASK_FILE"
+    refresh_waybar
+  ) &
+}
+
+list_tasks() {
+  cat "$TASK_FILE"
+}
+
+clear_tasks() {
+  update_tasks task_truncate
+}
+
+# The task shown on the bar: first in display order.
+top_task() {
+  read_tasks
+  [ "${#TASKS[@]}" -gt 0 ] || return 1
+  local first
+  first="$(sorted_task_indices | head -n 1)"
+  printf '%s\n' "${TASKS[$first]}"
+}
+
+done_top_task() {
+  local task
+  task="$(top_task)" || return 0
+  update_tasks task_drop "$task"
+}
+
+undo_last() {
+  update_tasks task_undo_last
+}
+
+edit_task() {
+  local current="$1"
+  local current_body current_priority updated formatted
+  current_body="$(task_body "$current")"
+  current_priority="$(task_priority "$current")"
+  updated="$(printf '%s' "$current_body" | prompt_rofi -dmenu -p "Edit")" || true
+  [ -n "$updated" ] || return 0
+  formatted="$(format_task "$updated" "$current_priority")" || return 0
+  update_tasks task_replace "$current" "$formatted" || return 1
+  printf '%s\n' "$formatted"
+}
+
+set_priority() {
+  local current="$1"
+  local new_priority="$2"
+  local formatted
+  formatted="$(format_task "$(task_body "$current")" "$new_priority")" || return 1
+  update_tasks task_replace "$current" "$formatted" || return 1
+  printf '%s\n' "$formatted"
+}
+
+confirm_clear() {
+  local choice no_option yes_option
+  no_option="$(chip_label "󰜺" "$ACTION_CANCEL_BG" "No")"
+  yes_option="$(chip_label "󰄬" "$ACTION_CLEAR_BG" "Yes, clear all")"
+
+  choice="$(
+    printf '%s\n%s\n' "$no_option" "$yes_option" \
+      | prompt_rofi -dmenu -i -no-custom -markup-rows -p "Clear all tasks?" \
+          -mesg "Alt+z in the menu brings them back."
+  )" || true
+  [ "$choice" = "$yes_option" ]
+}
+
+# ── waybar ───────────────────────────────────────────────────────────────────
+
+render_waybar() {
+  read_tasks
+
+  local count="${#TASKS[@]}"
+  if [ "$count" -eq 0 ]; then
+    jq -cn \
+      --arg text "󰠮 Empty" \
+      --arg tooltip "No active tasks" \
+      --arg class "empty" \
+      '{text: $text, tooltip: $tooltip, class: $class}'
+    return 0
+  fi
+
+  local -a order
+  mapfile -t order < <(sorted_task_indices)
+  local top_task="${TASKS[${order[0]}]}"
+  local remaining=$((count - 1))
+  local top_priority display_text tooltip priority tooltip_body i
+
+  top_priority="$(task_priority "$top_task")"
+  display_text="[$(priority_icon "$top_priority")] $(escape_markup "$(task_body "$top_task")")"
+  if [ "$remaining" -gt 0 ]; then
+    display_text="$display_text   ($remaining)"
+  fi
+
+  tooltip="<b><span foreground='${ACTION_ADD_BG}'>ATOMIC TASKS</span></b>
+<span alpha='30%'>──────────────────────────</span>
+<tt>"
+  for i in "${order[@]}"; do
+    priority="$(task_priority "${TASKS[$i]}")"
+    tooltip_body="$(task_body "${TASKS[$i]}")"
+    if [ "${#tooltip_body}" -gt 68 ]; then
+      tooltip_body="${tooltip_body:0:67}…"
+    fi
+    tooltip+="<span foreground='$(priority_bg "$priority")'>$(priority_icon "$priority")</span> $(escape_markup "$tooltip_body")"$'\n'
+  done
+  tooltip="${tooltip%$'\n'}</tt>
+
+<span size='small' alpha='65%'>Click: menu · Right: add · Middle: done top</span>"
+
+  jq -cn \
+    --arg text "$display_text" \
+    --arg tooltip "$tooltip" \
+    --arg class "$top_priority" \
+    '{text: $text, tooltip: $tooltip, class: $class}'
+}
+
+# ── main menu ────────────────────────────────────────────────────────────────
+# One sorted list. Routine task actions live in an expandable action area:
+#   Enter opens/closes it; Alt+d done · Alt+e edit · Alt+↑ move to top
+#   Alt+1..4 set priority. Add/Open/Clear/Undo stay in the top action bar.
+# rofi prints the highlighted row and filter for every key, so a key or button
+# always acts on the task under the cursor and the filter survives the reopen.
+
+rofi_menu() {
+  # EXIT runs after function-local variables leave scope under nounset.
+  action_theme="$(mktemp)"
+  # Keep the theme file until rofi exits, then remove it.
+  trap 'rm -f "$action_theme"' EXIT
+
+  local filter="" selected_task="" expanded=0 selected_row=0
+
+  while true; do
+    read_tasks
+
+    local -a order=() options=() row_task=()
+    local total_count="${#TASKS[@]}"
+    local status_text menu_lines selection status i task hot=0
+    local restore_row=0 next_filter="" result="" new_task="" main_children=""
+
+    mapfile -t order < <(sorted_task_indices)
+    for i in ${order[@]+"${order[@]}"}; do
+      task="${TASKS[$i]}"
+      options+=("$(task_label "$task")")
+      row_task+=("$task")
+      case "$(task_priority "$task")" in critical|high) hot=$((hot + 1)) ;; esac
+    done
+    if [ "$total_count" -eq 0 ]; then
+      options+=("$(empty_task_label)")
+      row_task+=("")
+      status_text="No active tasks"
+    else
+      status_text="$total_count active  •  $hot urgent"
+    fi
+
+    if [ "${#row_task[@]}" -gt 0 ]; then
+      if [ -n "$selected_task" ]; then
+        for i in "${!row_task[@]}"; do
+          if [ "${row_task[$i]}" = "$selected_task" ]; then
+            restore_row="$i"
+            break
+          fi
+        done
+      else
+        restore_row="$selected_row"
+      fi
+      if [ "$restore_row" -ge "${#row_task[@]}" ]; then
+        restore_row=$((${#row_task[@]} - 1))
+      fi
+      if [ "$restore_row" -lt 0 ]; then
+        restore_row=0
+      fi
+      if [ -z "${row_task[$restore_row]}" ]; then
+        restore_row=0
+      fi
+    else
+      expanded=0
+      selected_task=""
+      restore_row=0
+    fi
+
+    if [ "$expanded" -eq 1 ] && [ -n "$selected_task" ]; then
+      status_text="$status_text   <span alpha='60%'>Enter closes actions</span>"
+      main_children="actionbar, box-task-actions, box-priority-actions, inputbar, statusbar, listview"
+    else
+      status_text="$status_text   <span alpha='60%'>Enter actions · Alt+d done · Alt+↑ top · Alt+1-4 priority · Alt+z undo · Ctrl+1-4 theme</span>"
+      main_children="actionbar, inputbar, statusbar, listview"
+    fi
+
+    menu_lines="${#options[@]}"
+    [ "$menu_lines" -gt 12 ] && menu_lines=12
+
+    : >"$action_theme"
+    if [ -n "$BASE_THEME" ]; then
+      printf '@theme %s\n' "$(rasi_quote "$BASE_THEME")" >>"$action_theme"
+    fi
+    cat >>"$action_theme" <<EOF
+* {
+  mono-font: $(rasi_quote "$CHIP_ICON_FONT_DESC");
+}
+window {
+  width: 54%;
+  children: [ mainbox ];
+  padding: 12px;
+}
+
+mainbox {
+  children: [ ${main_children} ];
+  spacing: 8px;
+  padding: 8px;
+}
+
+statusbar {
+  expand: false;
+  padding: 6px 9px;
+  border: 1px;
+  border-radius: 8px;
+  border-color: var(outline, #3c3836);
+  background-color: ${SECTION_BG};
+  children: [ textbox-status ];
+}
+
+textbox-status {
+  markup: true;
+  content: $(rasi_quote "$status_text");
+  text-color: ${INFO_FG};
+  font: @mono-font;
+}
+
+actionbar {
+  expand: false;
+  orientation: horizontal;
+  spacing: 5px;
+  children: [ button-add, button-open, button-clear, button-actions ];
+}
+
+button {
+  cursor: pointer;
+}
+
+button-add, button-open, button-clear {
+  expand: false;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px;
+  background-color: ${SECTION_BG};
+  font: @mono-font;
+  horizontal-align: 0.5;
+}
+
+button selected,
+button selected.normal {
+  text-color: ${ACTION_FG};
+}
+
+button-add {
+  content: "󰐕 Add  Alt+a";
+  text-color: ${ACTION_ADD_BG};
+  border-color: ${ACTION_ADD_BG};
+  action: "kb-custom-1";
+}
+
+button-add selected,
+button-add selected.normal {
+  background-color: ${ACTION_ADD_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-open {
+  content: "󰈔 Open  Alt+o";
+  text-color: ${ACTION_OPEN_BG};
+  border-color: ${ACTION_OPEN_BG};
+  action: "kb-custom-2";
+}
+
+button-open selected,
+button-open selected.normal {
+  background-color: ${ACTION_OPEN_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-clear {
+  content: "󰩹 Clear  Alt+x";
+  text-color: ${ACTION_CLEAR_BG};
+  border-color: ${ACTION_CLEAR_BG};
+  action: "kb-custom-3";
+}
+
+button-clear selected,
+button-clear selected.normal {
+  background-color: ${ACTION_CLEAR_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-actions {
+  content: "󰙵 Actions  Enter";
+  text-color: ${SECTION_FG};
+  border-color: ${INFO_FG};
+  action: "kb-accept-entry";
+}
+
+button-actions selected,
+button-actions selected.normal {
+  background-color: ${INFO_FG};
+  text-color: ${ACTION_FG};
+}
+
+box-task-actions, box-priority-actions {
+  background-color: transparent;
+  orientation: horizontal;
+  expand: false;
+  spacing: 5px;
+  padding: 0;
+}
+
+box-task-actions {
+  children: [ button-done, button-edit, button-move ];
+}
+
+box-priority-actions {
+  children: [ button-critical, button-high, button-moderate, button-low ];
+}
+
+button-done, button-edit, button-move,
+button-critical, button-high, button-moderate, button-low {
+  expand: false;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px;
+  background-color: ${SECTION_BG};
+  font: @mono-font;
+  horizontal-align: 0.5;
+}
+
+button-done {
+  content: "󰄬 Done  Alt+d";
+  text-color: ${ACTION_ADD_BG};
+  border-color: ${ACTION_ADD_BG};
+  action: "kb-custom-5";
+}
+
+button-done selected,
+button-done selected.normal {
+  background-color: ${ACTION_ADD_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-edit {
+  content: "󰏫 Edit  Alt+e";
+  text-color: ${ACTION_EDIT_BG};
+  border-color: ${ACTION_EDIT_BG};
+  action: "kb-custom-6";
+}
+
+button-edit selected,
+button-edit selected.normal {
+  background-color: ${ACTION_EDIT_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-move {
+  content: "󰁝 Top  Alt+↑";
+  text-color: ${ACTION_MOVE_BG};
+  border-color: ${ACTION_MOVE_BG};
+  action: "kb-custom-7";
+}
+
+button-move selected,
+button-move selected.normal {
+  background-color: ${ACTION_MOVE_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-critical {
+  content: "Critical Alt+1";
+  text-color: ${TASK_CRITICAL_BG};
+  border-color: ${TASK_CRITICAL_BG};
+  action: "kb-custom-8";
+}
+
+button-critical selected,
+button-critical selected.normal {
+  background-color: ${TASK_CRITICAL_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-high {
+  content: "High Alt+2";
+  text-color: ${TASK_HIGH_BG};
+  border-color: ${TASK_HIGH_BG};
+  action: "kb-custom-9";
+}
+
+button-high selected,
+button-high selected.normal {
+  background-color: ${TASK_HIGH_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-moderate {
+  content: "Moderate Alt+3";
+  text-color: ${TASK_MODERATE_BG};
+  border-color: ${TASK_MODERATE_BG};
+  action: "kb-custom-10";
+}
+
+button-moderate selected,
+button-moderate selected.normal {
+  background-color: ${TASK_MODERATE_BG};
+  text-color: ${ACTION_FG};
+}
+
+button-low {
+  content: "Low Alt+4";
+  text-color: ${TASK_LOW_BG};
+  border-color: ${TASK_LOW_BG};
+  action: "kb-custom-11";
+}
+
+button-low selected,
+button-low selected.normal {
+  background-color: ${TASK_LOW_BG};
+  text-color: ${ACTION_FG};
+}
+
+inputbar {
+  margin: 0;
+  padding: 5px;
+  border: 1px;
+  border-radius: 8px;
+  border-color: var(outline-soft, #3c3836);
+  background-color: ${SECTION_BG};
+}
+
+entry {
+  placeholder: "Filter…";
+}
+
+listview {
+  columns: 1;
+  lines: ${menu_lines};
+  fixed-height: false;
+  spacing: 5px;
+  padding: 0;
+}
+
+element {
+  padding: 6px 9px;
+  border-radius: 8px;
+  spacing: 7px;
+}
+
+EOF
+    theme_palette_rules >>"$action_theme"
+
+    status=0
+    result="$(
+      printf '%s\n' "${options[@]}" \
+        | show_rofi -dmenu -i -no-custom -hover-select -markup-rows -format $'i\nf' -p "Atomic Tasks" \
+          -filter "$filter" \
+          -selected-row "$restore_row" \
+          -kb-custom-1 "Alt+a" \
+          -kb-custom-2 "Alt+o" \
+          -kb-custom-3 "Alt+x" \
+          -kb-custom-4 "Alt+z" \
+          -kb-custom-5 "Alt+d" \
+          -kb-custom-6 "Alt+e" \
+          -kb-custom-7 "Alt+Up" \
+          -kb-custom-8 "Alt+1" \
+          -kb-custom-9 "Alt+2" \
+          -kb-custom-10 "Alt+3" \
+          -kb-custom-11 "Alt+4" \
+          -kb-custom-12 "Control+1" \
+          -kb-custom-13 "Control+2" \
+          -kb-custom-14 "Control+3" \
+          -kb-custom-15 "Control+4" \
+          -theme "$action_theme"
+    )" || status=$?
+
+    selection=""
+    next_filter="$filter"
+    if [ -n "$result" ]; then
+      selection="${result%%$'\n'*}"
+      if [[ "$result" == *$'\n'* ]]; then
+        next_filter="${result#*$'\n'}"
+        next_filter="${next_filter%$'\n'}"
+      fi
+    fi
+    filter="$next_filter"
+
+    # The task under the cursor, if the key needs one.
+    task=""
+    if [[ "$selection" =~ ^[0-9]+$ ]] && [ "$selection" -lt "${#row_task[@]}" ]; then
+      task="${row_task[$selection]}"
+      selected_row="$selection"
+      if [ -n "$task" ]; then
+        selected_task="$task"
+      fi
+    fi
+
+    case "$status" in
+      0)
+        if [ -n "$task" ]; then
+          expanded=$((1 - expanded))
+        else
+          expanded=0
+        fi
+        ;;
+      1)
+        return 0
+        ;;
+      10)
+        add_task
+        selected_task=""
+        selected_row=0
+        expanded=0
+        ;;
+      11)
+        open_file_in_terminal
+        return 0
+        ;;
+      12)
+        if confirm_clear; then
+          clear_tasks
+          selected_task=""
+          selected_row=0
+          expanded=0
+        fi
+        ;;
+      13)
+        undo_last || true
+        selected_task=""
+        selected_row=0
+        ;;
+      14)
+        if [ -n "$task" ]; then
+          update_tasks task_drop "$task"
+          selected_task=""
+        fi
+        ;;
+      15)
+        if [ -n "$task" ]; then
+          new_task="$(edit_task "$task")" || new_task=""
+          if [ -n "$new_task" ]; then
+            selected_task="$new_task"
+          fi
+        fi
+        ;;
+      16)
+        if [ -n "$task" ]; then
+          update_tasks task_promote "$task"
+        fi
+        ;;
+      17)
+        if [ -n "$task" ]; then
+          new_task="$(set_priority "$task" critical)" || new_task=""
+          if [ -n "$new_task" ]; then
+            selected_task="$new_task"
+          fi
+        fi
+        ;;
+      18)
+        if [ -n "$task" ]; then
+          new_task="$(set_priority "$task" high)" || new_task=""
+          if [ -n "$new_task" ]; then
+            selected_task="$new_task"
+          fi
+        fi
+        ;;
+      19)
+        if [ -n "$task" ]; then
+          new_task="$(set_priority "$task" moderate)" || new_task=""
+          if [ -n "$new_task" ]; then
+            selected_task="$new_task"
+          fi
+        fi
+        ;;
+      20)
+        if [ -n "$task" ]; then
+          new_task="$(set_priority "$task" low)" || new_task=""
+          if [ -n "$new_task" ]; then
+            selected_task="$new_task"
+          fi
+        fi
+        ;;
+      21)
+        set_theme_mode nord
+        ;;
+      22)
+        set_theme_mode solarized
+        ;;
+      23)
+        set_theme_mode gruvbox
+        ;;
+      24)
+        set_theme_mode auto
+        ;;
+      *)
+        return 0
+        ;;
+    esac
+  done
+}
+
+case "${1:-}" in
+  --help|-h)
+    printf '%s\n' 'Usage: atomic-note [rofi|add [TEXT [PRIORITY]]|done-top|undo|file|list|clear|render-waybar]'
+    ;;
+  --version)
+    printf '%s\n' 'atomic-note 0.1.0'
+    ;;
+  render-waybar)
+    render_waybar
+    ;;
+  add)
+    add_task "${2:-}" "${3:-}"
+    ;;
+  done-top)
+    done_top_task
+    ;;
+  undo)
+    undo_last
+    ;;
+  file)
+    open_file_in_terminal
+    ;;
+  list)
+    list_tasks
+    ;;
+  clear)
+    clear_tasks
+    ;;
+  # edit|rofi|menu and the bare invocation all open the same menu.
+  *)
+    rofi_menu
+    ;;
+esac

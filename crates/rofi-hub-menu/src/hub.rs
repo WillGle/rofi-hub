@@ -4,7 +4,9 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 use rofi_dmenu::manifest::ManifestSet;
-use rofi_dmenu::{Category, DmenuOptions, Item, Mode, Outcome, ProviderManifest, Rofi, Theme, ui};
+use rofi_dmenu::{
+    Category, DmenuOptions, Item, MenuInput, Mode, Outcome, ProviderManifest, Rofi, Theme, ui,
+};
 use rofi_dmenu::{notify, paths, which};
 use serde_json::json;
 
@@ -13,13 +15,23 @@ use crate::config::Config;
 use crate::theme::{self, Choice};
 use rofi_dmenu::ChromeProfile;
 
-/// Mirrors screen-time: Alt+1..3 pick a palette, Alt+4 restores auto.
+/// Mirrors screen-time: Ctrl+1..3 pick a palette, Ctrl+4 restores auto.
 const THEME_BINDINGS: [(Mode, &str); 4] = [
-    (Mode::Nord, "Alt+1"),
-    (Mode::Solarized, "Alt+2"),
-    (Mode::Gruvbox, "Alt+3"),
-    (Mode::Auto, "Alt+4"),
+    (Mode::Nord, "Control+1"),
+    (Mode::Solarized, "Control+2"),
+    (Mode::Gruvbox, "Control+3"),
+    (Mode::Auto, "Control+4"),
 ];
+
+/// The Rofi emoji plugin is denser than a text list: four columns with at most
+/// fifteen visible rows keeps the picker compact on a 1280×800 desktop.
+const EMOJI_COLUMNS: u32 = 4;
+const EMOJI_LINES: u32 = 15;
+
+/// Power actions are short labels, so three columns keep the whole menu on one
+/// compact screen.
+const POWER_COLUMNS: u32 = 3;
+const POWER_LINES: u32 = 2;
 
 pub fn run(cli: Cli) -> Result<()> {
     let (config, warnings) = Config::load();
@@ -59,8 +71,8 @@ pub fn run(cli: Cli) -> Result<()> {
             &config,
             "emoji",
             &["-modi".to_owned(), "emoji".to_owned()],
-            None,
-            None,
+            Some(EMOJI_COLUMNS),
+            Some(EMOJI_LINES),
         ),
         Some(CliCommand::Power) => show_power(theme, no_theme, &config),
         Some(CliCommand::Show { mode, args }) => {
@@ -140,8 +152,8 @@ fn show_power(theme: Option<&str>, no_theme: bool, config: &Config) -> Result<()
         config,
         "power-menu",
         &["-modi".to_owned(), format!("power-menu:{}", menu.display())],
-        None,
-        None,
+        Some(POWER_COLUMNS),
+        Some(POWER_LINES),
     )
 }
 
@@ -201,6 +213,8 @@ fn open(
         }
     };
     let providers = manifests.providers();
+    let mut selected_id: Option<String> = None;
+    let mut filter = String::new();
 
     loop {
         let mut items = hub_items(providers, &choice.theme);
@@ -211,7 +225,7 @@ fn open(
                     &[
                         ("\u{2191}/\u{2193}", "select"),
                         ("Enter", "open"),
-                        ("Alt+1\u{2013}4", "theme"),
+                        ("Ctrl+1\u{2013}4", "theme"),
                         ("esc", "close"),
                     ],
                     &choice.theme,
@@ -224,9 +238,17 @@ fn open(
             options.theme = choice.path.clone();
         }
         options.config = rofi_config();
+        let selected_row = selected_id
+            .as_deref()
+            .and_then(|id| items.iter().position(|item| item.id == id))
+            .unwrap_or_else(|| {
+                items
+                    .iter()
+                    .position(|item| !item.nonselectable)
+                    .unwrap_or(0)
+            });
+        let active = ui::active_rows(&items);
         options.extra_args = vec![
-            "-selected-row".to_owned(),
-            "1".to_owned(),
             "-mesg".to_owned(),
             format!(
                 "{}\n{}",
@@ -239,6 +261,17 @@ fn open(
                 String::new()
             ),
         ];
+        if !active.is_empty() {
+            options.extra_args.extend(["-a".to_owned(), active]);
+        }
+        options
+            .theme_str
+            .push(ui::static_header_theme(&choice.theme));
+        // Keep the popup height when a filter reduces the list. Menu theme
+        // changes reopen the same list and must not resize the window.
+        options
+            .theme_str
+            .push("listview { dynamic: false; }".to_owned());
         let runtime = paths::rofi_runtime_dir();
         let _ = std::fs::create_dir_all(&runtime);
         options.pid = Some(runtime.join("rofi.pid"));
@@ -246,9 +279,20 @@ fn open(
             options.extra_args.push(format!("-kb-custom-{}", index + 1));
             options.extra_args.push((*key).to_owned());
         }
+        let input = MenuInput {
+            text: filter.clone(),
+            row: Some(selected_row),
+        };
+        input.restore(&mut options, selected_row);
 
-        match rofi.dmenu(&items, &options)? {
+        let (outcome, current_input) = rofi.dmenu_with_input(&items, &options)?;
+        match outcome {
             Outcome::Selected(id) if id == "hint" => return Ok(()),
+            Outcome::Selected(id) if id.starts_with("section-") => {
+                // Headers are static bands, never actions. Keep the typed
+                // filter and the selected provider while reopening.
+                retain_input(&items, &current_input, &mut selected_id, &mut filter);
+            }
             Outcome::Selected(id) => {
                 let provider = providers
                     .iter()
@@ -260,11 +304,36 @@ fn open(
             Outcome::Custom(index) if (index as usize) < THEME_BINDINGS.len() => {
                 let mode = THEME_BINDINGS[index as usize].0;
                 theme::save_mode(mode)?;
-                choice = theme::resolve(Some(mode.as_str()), config)?;
+                choice = if mode == Mode::Auto {
+                    // Auto means "no menu override": let the configured
+                    // [theme] value resolve again instead of forcing the
+                    // built-in auto palette for this session.
+                    theme::resolve(None, config)?
+                } else {
+                    theme::resolve(Some(mode.as_str()), config)?
+                };
+                retain_input(&items, &current_input, &mut selected_id, &mut filter);
             }
             Outcome::Custom(_) => return Ok(()),
         }
     }
+}
+
+/// Keep the provider id instead of the visible row index. The next launch
+/// resolves that id against the rebuilt list, so separating headers, counts,
+/// or categories cannot move the cursor to another provider.
+fn retain_input(
+    items: &[Item],
+    input: &MenuInput,
+    selected_id: &mut Option<String>,
+    filter: &mut String,
+) {
+    filter.clone_from(&input.text);
+    *selected_id = input
+        .row
+        .and_then(|row| items.get(row))
+        .filter(|item| !item.nonselectable && item.id != "hint")
+        .map(|item| item.id.clone());
 }
 
 fn hub_items(providers: &[ProviderManifest], theme: &Theme) -> Vec<Item> {

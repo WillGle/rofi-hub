@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Keep the app row under the cursor separate from the expanded detail. Theme
+  changes now restore the same app on the same page and keep the date, page,
+  detail, and popup size; the launcher passes the saved row explicitly because
+  script `new-selection` metadata is not honored by every Rofi build.
+- Share the fixed active-header style with the other apps, so section bands do
+  not gain a selection outline.
+
 ## 0.5.0
 
 - First release as a `rofi-hub` app. Installed paths, database schema, UI, and

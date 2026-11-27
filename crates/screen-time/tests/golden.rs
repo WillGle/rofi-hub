@@ -88,7 +88,7 @@ fn rofi_uses_the_shared_ui_kit() {
     assert!(actual.contains("SCREEN TIME"), "{actual}");
     assert!(actual.contains("\u{258c} DAY ACTIVITY"), "{actual}");
     assert!(actual.contains("\u{258c} APP TIMELINE"), "{actual}");
-    assert!(actual.contains("Alt+1\u{2013}4 theme"), "{actual}");
+    assert!(actual.contains("Ctrl+1\u{2013}4 theme"), "{actual}");
     assert!(actual.contains("\u{00b7}"), "{actual}");
     assert!(actual.contains("foreground='#"), "{actual}");
 }

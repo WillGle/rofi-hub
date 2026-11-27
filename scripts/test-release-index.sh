@@ -62,6 +62,7 @@ for entry in apps or []:
         "clipboard": "rofi-clipboard",
         "keybinds": "rofi-keybinds",
         "network": "rofi-network",
+        "atomic-note": "atomic-note",
         "screen-time": "screen-time",
         "hub-menu": "rofi-hub-menu",
     }.get(app_id)

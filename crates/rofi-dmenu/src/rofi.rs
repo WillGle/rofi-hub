@@ -18,6 +18,24 @@ pub enum Outcome {
     Custom(u8),
 }
 
+/// Entry text and original list index returned by Rofi.
+#[derive(Debug, Default)]
+pub struct MenuInput {
+    pub text: String,
+    pub row: Option<usize>,
+}
+
+impl MenuInput {
+    pub fn restore(&self, options: &mut DmenuOptions, default_row: usize) {
+        options.extra_args.extend([
+            "-filter".to_owned(),
+            self.text.clone(),
+            "-selected-row".to_owned(),
+            self.row.unwrap_or(default_row).to_string(),
+        ]);
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct DmenuOptions {
     pub prompt: Option<String>,
@@ -30,6 +48,12 @@ pub struct DmenuOptions {
     /// Allow free-form input instead of only the supplied rows. The calendar
     /// uses this for its date search box.
     pub allow_custom: bool,
+    /// Allow opening Rofi with an empty list. Used by the calendar, whose
+    /// navigation lives in RASI buttons rather than filterable rows.
+    pub allow_empty: bool,
+    /// Theme overrides joined into one `-theme-str` argument. Rofi only honors
+    /// one such argument, so app geometry and button rules must be combined.
+    pub theme_str: Vec<String>,
     pub extra_args: Vec<String>,
 }
 
@@ -101,12 +125,21 @@ impl Rofi {
     /// Build the dmenu command. Kept separate from `dmenu` so argument
     /// handling can be tested without a display.
     pub fn dmenu_command(&self, options: &DmenuOptions, icons: bool) -> Command {
+        self.dmenu_command_with_format(options, icons, "s")
+    }
+
+    fn dmenu_command_with_format(
+        &self,
+        options: &DmenuOptions,
+        icons: bool,
+        format: &str,
+    ) -> Command {
         let mut command = Command::new(&self.binary);
         command
             .arg("-dmenu")
             .arg("-i")
             .arg("-format")
-            .arg("s")
+            .arg(format)
             .arg("-disable-history")
             .arg("-markup-rows");
 
@@ -129,6 +162,9 @@ impl Rofi {
         if let Some(theme) = &options.theme {
             command.arg("-theme").arg(theme);
         }
+        if !options.theme_str.is_empty() {
+            command.arg("-theme-str").arg(options.theme_str.join("\n"));
+        }
         for arg in &options.extra_args {
             command.arg(arg);
         }
@@ -139,11 +175,32 @@ impl Rofi {
     /// returns the text before the first NUL, which is exactly `Item::id`;
     /// filtering in Rofi does not change it.
     pub fn dmenu(&self, items: &[Item], options: &DmenuOptions) -> Result<Outcome> {
-        if items.is_empty() {
-            return Ok(Outcome::Cancelled);
+        self.run_dmenu(items, options, false)
+            .map(|(outcome, _)| outcome)
+    }
+
+    /// Return the entry and row on custom key bindings so a menu can reopen
+    /// with the same filter and selection after changing its theme.
+    pub fn dmenu_with_input(
+        &self,
+        items: &[Item],
+        options: &DmenuOptions,
+    ) -> Result<(Outcome, MenuInput)> {
+        self.run_dmenu(items, options, true)
+    }
+
+    fn run_dmenu(
+        &self,
+        items: &[Item],
+        options: &DmenuOptions,
+        capture_input: bool,
+    ) -> Result<(Outcome, MenuInput)> {
+        if items.is_empty() && !options.allow_empty {
+            return Ok((Outcome::Cancelled, MenuInput::default()));
         }
         let icons = items.iter().any(|item| item.icon.is_some());
-        let mut command = self.dmenu_command(options, icons);
+        let format = if capture_input { "i\nf" } else { "s" };
+        let mut command = self.dmenu_command_with_format(options, icons, format);
         command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -171,20 +228,29 @@ impl Rofi {
 
         let output = child.wait_with_output()?;
         let status = output.status.code().unwrap_or(-1);
-        match status {
-            0 => {
-                let text = String::from_utf8_lossy(&output.stdout);
-                let id = text.trim_end_matches(['\r', '\n']);
-                if id.is_empty() {
-                    Ok(Outcome::Cancelled)
-                } else {
-                    Ok(Outcome::Selected(id.to_owned()))
+        let text = String::from_utf8_lossy(&output.stdout);
+        let text = text.strip_suffix('\n').unwrap_or(&text);
+        let mut input = MenuInput::default();
+        let id =
+            if let Some((index, filter)) = capture_input.then(|| text.split_once('\n')).flatten() {
+                input.row = index.parse::<usize>().ok().filter(|row| *row < items.len());
+                input.text = filter.to_owned();
+                input.row.map_or(filter, |row| items[row].id.as_str())
+            } else {
+                // Preserve the plain row output accepted by existing Rofi wrappers.
+                let text = text.trim_end_matches(['\r', '\n']);
+                if capture_input {
+                    input.row = items.iter().position(|item| item.id == text);
                 }
-            }
-            1 => Ok(Outcome::Cancelled),
-            10..=28 => Ok(Outcome::Custom((status - 10) as u8)),
-            other => Err(Error::RofiStatus(other)),
-        }
+                text
+            };
+        let outcome = match status {
+            0 if !id.is_empty() => Outcome::Selected(id.to_owned()),
+            0 | 1 => Outcome::Cancelled,
+            10..=28 => Outcome::Custom((status - 10) as u8),
+            other => return Err(Error::RofiStatus(other)),
+        };
+        Ok((outcome, input))
     }
 }
 
@@ -208,6 +274,8 @@ mod tests {
             config: Some(PathBuf::from("/tmp/config.rasi")),
             pid: Some(PathBuf::from("/tmp/rofi-hub.pid")),
             allow_custom: false,
+            allow_empty: false,
+            theme_str: vec!["window { width: 50ch; }".to_owned()],
             extra_args: vec!["-kb-custom-1".to_owned(), "Alt+1".to_owned()],
         };
         let args = args(&options, true);
@@ -219,6 +287,7 @@ mod tests {
         assert!(args.contains(&"/tmp/theme.rasi".to_owned()));
         assert!(args.contains(&"/tmp/config.rasi".to_owned()));
         assert!(args.contains(&"/tmp/rofi-hub.pid".to_owned()));
+        assert!(args.contains(&"window { width: 50ch; }".to_owned()));
         assert_eq!(args[args.len() - 2], "-kb-custom-1");
     }
 

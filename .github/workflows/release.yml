@@ -47,7 +47,8 @@ jobs:
             scripts/test-install-matrix.sh scripts/test-migration.sh \
             scripts/test-nix.sh scripts/test-release-index.sh scripts/test-theme.sh \
             crates/screen-time/scripts/*.sh \
-            crates/screen-time/share/rofi-screen-time
+            crates/screen-time/share/rofi-screen-time crates/atomic-note/share/atomic-note \
+            crates/atomic-note/tests/menu.sh
 
   test:
     runs-on: ubuntu-latest
@@ -94,6 +95,7 @@ jobs:
           cargo build --workspace
           scripts/test-apps.sh
           scripts/test-theme.sh
+          bash crates/atomic-note/tests/menu.sh
       - name: Migration fixture
         run: scripts/test-migration.sh
       - name: Startup performance budget
@@ -174,7 +176,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(uname -m)" = "aarch64"
-          for app in rofi-calendar rofi-clipboard rofi-keybinds rofi-network screen-time rofi-hub-menu; do
+          for app in rofi-calendar rofi-clipboard rofi-keybinds rofi-network atomic-note screen-time rofi-hub-menu; do
             out="$(nix build --no-link --print-out-paths ".#$app")"
             echo "built $app: $out"
             nix path-info -rSh "$out" | sed "s/^/closure $app: /"
