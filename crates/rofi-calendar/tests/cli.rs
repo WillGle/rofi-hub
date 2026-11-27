@@ -50,12 +50,15 @@ fn renders_the_month_sheet_and_accepts_free_text() {
         "the action row must reserve its bottom outline: {args}"
     );
     assert!(
-        args.contains("padding: calc(20px + 0.5em) 20px;"),
+        args.contains("padding: calc(20px + 1em) 20px;"),
         "the calendar window must reserve about 5% more height: {args}"
     );
     assert!(args.contains("location: center;"), "{args}");
     assert!(args.contains("anchor: center;"), "{args}");
     assert!(args.contains("46ch"), "{args}");
+    assert!(args.contains("* 0.95"), "{args}");
+    assert!(args.contains("size=\"18000\""), "{args}");
+    assert!(args.contains("size=\"12000\""), "{args}");
     assert!(env.stdin_log().is_empty(), "{}", env.stdin_log());
 }
 

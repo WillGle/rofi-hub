@@ -27,7 +27,7 @@ configuration {
 
 /* Zoned chrome: one bordered card for filter, header, and list. */
 window {
-    width: calc( ( 46ch + 64px ) min 94% );
+    width: calc( ( 44ch + 64px ) min 94% );
     location: center;
     anchor: center;
     border: 1px;

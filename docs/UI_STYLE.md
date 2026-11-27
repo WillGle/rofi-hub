@@ -88,7 +88,7 @@ Entertainment/System/Other to palette roles.
 |---|---:|---:|---|---|
 | Hub menu | 96ch | 20 | no | input, message, searchable provider list; height stays fixed while filtering |
 | Screen Time | 144ch/dynamic | 18 | no | header, timeline, inline app details |
-| Calendar | 46ch | 1 | no | centered month message, date input, compact icon navigation plus Today |
+| Calendar | 44ch | 1 | no | centered month message, date input, compact icon navigation plus Today |
 | Clipboard | 110ch (auto-fit) | 16 | no | input, message, four RASI action buttons, list |
 | Keybinds | 110ch | 10 | no | input, message, 3-column shortcut list (10 rows max), searchable ids |
 | Network | 74ch | 13 | no | status, action buttons, filter, Wi-Fi and actions (12 candidates) |

@@ -506,7 +506,7 @@ fn theme_dump_uses_app_profiles() {
         .unwrap();
     assert!(calendar.status.success(), "{}", stderr(&calendar));
     let calendar = stdout(&calendar);
-    assert!(calendar.contains("46ch"), "{calendar}");
+    assert!(calendar.contains("44ch"), "{calendar}");
     assert!(calendar.contains("lines: 1;"), "{calendar}");
     assert!(calendar.contains("columns: 3;"), "{calendar}");
     assert!(

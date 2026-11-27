@@ -113,7 +113,7 @@ impl ChromeProfile {
         match app {
             "screen-time" => Self::new(144, 18, false, 26),
             "calendar" => {
-                let mut profile = Self::new(46, 1, false, 16);
+                let mut profile = Self::new(44, 1, false, 16);
                 profile.columns = 3;
                 profile.placeholder = "DD/MM/YYYY";
                 profile.message_first = true;

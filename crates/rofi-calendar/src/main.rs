@@ -93,7 +93,10 @@ fn run() -> Result<()> {
         let mut mesg = render_sheet(&view, today, note.as_deref(), &palette);
         mesg.truncate(mesg.trim_end_matches('\n').len());
         mesg.push('\n');
-        mesg.push_str(&ui::hint(&[("Ctrl+1–4", "Theme")], &palette));
+        mesg.push_str(&format!(
+            "<span size=\"12000\">{}</span>",
+            ui::hint(&[("Ctrl+1–4", "Theme")], &palette)
+        ));
         mesg.push('\n');
         options.extra_args = vec![
             "-matching".to_owned(),
@@ -179,12 +182,12 @@ fn calendar_theme(theme: &Theme) -> String {
     format!(
         r#"
 window {{
-    width: calc( ( 46ch + 60px ) min 94% );
+    width: calc( ( ( 46ch + 60px ) * 0.95 ) min 94% );
     location: center;
     anchor: center;
-    /* Keep the width unchanged and add roughly 5% to the content height in
-       the vertical padding. 0.5em per side scales with the configured font. */
-    padding: calc(20px + 0.5em) 20px;
+    /* Keep the width unchanged and add roughly 10% to the content height in
+       the vertical padding. 1em per side scales with the configured font. */
+    padding: calc(20px + 1em) 20px;
 }}
 mainbox {{
     children: [ message, inputbar, box-calendar-actions ];
@@ -324,13 +327,16 @@ fn render_sheet(view: &View, today: NaiveDate, note: Option<&str>, palette: &The
         .format("%B %Y")
         .to_string();
     let title_span = format!(
-        "<span foreground=\"{}\" weight=\"bold\" size=\"16000\">{}</span>",
+        "<span foreground=\"{}\" weight=\"bold\" size=\"18000\">{}</span>",
         palette.text,
         escape_markup(&month)
     );
-    let mut mesg = format!("{title_span}\n{}\n", render_grid(view, today, palette));
-    mesg.push_str(&render_note(view, note, palette));
-    mesg
+    let body = format!(
+        "{}\n{}",
+        render_grid(view, today, palette),
+        render_note(view, note, palette)
+    );
+    format!("{title_span}\n<span size=\"12000\">{body}</span>\n")
 }
 
 fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
@@ -592,7 +598,7 @@ mod tests {
     fn side_buttons_are_compact_icons() {
         let theme = calendar_theme(&Theme::gruvbox());
         assert!(
-            theme.contains("width: calc( ( 46ch + 60px ) min 94% );"),
+            theme.contains("width: calc( ( ( 46ch + 60px ) * 0.95 ) min 94% );"),
             "the calendar should be about 10% narrower: {theme}"
         );
         assert!(theme.contains("content: \"←\";"), "{theme}");
@@ -607,7 +613,7 @@ mod tests {
     fn window_adds_about_five_percent_height() {
         let theme = calendar_theme(&Theme::gruvbox());
         assert!(
-            theme.contains("padding: calc(20px + 0.5em) 20px;"),
+            theme.contains("padding: calc(20px + 1em) 20px;"),
             "the calendar should keep its width but reserve a little more height: {theme}"
         );
     }
