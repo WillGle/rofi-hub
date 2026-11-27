@@ -46,8 +46,11 @@ esac
     let stdin = env.stdin_log();
     assert!(stdin.contains("one"));
     assert!(stdin.contains("two"));
-    assert!(stdin.contains("HISTORY"), "{stdin}");
+    assert!(args.contains("HISTORY"), "{args}");
+    assert!(args.contains("num-filtered-rows"), "{args}");
     assert!(args.contains("2 text"), "{args}");
+    // The fixed HISTORY band is not a row, so the first entry is row 0.
+    assert!(args.contains("ARG:-selected-row\nARG:0"), "{args}");
 }
 
 #[test]
@@ -95,9 +98,9 @@ esac
     );
     env.script("wl-copy", "cat >/dev/null\n");
 
-    // Rofi row 2 is the second entry, after the section header. The typed
-    // filter must survive the reopen after deleting.
-    env.set_replies(&["@custom:2:2:two", "@cancel"]);
+    // The fixed HISTORY band is not a row, so row 1 is the second entry. The
+    // typed filter must survive the reopen after deleting.
+    env.set_replies(&["@custom:2:1:two", "@cancel"]);
     let output = env
         .command(BIN)
         .env("CLIPHIST_LOG", &calls)
@@ -122,7 +125,34 @@ esac
 }
 
 #[test]
-fn header_is_static_and_never_copies() {
+fn filtered_header_keeps_the_total_and_uses_a_live_match_count() {
+    let env = TestEnv::new();
+    env.script(
+        "cliphist",
+        "case \"$1\" in list) printf '7\\tone\\n8\\ttwo\\n' ;; esac\n",
+    );
+    env.script("wl-copy", "cat >/dev/null\n");
+
+    // The fixed header owns the full-history total once. The match count is
+    // Rofi's live `num-filtered-rows` widget, so typing updates it without a
+    // refresh or a relaunch.
+    env.set_replies(&["@custom:1:1:two", "@cancel"]);
+    let output = env.run(BIN, &[]);
+    assert!(output.status.success());
+    let args = env.args_log();
+    let second = args.rsplit("INVOCATION").next().unwrap();
+    assert!(second.contains("2 items"), "{second}");
+    assert!(!second.contains("match for"), "stale match text: {second}");
+    assert!(second.contains("num-filtered-rows"), "{second}");
+    assert!(second.contains("textbox-count-label"), "{second}");
+    assert!(second.contains("matching"), "{second}");
+    assert!(second.contains("textbox-section-history"), "{second}");
+    assert!(second.contains("ARG:-filter"), "{second}");
+    assert!(second.contains("ARG:two"), "{second}");
+}
+
+#[test]
+fn section_band_is_fixed_and_never_copies() {
     let env = TestEnv::new();
     let decode = env.home().join("decode-called");
     let copy = env.home().join("copy-called");
@@ -136,7 +166,7 @@ esac
     );
     env.script("wl-copy", r#": > "$COPY_CALLED"; cat >/dev/null"#);
 
-    env.set_replies(&["section-history", "@cancel"]);
+    env.set_replies(&["@cancel"]);
     let output = env
         .command(BIN)
         .env("DECODE_CALLED", &decode)
@@ -147,9 +177,13 @@ esac
     assert!(!decode.exists(), "header decode must not run");
     assert!(!copy.exists(), "header copy must not run");
     let args = env.args_log();
-    assert_eq!(args.matches("INVOCATION").count(), 2, "{args}");
-    assert!(args.contains("ARG:-a\nARG:0"), "{args}");
-    assert!(args.contains("element selected.active"), "{args}");
+    assert_eq!(args.matches("INVOCATION").count(), 1, "{args}");
+    assert!(
+        !args.contains("ARG:-a"),
+        "section band must not be a row: {args}"
+    );
+    assert!(args.contains("textbox-section-history"), "{args}");
+    assert!(args.contains("HISTORY"), "{args}");
 }
 
 #[test]
@@ -185,6 +219,11 @@ fn main_screen_uses_ras_buttons_for_every_action() {
         !args.contains("Copy  \u{00b7}"),
         "text chips remain: {args}"
     );
+    assert!(
+        args.contains("num-filtered-rows"),
+        "missing live count: {args}"
+    );
+    assert!(args.contains("textbox-section-history"), "{args}");
 }
 
 #[test]
@@ -231,6 +270,10 @@ fn empty_history_shows_an_empty_state() {
         env.stdin_log().contains("Clipboard history is empty"),
         "{}",
         env.stdin_log()
+    );
+    assert!(
+        !args.contains("num-filtered-rows"),
+        "empty history has no match count: {args}"
     );
 }
 

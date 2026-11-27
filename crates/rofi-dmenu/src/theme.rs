@@ -340,7 +340,7 @@ configuration {{
     background-color: {base};
     text-color: {text};
     border-color: {border};
-    selected-normal-background: {mantle};
+    selected-normal-background: {surface_alt};
     selected-normal-foreground: {text};
     normal-background: {base};
     normal-foreground: {text};
@@ -494,7 +494,13 @@ impl Theme {
             &["colors", "on_surface_variant", "default", "color"],
         )?;
         let accent = json_color(&value, &["colors", "primary", "default", "color"])?;
-        let power = json_color(&value, &["palettes", "secondary", "70", "color"])?;
+        // A wallpaper palette does not always ship the optional secondary
+        // palette. Keep the generated surface/accent instead of rejecting the
+        // whole palette and falling back to static.env or Gruvbox.
+        let power = json_color(&value, &["palettes", "secondary", "70", "color"])
+            .or_else(|| json_color(&value, &["colors", "secondary", "default", "color"]))
+            .or_else(|| json_color(&value, &["colors", "tertiary", "default", "color"]))
+            .or_else(|| json_color(&value, &["colors", "primary", "default", "color"]))?;
         let base_luminance = luminance(&base)?;
         let light = contrast(0.0, base_luminance) >= contrast(1.0, base_luminance);
         let mut theme = if light {
@@ -515,6 +521,16 @@ impl Theme {
         theme.muted = muted;
         theme.accent = accent;
         theme.power = power;
+        if let Some(surface_alt) = json_color(
+            &value,
+            &["colors", "surface_container_high", "default", "color"],
+        ) {
+            theme.surface_alt = surface_alt;
+        }
+        if let Some(border) = json_color(&value, &["colors", "outline_variant", "default", "color"])
+        {
+            theme.border = border;
+        }
         for color in [
             &mut theme.text,
             &mut theme.muted,
@@ -549,12 +565,18 @@ impl Theme {
         let mut theme = Self::gruvbox();
         theme.name = "static";
         theme.base = base;
-        theme.mantle = mantle;
+        theme.mantle = mantle.clone();
         theme.text = text;
-        theme.muted = muted;
+        theme.muted = muted.clone();
         theme.accent = accent.clone();
         theme.work = accent;
         theme.power = power;
+        theme.surface_alt = optional_color(
+            &vars,
+            &["THEME_STATIC_SURFACE_ALT", "THEME_STATIC_OVERLAY"],
+            &mantle,
+        );
+        theme.border = optional_color(&vars, &["THEME_STATIC_OUTLINE"], &theme.border);
         theme.browser = optional_color(&vars, &["THEME_STATIC_BLUE"], &theme.power);
         theme.communication =
             optional_color(&vars, &["THEME_STATIC_WARNING"], &theme.communication);
@@ -821,8 +843,8 @@ pub fn write_palette_theme(app: &str, base_theme: &Path, theme: &Theme) -> Optio
     foreground: {text};
     normal-background: {mantle};
     normal-foreground: {text};
-    selected-normal-background: {accent};
-    selected-normal-foreground: {selected_text};
+    selected-normal-background: {surface_alt};
+    selected-normal-foreground: {text};
 }}
 window {{ background-color: {base}; border-color: {border}; }}
 mainbox, listview {{ background-color: transparent; }}
@@ -843,9 +865,11 @@ element normal.active, element alternate.active, element selected.active {{
     border-radius: 4px;
 }}
 element selected, element selected.normal {{
-    background-color: {accent};
+    background-color: {surface_alt};
+    border: 1px;
     border-color: {accent};
-    text-color: {selected_text};
+    border-radius: 6px;
+    text-color: {text};
 }}
 element-text {{ text-color: inherit; }}
 "#
@@ -1111,6 +1135,81 @@ mod tests {
             ),
             "selected active header must not inherit the row outline"
         );
+    }
+
+    #[test]
+    fn matugen_palette_maps_surface_and_border_roles() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("palette.json");
+        std::fs::write(
+            &path,
+            r##"{
+              "colors": {
+                "surface": {"default": {"color": "#101010"}},
+                "surface_container": {"default": {"color": "#202020"}},
+                "surface_container_high": {"default": {"color": "#303030"}},
+                "on_surface": {"default": {"color": "#f0f0f0"}},
+                "on_surface_variant": {"default": {"color": "#909090"}},
+                "primary": {"default": {"color": "#00cccc"}},
+                "outline_variant": {"default": {"color": "#404040"}}
+              },
+              "palettes": {"secondary": {"70": {"color": "#00cccc"}}}
+            }"##,
+        )
+        .unwrap();
+        let theme = Theme::from_palette_file(&path).unwrap();
+        assert_eq!(theme.surface_alt, "#303030");
+        assert_eq!(theme.border, "#404040");
+    }
+
+    #[test]
+    fn matugen_palette_without_secondary_still_uses_its_surfaces() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("palette.json");
+        std::fs::write(
+            &path,
+            r##"{
+              "colors": {
+                "surface": {"default": {"color": "#101410"}},
+                "surface_container": {"default": {"color": "#1c211b"}},
+                "surface_container_high": {"default": {"color": "#272b26"}},
+                "on_surface": {"default": {"color": "#e0e4db"}},
+                "on_surface_variant": {"default": {"color": "#c2c9bd"}},
+                "primary": {"default": {"color": "#9fd49c"}},
+                "outline_variant": {"default": {"color": "#424940"}}
+              }
+            }"##,
+        )
+        .unwrap();
+        let theme = Theme::from_palette_file(&path).expect("palette without secondary");
+        assert_eq!(theme.base, "#101410");
+        assert_eq!(theme.mantle, "#1c211b");
+        assert_eq!(theme.surface_alt, "#272b26");
+        assert_eq!(theme.border, "#424940");
+        assert_eq!(theme.accent, "#9fd49c");
+        assert_eq!(theme.power, "#9fd49c");
+    }
+
+    #[test]
+    fn static_env_maps_surface_and_border_roles() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("static.env");
+        std::fs::write(
+            &path,
+            "THEME_STATIC_BASE='#101410'\n\
+             THEME_STATIC_MANTLE='#1c211b'\n\
+             THEME_STATIC_SURFACE_ALT='#272b26'\n\
+             THEME_STATIC_TEXT='#e0e4db'\n\
+             THEME_STATIC_SUBTEXT='#c2c9bd'\n\
+             THEME_STATIC_ACCENT='#9fd49c'\n\
+             THEME_STATIC_CYAN='#9eb09a'\n\
+             THEME_STATIC_OUTLINE='#424940'\n",
+        )
+        .unwrap();
+        let theme = Theme::from_static_env(&path).unwrap();
+        assert_eq!(theme.surface_alt, "#272b26");
+        assert_eq!(theme.border, "#424940");
+        assert_eq!(theme.accent, "#9fd49c");
     }
 
     #[test]

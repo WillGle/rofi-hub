@@ -296,6 +296,31 @@ fn theme_change_keeps_filter_and_selected_provider_id() {
 }
 
 #[test]
+fn navigation_hint_and_fixed_height_stay_outside_the_filtered_list() {
+    let env = TestEnv::new();
+    env.provider("alpha", "Alpha", &[shell_path().to_str().unwrap()]);
+    fs::create_dir_all(env.config.join("rofi")).unwrap();
+    fs::write(
+        env.config.join("rofi/theme.rasi"),
+        "* { background-color: #101010; }\n",
+    )
+    .unwrap();
+    let log = env.root.path().join("rofi-args");
+    let rofi = fake_rofi(&env, &log);
+
+    let output = env.command().env("ROFI_BIN", &rofi).output().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    let args = fs::read_to_string(&log).unwrap();
+    assert!(args.contains("-mesg\n"), "{args}");
+    assert!(args.contains("Enter open"), "launch hint missing: {args}");
+    assert!(args.contains("Ctrl+1–4 theme"), "{args}");
+    assert!(
+        args.contains("listview { dynamic: false; }"),
+        "popup height must stay fixed while filtering: {args}"
+    );
+}
+
+#[test]
 fn launched_providers_get_a_clean_environment_and_their_args() {
     let env = TestEnv::new();
     let marker = env.root.path().join("marker");

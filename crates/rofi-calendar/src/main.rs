@@ -94,6 +94,10 @@ fn run() -> Result<()> {
         let mut mesg = render_sheet(&view, today, note.as_deref(), &palette);
         mesg.truncate(mesg.trim_end_matches('\n').len());
         mesg.push('\n');
+        if note.is_some() || view.focus.is_some() {
+            // Keep the date/error note out of the folded final message line.
+            mesg.push('\n');
+        }
         options.extra_args = vec![
             "-matching".to_owned(),
             "normal".to_owned(),
@@ -206,18 +210,18 @@ box-calendar-actions {{
 }}
 button-prev, button-today, button-next {{
     expand: true;
-    padding: 9px 12px;
+    padding: 6px 10px;
     margin: 0;
     border: 1px;
-    border-radius: 6px;
-    border-color: {muted};
+    border-radius: 8px;
+    border-color: {border};
     background-color: {mantle};
     text-color: {text};
     horizontal-align: 0.5;
 }}
 button-prev, button-next {{
     expand: false;
-    padding: 9px 14px;
+    padding: 6px 12px;
 }}
 button-prev {{
     content: "{prev}";
@@ -247,6 +251,7 @@ textbox-calendar-theme {{
 }}
 "#,
         muted = theme.muted,
+        border = theme.border,
         mantle = theme.mantle,
         text = theme.text,
         accent = theme.accent,
@@ -335,12 +340,12 @@ fn render_sheet(view: &View, today: NaiveDate, note: Option<&str>, palette: &The
         palette.text,
         escape_markup(&month)
     );
-    let body = format!(
-        "{}\n{}",
-        render_grid(view, today, palette),
-        render_note(view, note, palette)
-    );
-    format!("{title_span}\n<span size=\"12000\">{body}</span>\n")
+    let note = render_note(view, note, palette);
+    let body = format!("{}\n{}", render_grid(view, today, palette), note);
+    // Rofi can fold the last message line into the bottom border. Keep one
+    // blank line after the date/error note so that final line stays readable.
+    let trailing = if note.is_empty() { "" } else { "\n" };
+    format!("{title_span}\n<span size=\"12000\">{body}</span>\n{trailing}")
 }
 
 fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
@@ -348,7 +353,10 @@ fn render_grid(view: &View, today: NaiveDate, palette: &Theme) -> String {
         .expect("the view always holds a valid month");
     let offset = first.weekday().num_days_from_monday() as usize;
     let days = days_in_month(view.year, view.month) as usize;
-    let rows = (offset + days).div_ceil(7);
+    // Always reserve six week rows. A four- or five-week month then keeps the
+    // same message height, so the popup size and the navigation buttons below
+    // the sheet do not move when browsing months.
+    let rows = 6;
 
     let mut sheet = String::new();
     let header = WEEKDAY_SHORT
@@ -549,6 +557,14 @@ mod tests {
         let error = render_note(&focused, Some("a < b"), &palette);
         assert!(error.contains("Invalid date: a &lt; b"));
         assert!(error.contains(&palette.danger));
+        assert!(
+            render_sheet(&focused, today(), None, &palette).ends_with("\n\n"),
+            "the last note line needs a trailing blank line"
+        );
+        assert!(
+            !render_sheet(&view(), today(), None, &palette).ends_with("\n\n"),
+            "an empty note should not add an extra blank line"
+        );
     }
 
     #[test]
@@ -561,6 +577,39 @@ mod tests {
         let mesg = render_sheet(&both, today(), None, &palette);
         assert!(mesg.contains("underline=\"single\""));
         assert!(mesg.contains("background=\"#fabd2f\""));
+    }
+
+    #[test]
+    fn four_five_and_six_week_months_keep_the_same_sheet_height() {
+        let palette = Theme::gruvbox();
+        // February 2027 starts on Monday and has 28 days (four rows),
+        // November 2026 needs five, and August 2026 needs six.
+        let heights: Vec<usize> = [(2027, 2), (2026, 11), (2026, 8)]
+            .into_iter()
+            .map(|(year, month)| {
+                let view = View {
+                    year,
+                    month,
+                    focus: None,
+                };
+                render_sheet(&view, today(), None, &palette).lines().count()
+            })
+            .collect();
+        assert_eq!(heights, vec![heights[0]; 3], "{heights:?}");
+        let grid = render_grid(
+            &View {
+                year: 2027,
+                month: 2,
+                focus: None,
+            },
+            today(),
+            &palette,
+        );
+        assert_eq!(grid.lines().count(), 7);
+        assert!(
+            grid.lines().skip(5).all(|line| line.trim().is_empty()),
+            "the reserved rows stay blank"
+        );
     }
 
     #[test]

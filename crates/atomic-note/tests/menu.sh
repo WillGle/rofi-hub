@@ -102,13 +102,29 @@ assert_contains "[Moderate] Beta task" "$HOME/.atomic_tasks" "done removes the s
 assert_contains "[Critical] Alpha task" "$HOME/.atomic_tasks.done" "done keeps an undo log"
 assert_contains "-filter" "$ARGS_LOG" "the typed filter is passed on reopen"
 assert_contains "Alpha" "$ARGS_LOG" "the typed filter survives the action"
-assert_contains "children: [ actionbar, box-task-actions, box-priority-actions, inputbar, statusbar, listview ]" "$THEME_DIR/theme.2" "Enter expands the inline action area"
+assert_contains "children: [ actionbar, inputbar, statusbar, box-task-actions, box-priority-actions, listview ]" "$THEME_DIR/theme.2" "Enter expands the inline action area"
 for button in button-done button-edit button-move button-critical button-high button-moderate button-low button-actions; do
     assert_contains "$button" "$THEME_DIR/theme.2" "expanded area has $button"
 done
 assert_contains 'action: "kb-custom-5"' "$THEME_DIR/theme.2" "Done button uses the Done key"
 assert_contains 'action: "kb-custom-1"' "$THEME_DIR/theme.2" "Add button uses the Add key"
+assert_contains 'content: "󰙵 Actions Enter"' "$THEME_DIR/theme.1" "Actions is a labelled toolbar control"
+assert_contains 'width: calc( ( ( 54% + 2em ) max 580px ) min 94% );' "$THEME_DIR/theme.2" "the expanded toolbar has room at narrow widths"
 assert_not_contains "children: [ actionbar, inputbar, statusbar, listview ]" "$THEME_DIR/theme.2" "no second menu replaces the main list"
+assert_contains "border-color: #3c3836;" "$THEME_DIR/theme.2" "Actions has a visible neutral outline"
+assert_not_contains "text-color: #83a598;" "$THEME_DIR/theme.2" "Open uses the neutral routine label"
+assert_not_contains "text-color: #d3869b;" "$THEME_DIR/theme.2" "Edit uses the neutral routine label"
+assert_not_contains "text-color: #fe8019;" "$THEME_DIR/theme.2" "Top uses the neutral routine label"
+assert_contains "text-color: #fabd2f;" "$THEME_DIR/theme.2" "Add keeps the primary accent"
+assert_contains "text-color: #f85149;" "$THEME_DIR/theme.2" "Clear keeps the danger treatment"
+selected_rule="$(awk '/^element selected, element selected.normal/{found=1} found{print} found && /^}/{exit}' "$THEME_DIR/theme.2")"
+if [[ "$selected_rule" == *"background-color: #32302f;"* \
+    && "$selected_rule" == *"border-color: #fabd2f;"* \
+    && "$selected_rule" != *"background-color: #fabd2f;"* ]]; then
+    pass "selected tasks use a surface fill and accent outline"
+else
+    fail "selected tasks use a surface fill and accent outline: $selected_rule"
+fi
 
 if bash "$APP" undo >/dev/null 2>&1; then
     assert_contains "[Critical] Alpha task" "$HOME/.atomic_tasks" "undo restores the done batch"

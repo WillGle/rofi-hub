@@ -180,8 +180,8 @@ pub(crate) fn render_dashboard_with_cursor(
 
     let peak = view
         .peak
-        .map(|(start, end)| timeutil::format_span(start, end))
-        .unwrap_or_else(|| "no peak".to_owned());
+        .map(|(start, end)| timeutil::format_span(start, end));
+    let peak_meta = peak.as_deref().map(|peak| format!("peak {peak}"));
     let summary = if let Some(top) = view.rows.first() {
         let category = category_for_app(&top.name);
         let dot = role_span("●", category.color(theme), mode);
@@ -199,12 +199,11 @@ pub(crate) fn render_dashboard_with_cursor(
             mode,
         );
         format!(
-            " {} {dot} {name} {duration} {}",
-            role_span("Top app", &theme.muted, mode),
-            role_span(&format!("· peak {peak}"), &theme.muted, mode)
+            " {} {dot} {name} {duration}",
+            role_span("Top app", &theme.muted, mode)
         )
     } else {
-        format!(" No activity recorded · peak {peak}")
+        " No activity recorded".to_owned()
     };
     if mode == OutputMode::Rofi {
         let meta = format!("{relative}{long_date}{stale}");
@@ -240,7 +239,13 @@ pub(crate) fn render_dashboard_with_cursor(
 
     emit(
         &mut out,
-        &section_header("DAY ACTIVITY", &format!("peak {peak}"), width, theme, mode),
+        &section_header(
+            "DAY ACTIVITY",
+            peak_meta.as_deref().unwrap_or(""),
+            width,
+            theme,
+            mode,
+        ),
         RowMeta::NonSelectable,
         mode,
     );
@@ -964,8 +969,15 @@ fn section_header(
         return panel_line(&format!(" {line}"), width, theme, mode);
     }
     let left_plain = format!(" ▌ {label}");
-    let padding = width.saturating_sub(visible_len(&left_plain) + visible_len(meta));
+    let padding = if meta.is_empty() {
+        0
+    } else {
+        width.saturating_sub(visible_len(&left_plain) + visible_len(meta))
+    };
     let line = format!("{left_plain}{}{meta}", " ".repeat(padding));
+    if meta.is_empty() {
+        return line;
+    }
     panel_line(&line, width, theme, mode)
 }
 
@@ -1146,6 +1158,25 @@ mod tests {
                     .and_then(|value| value.parse().ok())
             })
             .expect("missing listview lines metadata")
+    }
+
+    #[test]
+    fn peak_is_shown_once_and_the_empty_state_is_readable() {
+        let theme = Theme::resolve(&Config::default());
+        let mut view = sample_view();
+
+        view.peak = Some((10 * 3600 + 30 * 60, 12 * 3600));
+        let with_peak = render_main_with_theme(&view, OutputMode::Rofi, &theme);
+        assert_eq!(with_peak.matches("peak ").count(), 1, "{with_peak}");
+        assert!(with_peak.contains("DAY ACTIVITY"), "{with_peak}");
+
+        view.peak = None;
+        view.rows.clear();
+        view.active_seconds = 0;
+        let empty = render_main_with_theme(&view, OutputMode::Rofi, &theme);
+        assert!(empty.contains("No activity recorded"), "{empty}");
+        assert!(!empty.contains("no peak"), "{empty}");
+        assert_eq!(empty.matches("peak").count(), 0, "{empty}");
     }
 
     #[test]

@@ -158,14 +158,17 @@ fn run(cli: Cli) -> Result<()> {
             input.restore(&mut options, selected_row);
             if !no_theme {
                 app::bind_theme_shortcuts(&mut options, 2);
-                options.extra_args.extend([
-                    "-theme-str".to_owned(),
-                    network_toolbar(
-                        &choice.theme,
-                        state.enabled && state.iface.is_some(),
-                        details.is_some(),
-                    ),
-                ]);
+                options
+                    .theme_str
+                    .push(ui::static_header_theme(&choice.theme));
+                options
+                    .theme_str
+                    .push(ui::selected_row_theme(&choice.theme));
+                options.theme_str.push(network_toolbar(
+                    &choice.theme,
+                    state.enabled && state.iface.is_some(),
+                    details.is_some(),
+                ));
             }
 
             let (outcome, current_input) = rofi.dmenu_with_input(&items, &options)?;
@@ -482,7 +485,10 @@ fn network_toolbar(theme: &Theme, can_scan: bool, show_details: bool) -> String 
     } else {
         "Details"
     };
-    let lines = if show_details { 5 } else { 13 };
+    // With details open, keep enough list rows that more than the four
+    // nearby networks from the old expanded baseline remain visible; the list
+    // still scrolls when the 12-candidate fixture needs more room.
+    let lines = if show_details { 9 } else { 13 };
     // Leave room below the button borders at fractional display scaling.
     format!(
         r#"
@@ -495,13 +501,6 @@ message {{ padding: 10px 16px; }}
 inputbar {{ padding: 8px 16px; }}
 listview {{ lines: {lines}; scrollbar: true; spacing: 2px; }}
 element {{ padding: 4px 14px; }}
-element normal.active, element alternate.active, element selected.active {{
-    background-color: {mantle};
-    text-color: {text};
-    border: 1px;
-    border-color: transparent;
-    border-radius: 6px;
-}}
 box-network-actions {{
     background-color: transparent;
     orientation: horizontal;
@@ -512,11 +511,11 @@ box-network-actions {{
 }}
 button-scan, button-details, button-actions {{
     expand: false;
-    padding: 7px 12px;
+    padding: 6px 10px;
     margin: 0 0 2px;
     border: 1px;
-    border-radius: 6px;
-    border-color: {muted};
+    border-radius: 8px;
+    border-color: {border};
     background-color: {mantle};
     text-color: {text};
 }}
@@ -533,7 +532,7 @@ button-actions {{
     action: "kb-custom-2";
 }}
 "#,
-        muted = theme.muted,
+        border = theme.border,
         mantle = theme.mantle,
         text = theme.text,
     )

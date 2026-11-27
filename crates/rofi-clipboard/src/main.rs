@@ -8,9 +8,7 @@ use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
-use rofi_dmenu::{
-    ChromeProfile, DmenuOptions, Item, MenuInput, Outcome, Rofi, Theme, app, ui, which,
-};
+use rofi_dmenu::{DmenuOptions, Item, MenuInput, Outcome, Rofi, Theme, app, ui, which};
 
 const TITLE_WIDTH: usize = 72;
 
@@ -257,19 +255,98 @@ fn empty_header(theme: &Theme) -> String {
 }
 
 /// Real RASI buttons replace the old textual action chips. Each button points
-/// at the same Rofi key used by the keyboard path.
-fn clipboard_toolbar(theme: &Theme, refresh_only: bool) -> String {
+/// at the same Rofi key used by the keyboard path. The live match count uses
+/// Rofi's `num-filtered-rows` widget, so it updates while the filter is typed
+/// instead of waiting for a relaunch.
+fn clipboard_chrome(theme: &Theme, refresh_only: bool) -> String {
     let buttons = if refresh_only {
         "button-refresh"
     } else {
         "button-copy, button-delete, button-clear, button-refresh"
     };
+    let (mainbox_children, header_rules) = if refresh_only {
+        (
+            "inputbar, message, box-clipboard-actions, listview".to_owned(),
+            String::new(),
+        )
+    } else {
+        (
+            "inputbar, box-clipboard-header, box-clipboard-actions, box-clipboard-list".to_owned(),
+            format!(
+                r#"
+box-clipboard-header {{
+    orientation: vertical;
+    spacing: 0;
+    background-color: transparent;
+    expand: false;
+    children: [ message, box-clipboard-count ];
+}}
+message {{
+    border: 0;
+}}
+box-clipboard-count {{
+    background-color: {mantle};
+    text-color: {muted};
+    padding: 0 12px 8px;
+    border: 0 0 1px 0;
+    border-color: {border};
+    orientation: horizontal;
+    expand: false;
+    spacing: 6px;
+    children: [ textbox-count-label, num-filtered-rows ];
+}}
+textbox-count-label {{
+    str: "matching";
+    text-color: {muted};
+    background-color: transparent;
+    padding: 0;
+    expand: false;
+}}
+num-filtered-rows {{
+    text-color: {accent};
+    background-color: transparent;
+    padding: 0;
+    expand: false;
+}}
+box-clipboard-list {{
+    orientation: vertical;
+    spacing: 4px;
+    background-color: transparent;
+    expand: false;
+    children: [ box-clipboard-section, listview ];
+}}
+box-clipboard-section {{
+    background-color: {surface_alt};
+    padding: 4px 10px;
+    border: 0 0 1px 0;
+    border-color: {border};
+    border-radius: 4px;
+    expand: false;
+    children: [ textbox-section-history ];
+}}
+textbox-section-history {{
+    str: "<span weight='bold'>▌ HISTORY</span>";
+    markup: true;
+    text-color: {accent};
+    background-color: transparent;
+    padding: 0;
+}}
+"#,
+                mantle = theme.mantle,
+                muted = theme.muted,
+                border = theme.border,
+                accent = theme.accent,
+                surface_alt = theme.surface_alt,
+            ),
+        )
+    };
     format!(
         r#"
 mainbox {{
-    children: [ inputbar, message, box-clipboard-actions, listview ];
+    children: [ {mainbox_children} ];
     spacing: 12px;
 }}
+{header_rules}
 box-clipboard-actions {{
     background-color: transparent;
     orientation: horizontal;
@@ -280,11 +357,11 @@ box-clipboard-actions {{
 }}
 button-copy, button-delete, button-clear, button-refresh {{
     expand: false;
-    padding: 6px 11px;
+    padding: 6px 10px;
     margin: 0 0 2px;
     border: 1px;
-    border-radius: 6px;
-    border-color: {muted};
+    border-radius: 8px;
+    border-color: {border};
     background-color: {mantle};
     text-color: {text};
 }}
@@ -318,7 +395,7 @@ button-clear selected.normal {{
     text-color: {base};
 }}
 "#,
-        muted = theme.muted,
+        border = theme.border,
         mantle = theme.mantle,
         text = theme.text,
         accent = theme.accent,
@@ -328,23 +405,7 @@ button-clear selected.normal {{
 }
 
 fn render_items(entries: &[Entry], theme: &Theme) -> Vec<Item> {
-    let width = ChromeProfile::for_app("clipboard")
-        .width_ch
-        .saturating_sub(26);
-    let mut items = Vec::with_capacity(entries.len() + 1);
-    items.push(
-        Item::new(
-            "section-history",
-            ui::section(
-                "HISTORY",
-                &format!("{} entries", entries.len()),
-                width,
-                theme,
-            ),
-        )
-        .active()
-        .nonselectable(),
-    );
+    let mut items = Vec::with_capacity(entries.len());
     for (index, entry) in entries.iter().enumerate() {
         // Dmenu matches the row text. Keep the original preview searchable
         // even when its formatted display has been shortened.
@@ -369,37 +430,16 @@ fn render_items(entries: &[Entry], theme: &Theme) -> Vec<Item> {
 }
 
 fn empty_items(theme: &Theme) -> Vec<Item> {
-    vec![
-        Item::new("empty", ui::empty("Clipboard history is empty", theme)).nonselectable(),
-        Item::new(
-            "hint",
-            ui::hint(
-                &[
-                    ("Alt+r", "refresh"),
-                    ("Ctrl+1–4", "theme"),
-                    ("esc", "close"),
-                ],
-                theme,
-            ),
-        )
-        .nonselectable(),
-    ]
+    vec![Item::new("empty", ui::empty("Clipboard history is empty", theme)).nonselectable()]
 }
 
-fn main_options(
-    items: &[Item],
-    entries: &[Entry],
-    theme: &Theme,
-    selected_row: usize,
-) -> DmenuOptions {
+fn main_options(entries: &[Entry], theme: &Theme, selected_row: usize) -> DmenuOptions {
     let mut options = app::dmenu_options("clipboard", "FILTER");
     options.extra_args = vec![
         "-selected-row".to_owned(),
         selected_row.to_string(),
         "-mesg".to_owned(),
         header(entries, theme),
-        "-a".to_owned(),
-        ui::active_rows(items),
         "-kb-custom-1".to_owned(),
         "Alt+x".to_owned(),
         "-kb-custom-2".to_owned(),
@@ -407,8 +447,8 @@ fn main_options(
         "-kb-custom-3".to_owned(),
         "Alt+d".to_owned(),
     ];
-    options.theme_str.push(ui::static_header_theme(theme));
-    options.theme_str.push(clipboard_toolbar(theme, false));
+    options.theme_str.push(ui::selected_row_theme(theme));
+    options.theme_str.push(clipboard_chrome(theme, false));
     options
 }
 
@@ -420,7 +460,7 @@ fn empty_options(theme: &Theme) -> DmenuOptions {
         "-kb-custom-1".to_owned(),
         "Alt+r".to_owned(),
     ];
-    options.theme_str.push(clipboard_toolbar(theme, true));
+    options.theme_str.push(clipboard_chrome(theme, true));
     options
 }
 
@@ -458,7 +498,7 @@ fn run() -> Result<()> {
     let rofi = Rofi::find()?;
 
     let mut filter = String::new();
-    let mut focus = 1usize;
+    let mut focus = 0usize;
     loop {
         let entries = load_entries(&cliphist)?;
         if entries.is_empty() {
@@ -481,10 +521,11 @@ fn run() -> Result<()> {
         }
 
         let items = render_items(&entries, &theme);
-        let mut options = main_options(&items, &entries, &theme, focus);
+        let header_text = header(&entries, &theme);
+        let mut options = main_options(&entries, &theme, focus);
         options.theme = theme_path.clone();
         app::bind_theme_shortcuts(&mut options, 3);
-        fit_options(&mut options, &items, &header(&entries, &theme), 48, 112);
+        fit_options(&mut options, &items, &header_text, 48, 112);
         options.allow_custom = true;
         options
             .extra_args

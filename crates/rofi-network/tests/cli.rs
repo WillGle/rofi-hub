@@ -330,8 +330,20 @@ fn details_are_queried_only_when_expanded_inline() {
     );
     assert!(!env.stdin().contains("manage:details"));
     assert!(!env.stdin().contains("section:connection"));
+    assert!(
+        env.args().contains("listview { lines: 9;"),
+        "expanded details must keep more than four network rows visible: {}",
+        env.args()
+    );
     let rows = format!("{}\n{}", env.stdin(), env.args());
     assert!(rows.contains("ap:Office WiFi"), "{rows}");
+    for field in ["IP/prefix", "Gateway", "VPN", "DNS", "Interface", "MAC"] {
+        assert_eq!(
+            rows.matches(field).count(),
+            1,
+            "{field} must be shown exactly once: {rows}"
+        );
+    }
     for expected in [
         "Example WiFi",
         "Interface",

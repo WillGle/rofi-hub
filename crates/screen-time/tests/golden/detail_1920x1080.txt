@@ -2,11 +2,11 @@
  18 sessions    median 3m    8 switches/h
  sessions through 17:14 · may lag one batch
 
- ▌ APP ACTIVITY                                                                                                                                 
+ ▌ APP ACTIVITY
                         00      02      04      06      08      10      12      14      16      18      20      22      24
  Sessions                                           ██      ██████  ██      ██  ██  ██    ████                          
 
- ▌ BURSTS                                                                                                                                       
+ ▌ BURSTS
  Time range      Sessions  Active     Relative duration
  09:12–09:19        4×         6m     █████████
  09:30–09:35        2×         4m     ██████

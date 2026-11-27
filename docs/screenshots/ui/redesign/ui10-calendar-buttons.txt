@@ -1,0 +1,12 @@
+4weeks launch geometry=406x435+757+323 buttons prev=40,349 today=203,349 next=366,349
+4weeks after-clicks geometry=406x435+757+323
+5weeks launch geometry=406x435+757+323 buttons prev=40,349 today=203,349 next=366,349
+5weeks after-clicks geometry=406x435+757+323
+6weeks launch geometry=406x435+757+323 buttons prev=40,349 today=203,349 next=366,349
+6weeks after-clicks geometry=406x435+757+323
+4weeks launch geometry=406x435+821+423 buttons prev=40,349 today=203,349 next=366,349
+4weeks after-clicks geometry=406x435+821+423
+5weeks launch geometry=406x435+821+423 buttons prev=40,349 today=203,349 next=366,349
+5weeks after-clicks geometry=406x435+821+423
+6weeks launch geometry=406x435+821+423 buttons prev=40,349 today=203,349 next=366,349
+6weeks after-clicks geometry=406x435+821+423

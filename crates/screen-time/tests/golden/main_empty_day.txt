@@ -1,9 +1,9 @@
  SCREEN TIME
  0m active
  Today · Saturday, 21 November 2026 · stale
- No activity recorded · peak no peak
+ No activity recorded
 
- ▌ DAY ACTIVITY                                                                     peak no peak
+ ▌ DAY ACTIVITY
                         00  02  04  06  08  10  12  14  16  18  20  22  24                      
                                                                                                 
     ■ POWER                                                                    0m               

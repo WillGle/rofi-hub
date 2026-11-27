@@ -14,7 +14,7 @@ configuration {
     background-color: #1d2021;
     text-color: #fbf1c7;
     border-color: #3c3836;
-    selected-normal-background: #282828;
+    selected-normal-background: #32302f;
     selected-normal-foreground: #fbf1c7;
     normal-background: #1d2021;
     normal-foreground: #fbf1c7;
@@ -39,8 +39,77 @@ window {
 
 mainbox {
     background-color: #1d2021;
-    children: [ inputbar, message, listview ];
+    children: [ inputbar, box-clipboard-header, box-clipboard-actions, box-clipboard-list ];
     spacing: 12px;
+    padding: 0;
+}
+
+box-clipboard-header {
+    orientation: vertical;
+    spacing: 0;
+    background-color: transparent;
+    expand: false;
+    children: [ message, box-clipboard-count ];
+}
+
+box-clipboard-count {
+    background-color: #282828;
+    text-color: #a89984;
+    padding: 0 12px 8px;
+    border: 0 0 1px 0;
+    border-color: #3c3836;
+    orientation: horizontal;
+    expand: false;
+    spacing: 6px;
+    children: [ textbox-count-label, num-filtered-rows ];
+}
+
+textbox-count-label {
+    str: "matching";
+    text-color: #a89984;
+    background-color: transparent;
+    padding: 0;
+    expand: false;
+}
+
+num-filtered-rows {
+    text-color: #fabd2f;
+    background-color: transparent;
+    padding: 0;
+    expand: false;
+}
+
+box-clipboard-actions {
+    background-color: transparent;
+    orientation: horizontal;
+    expand: false;
+    spacing: 10px;
+    padding: 0 0 2px;
+}
+
+box-clipboard-list {
+    orientation: vertical;
+    spacing: 4px;
+    background-color: transparent;
+    expand: false;
+    children: [ box-clipboard-section, listview ];
+}
+
+box-clipboard-section {
+    background-color: #32302f;
+    padding: 4px 10px;
+    border: 0 0 1px 0;
+    border-color: #3c3836;
+    border-radius: 4px;
+    expand: false;
+    children: [ textbox-section-history ];
+}
+
+textbox-section-history {
+    str: "<span weight='bold'>▌ HISTORY</span>";
+    markup: true;
+    text-color: #fabd2f;
+    background-color: transparent;
     padding: 0;
 }
 

@@ -71,20 +71,31 @@ fn run() -> Result<()> {
         let mut options = app::dmenu_options("keybinds", "SHORTCUTS");
         options.theme = theme_path.clone();
         options.extra_args = vec![
+            // Substring matching keeps a section header with the bindings it
+            // owns instead of fuzzy-matching unrelated header ids.
+            "-matching".to_owned(),
+            "normal".to_owned(),
             "-mesg".to_owned(),
+            // Keep the keyboard hint in the fixed message. A hint row in the
+            // filterable list disappears as soon as the user types.
             format!(
-                "{}\n",
+                "{}\n{}\n",
                 ui::header(
                     "SHORTCUTS",
                     &format!("{} bindings", bindings.len()),
                     "hyprland.conf",
                     &theme,
-                )
+                ),
+                ui::hint(
+                    &[("Enter", "run"), ("Ctrl+1–4", "theme"), ("esc", "close")],
+                    &theme,
+                ),
             ),
             "-a".to_owned(),
             ui::active_rows(&items),
         ];
         options.theme_str.push(ui::static_header_theme(&theme));
+        options.theme_str.push(ui::selected_row_theme(&theme));
         app::bind_theme_shortcuts(&mut options, 0);
         input.restore(&mut options, 1);
 
@@ -426,13 +437,24 @@ fn build_items(bindings: &[Binding], theme: &Theme) -> Vec<Item> {
     for (index, binding) in bindings.iter().enumerate() {
         if binding.section != section {
             section = &binding.section;
+            // Keep the section header searchable with the bindings it owns.
+            // When a shortcut or description matches, its header stays in the
+            // filtered list, so the category is visible and the first binding
+            // keeps its stable position under the header.
+            let mut searchable = format!("section-{index}\t{section}");
+            for other in bindings[index..]
+                .iter()
+                .take_while(|other| other.section == *section)
+            {
+                searchable.push('\t');
+                searchable.push_str(&other.combo);
+                searchable.push('\t');
+                searchable.push_str(&other.description);
+            }
             items.push(
-                Item::new(
-                    format!("section-{index}\t{}", section),
-                    ui::section(section, "", 98, theme),
-                )
-                .active()
-                .nonselectable(),
+                Item::new(searchable, ui::section(section, "", 98, theme))
+                    .active()
+                    .nonselectable(),
             );
         }
         let marker = if binding.command.is_some() {
@@ -441,24 +463,23 @@ fn build_items(bindings: &[Binding], theme: &Theme) -> Vec<Item> {
             "\u{2022}"
         };
         // Rofi filters the text before the first NUL (the id), not the display
-        // markup. Keep the stable list index first, then the visible fields so
-        // `Terminal` and `Super+Enter` both find the same binding.
-        let searchable = format!("{index}\t{}\t{}", binding.combo, binding.description);
+        // markup. Keep the stable list index first, then the visible fields and
+        // section so a filtered row still carries its category context.
+        let searchable = format!(
+            "{index}\t{}\t{}\t{}",
+            binding.combo, binding.description, binding.section
+        );
         items.push(Item::new(
             searchable,
-            ui::row(marker, &binding.combo, &binding.description, "", theme),
-        ));
-    }
-    items.push(
-        Item::new(
-            "hint",
-            ui::hint(
-                &[("Enter", "run"), ("Ctrl+1–4", "theme"), ("esc", "close")],
+            ui::row(
+                marker,
+                &binding.combo,
+                &binding.description,
+                &binding.section,
                 theme,
             ),
-        )
-        .nonselectable(),
-    );
+        ));
+    }
     items
 }
 
@@ -575,6 +596,61 @@ bind = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
                 .any(|item| item.display.contains("Super+Enter"))
         );
         assert!(!items.iter().any(|item| item.display.contains("[Basic]")));
+        assert!(
+            items.iter().all(|item| item.id != "hint"),
+            "the keyboard hint belongs in the fixed message, not the filtered list"
+        );
+        assert!(
+            items
+                .iter()
+                .any(|item| item.display.contains("Super+Enter") && item.display.contains("Basic")),
+            "a matching row keeps its category context"
+        );
+    }
+
+    #[test]
+    fn dense_fixture_keeps_39_bindings_and_their_sections() {
+        let mut config = String::from("# --- Basic ---\n");
+        for index in 0..20 {
+            config.push_str(&format!(
+                "bind = SUPER, F{}, exec, command-{index} with a deliberately long description\n",
+                index + 1
+            ));
+        }
+        config.push_str("# --- Windows ---\n");
+        for index in 0..10 {
+            config.push_str(&format!(
+                "bind = SUPER SHIFT, F{}, resizeactive, {index} {index}\n",
+                index + 21
+            ));
+        }
+        config.push_str("# --- Media ---\n");
+        for key in [
+            "XF86AudioMute",
+            "XF86AudioLowerVolume",
+            "XF86AudioRaiseVolume",
+            "XF86AudioMicMute",
+            "XF86MonBrightnessDown",
+            "XF86MonBrightnessUp",
+            "XF86TouchpadToggle",
+            "Print",
+            "F1",
+        ] {
+            config.push_str(&format!("bind = , {key}, exec, handle-{key}\n"));
+        }
+        let bindings = parse_config(&config);
+        assert_eq!(bindings.len(), 39);
+        let items = build_items(&bindings, &Theme::gruvbox());
+        assert!(items.iter().any(|item| item.display.contains("BASIC")));
+        assert!(items.iter().any(|item| item.display.contains("WINDOWS")));
+        assert!(items.iter().any(|item| item.display.contains("MEDIA")));
+        let first = items
+            .iter()
+            .find(|item| item.display.contains("command-0"))
+            .expect("first binding row");
+        assert!(first.id.contains("Basic"), "{}", first.id);
+        assert!(first.id.contains("command-0"), "{}", first.id);
+        assert_eq!(row_index(&first.id), Some(0));
     }
 
     #[test]
@@ -587,11 +663,14 @@ bind = , XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
             .expect("terminal row");
         assert!(terminal.id.contains("Super+Enter"), "{}", terminal.id);
         assert!(terminal.id.contains("Terminal"), "{}", terminal.id);
+        assert!(terminal.id.contains("Basic"), "{}", terminal.id);
         assert_eq!(row_index(&terminal.id), Some(0));
         assert_eq!(row_index("0"), Some(0));
         let section = items.iter().find(|item| item.active).expect("section row");
         assert!(section.id.starts_with("section-"));
         assert!(section.id.contains("Basic"), "{}", section.id);
+        assert!(section.id.contains("Super+Enter"), "{}", section.id);
+        assert!(section.id.contains("Terminal"), "{}", section.id);
         assert_eq!(row_index(&section.id), None);
     }
 }

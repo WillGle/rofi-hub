@@ -53,10 +53,14 @@ pub fn header_inline(label: &str, hero: &str, meta: &str, theme: &Theme) -> Stri
 pub fn section(label: &str, meta: &str, width: usize, theme: &Theme) -> String {
     let label = format!("\u{258c} {}", label.to_uppercase());
     let plain = format!("{label}{meta}");
-    let pad = width
-        .saturating_sub(display_width(&plain))
-        .saturating_sub(8)
-        .max(1);
+    let pad = if meta.is_empty() {
+        0
+    } else {
+        width
+            .saturating_sub(display_width(&plain))
+            .saturating_sub(8)
+            .max(1)
+    };
     format!(
         "<span foreground='{accent}' weight='bold'>{}</span>{}<span foreground='{muted}'>{}</span>",
         escape_markup(&label),
@@ -270,6 +274,24 @@ pub fn active_rows(items: &[crate::Item]) -> String {
         .join(",")
 }
 
+/// Shared selected-row style: a `surface_alt` fill with a visible accent
+/// outline. Apps pass this after the resolved theme so a user base theme cannot
+/// turn the row into a solid accent block.
+pub fn selected_row_theme(theme: &Theme) -> String {
+    format!(
+        "element selected, element selected.normal {{\n\
+         \x20   background-color: {surface};\n\
+         \x20   text-color: {text};\n\
+         \x20   border: 1px;\n\
+         \x20   border-color: {accent};\n\
+         \x20   border-radius: 6px;\n\
+         }}",
+        surface = theme.surface_alt,
+        text = theme.text,
+        accent = theme.accent,
+    )
+}
+
 /// Fixed appearance for active section headers across normal, alternate, and
 /// selected states. Clicking or navigating onto a header must not paint the
 /// regular selected-row outline.
@@ -384,6 +406,8 @@ mod tests {
         let text = section("Wi-Fi", "3", 20, &theme());
         assert!(text.contains("\u{258c} WI-FI"));
         assert!((12..=20).contains(&display_width(&text)));
+        let bare = section("Wi-Fi", "", 20, &theme());
+        assert!(!bare.ends_with(' '), "{bare}");
     }
 
     #[test]
@@ -410,6 +434,23 @@ mod tests {
             "metadata must inherit the row color"
         );
         assert!(text.contains("alpha='72%'"), "{text}");
+    }
+
+    #[test]
+    fn selected_rows_use_a_surface_fill_with_an_accent_outline() {
+        let theme = theme();
+        let rule = selected_row_theme(&theme);
+        assert!(rule.contains(&theme.surface_alt), "{rule}");
+        assert!(rule.contains(&theme.text), "{rule}");
+        assert!(
+            rule.contains(&format!("border-color: {};", theme.accent)),
+            "{rule}"
+        );
+        assert!(rule.contains("border-radius: 6px"), "{rule}");
+        assert!(
+            !rule.contains(&format!("background-color: {};", theme.accent)),
+            "selection must not be a solid accent fill: {rule}"
+        );
     }
 
     #[test]

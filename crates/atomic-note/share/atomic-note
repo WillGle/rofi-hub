@@ -65,8 +65,10 @@ ACTION_EDIT_BG="${THEME_STATIC_PURPLE:-#d3869b}"
 ACTION_MOVE_BG="${THEME_STATIC_WARNING:-#fe8019}"
 ACTION_CANCEL_BG="${THEME_STATIC_SUBTEXT:-#a89984}"
 SECTION_BG="${THEME_STATIC_MANTLE:-#282828}"
+SURFACE_ALT="${THEME_STATIC_SURFACE_ALT:-${THEME_STATIC_MANTLE:-#32302f}}"
 SECTION_FG="${THEME_STATIC_TEXT:-#fbf1c7}"
 INFO_FG="${THEME_STATIC_SUBTEXT:-#a89984}"
+BORDER_FG="${THEME_STATIC_OUTLINE:-#3c3836}"
 TASK_CRITICAL_BG="#f85149"
 TASK_HIGH_BG="#d29922"
 TASK_MODERATE_BG="#58a6ff"
@@ -85,6 +87,7 @@ load_runtime_palette() {
     [
       .colors.surface.default.color,
       .colors.surface_container.default.color,
+      .colors.surface_container_high.default.color,
       .colors.on_surface.default.color,
       .colors.on_surface_variant.default.color,
       .colors.primary.default.color,
@@ -102,17 +105,18 @@ load_runtime_palette() {
   )" || return 0
 
   IFS=$'\t' read -r -a palette <<< "$values"
-  [ "${#palette[@]}" -eq 10 ] || return 0
+  [ "${#palette[@]}" -eq 11 ] || return 0
 
   ACTION_FG="${palette[0]}"
-  ACTION_ADD_BG="${palette[4]}"
-  ACTION_OPEN_BG="${palette[9]}"
-  ACTION_EDIT_BG="${palette[8]}"
-  ACTION_MOVE_BG="${palette[6]}"
-  ACTION_CANCEL_BG="${palette[3]}"
+  ACTION_ADD_BG="${palette[5]}"
+  ACTION_OPEN_BG="${palette[10]}"
+  ACTION_EDIT_BG="${palette[9]}"
+  ACTION_MOVE_BG="${palette[7]}"
+  ACTION_CANCEL_BG="${palette[4]}"
   SECTION_BG="${palette[1]}"
-  SECTION_FG="${palette[2]}"
-  INFO_FG="${palette[3]}"
+  SURFACE_ALT="${palette[2]}"
+  SECTION_FG="${palette[3]}"
+  INFO_FG="${palette[4]}"
 }
 load_runtime_palette
 
@@ -126,8 +130,10 @@ AUTO_ACTION_EDIT_BG="$ACTION_EDIT_BG"
 AUTO_ACTION_MOVE_BG="$ACTION_MOVE_BG"
 AUTO_ACTION_CANCEL_BG="$ACTION_CANCEL_BG"
 AUTO_SECTION_BG="$SECTION_BG"
+AUTO_SURFACE_ALT="$SURFACE_ALT"
 AUTO_SECTION_FG="$SECTION_FG"
 AUTO_INFO_FG="$INFO_FG"
+AUTO_BORDER_FG="$BORDER_FG"
 THEME_MODE=""
 THEME_BASE=""
 THEME_MANTLE=""
@@ -164,12 +170,14 @@ apply_theme_mode() {
     ACTION_MOVE_BG="$AUTO_ACTION_MOVE_BG"
     ACTION_CANCEL_BG="$AUTO_ACTION_CANCEL_BG"
     SECTION_BG="$AUTO_SECTION_BG"
+    SURFACE_ALT="$AUTO_SURFACE_ALT"
     SECTION_FG="$AUTO_SECTION_FG"
     INFO_FG="$AUTO_INFO_FG"
+    BORDER_FG="$AUTO_BORDER_FG"
     return 0
   fi
   values="$(theme_palette "$mode")" || return 1
-  IFS=: read -r base mantle _ border text muted accent _ _ browser communication entertainment _ danger <<<"$values"
+  IFS=: read -r base mantle surface_alt border text muted accent _ _ browser communication entertainment _ danger <<<"$values"
   THEME_MODE="$mode"
   THEME_BASE="$base" THEME_MANTLE="$mantle" THEME_BORDER="$border" THEME_TEXT="$text" THEME_ACCENT="$accent"
   ACTION_FG="$base"
@@ -180,8 +188,10 @@ apply_theme_mode() {
   ACTION_MOVE_BG="$communication"
   ACTION_CANCEL_BG="$muted"
   SECTION_BG="$mantle"
+  SURFACE_ALT="$surface_alt"
   SECTION_FG="$text"
   INFO_FG="$muted"
+  BORDER_FG="$border"
 }
 
 save_theme_mode() {
@@ -211,10 +221,11 @@ if [ -r "$THEME_CHOICE" ]; then
 fi
 
 # A saved mode only recolors the app; the resolved base theme still supplies
-# the font, window geometry, and component layout.
+# the font, window geometry, and component layout. The selected-row rule is
+# always emitted so a base theme cannot turn it into a solid accent block.
 theme_palette_rules() {
-  [ -n "$THEME_MODE" ] || return 0
-  cat <<EOF
+  if [ -n "$THEME_MODE" ]; then
+    cat <<EOF
 window {
   background-color: ${THEME_BASE};
   border-color: ${THEME_BORDER};
@@ -240,10 +251,15 @@ element, element normal.normal, element alternate.normal {
   border-color: ${THEME_BORDER};
   text-color: ${THEME_TEXT};
 }
+EOF
+  fi
+  cat <<EOF
 element selected, element selected.normal {
-  background-color: ${THEME_ACCENT};
-  border-color: ${THEME_ACCENT};
-  text-color: ${THEME_BASE};
+  background-color: ${SURFACE_ALT};
+  border: 1px;
+  border-color: ${ACTION_ADD_BG};
+  border-radius: 6px;
+  text-color: ${SECTION_FG};
 }
 EOF
 }
@@ -775,7 +791,8 @@ rofi_menu() {
 
     if [ "$expanded" -eq 1 ] && [ -n "$selected_task" ]; then
       status_text="$status_text   <span alpha='60%'>Enter closes actions</span>"
-      main_children="actionbar, box-task-actions, box-priority-actions, inputbar, statusbar, listview"
+      # The fixed filter and status stay above the task-specific controls.
+      main_children="actionbar, inputbar, statusbar, box-task-actions, box-priority-actions, listview"
     else
       status_text="$status_text   <span alpha='60%'>Enter actions · Alt+d done · Alt+↑ top · Alt+1-4 priority · Alt+z undo · Ctrl+1-4 theme</span>"
       main_children="actionbar, inputbar, statusbar, listview"
@@ -793,7 +810,9 @@ rofi_menu() {
   mono-font: $(rasi_quote "$CHIP_ICON_FONT_DESC");
 }
 window {
-  width: 54%;
+  /* Wide enough for the four toolbar buttons at 640x480, while the desktop
+     width stays close to the previous 54% sheet. */
+  width: calc( ( ( 54% + 2em ) max 580px ) min 94% );
   children: [ mainbox ];
   padding: 12px;
 }
@@ -832,9 +851,9 @@ button {
   cursor: pointer;
 }
 
-button-add, button-open, button-clear {
+button-add, button-open, button-clear, button-actions {
   expand: false;
-  padding: 5px 9px;
+  padding: 6px 10px;
   border-radius: 8px;
   border: 1px;
   background-color: ${SECTION_BG};
@@ -844,11 +863,13 @@ button-add, button-open, button-clear {
 
 button selected,
 button selected.normal {
-  text-color: ${ACTION_FG};
+  background-color: ${SURFACE_ALT};
+  border-color: ${ACTION_ADD_BG};
+  text-color: ${SECTION_FG};
 }
 
 button-add {
-  content: "󰐕 Add  Alt+a";
+  content: "󰐕 Add Alt+a";
   text-color: ${ACTION_ADD_BG};
   border-color: ${ACTION_ADD_BG};
   action: "kb-custom-1";
@@ -861,20 +882,14 @@ button-add selected.normal {
 }
 
 button-open {
-  content: "󰈔 Open  Alt+o";
-  text-color: ${ACTION_OPEN_BG};
-  border-color: ${ACTION_OPEN_BG};
+  content: "󰈔 Open Alt+o";
+  text-color: ${SECTION_FG};
+  border-color: ${BORDER_FG};
   action: "kb-custom-2";
 }
 
-button-open selected,
-button-open selected.normal {
-  background-color: ${ACTION_OPEN_BG};
-  text-color: ${ACTION_FG};
-}
-
 button-clear {
-  content: "󰩹 Clear  Alt+x";
+  content: "󰩹 Clear Alt+x";
   text-color: ${ACTION_CLEAR_BG};
   border-color: ${ACTION_CLEAR_BG};
   action: "kb-custom-3";
@@ -887,16 +902,10 @@ button-clear selected.normal {
 }
 
 button-actions {
-  content: "󰙵 Actions  Enter";
+  content: "󰙵 Actions Enter";
   text-color: ${SECTION_FG};
-  border-color: ${INFO_FG};
+  border-color: ${BORDER_FG};
   action: "kb-accept-entry";
-}
-
-button-actions selected,
-button-actions selected.normal {
-  background-color: ${INFO_FG};
-  text-color: ${ACTION_FG};
 }
 
 box-task-actions, box-priority-actions {
@@ -918,7 +927,7 @@ box-priority-actions {
 button-done, button-edit, button-move,
 button-critical, button-high, button-moderate, button-low {
   expand: false;
-  padding: 5px 9px;
+  padding: 6px 10px;
   border-radius: 8px;
   border: 1px;
   background-color: ${SECTION_BG};
@@ -927,42 +936,24 @@ button-critical, button-high, button-moderate, button-low {
 }
 
 button-done {
-  content: "󰄬 Done  Alt+d";
-  text-color: ${ACTION_ADD_BG};
-  border-color: ${ACTION_ADD_BG};
+  content: "󰄬 Done Alt+d";
+  text-color: ${SECTION_FG};
+  border-color: ${BORDER_FG};
   action: "kb-custom-5";
 }
 
-button-done selected,
-button-done selected.normal {
-  background-color: ${ACTION_ADD_BG};
-  text-color: ${ACTION_FG};
-}
-
 button-edit {
-  content: "󰏫 Edit  Alt+e";
-  text-color: ${ACTION_EDIT_BG};
-  border-color: ${ACTION_EDIT_BG};
+  content: "󰏫 Edit Alt+e";
+  text-color: ${SECTION_FG};
+  border-color: ${BORDER_FG};
   action: "kb-custom-6";
 }
 
-button-edit selected,
-button-edit selected.normal {
-  background-color: ${ACTION_EDIT_BG};
-  text-color: ${ACTION_FG};
-}
-
 button-move {
-  content: "󰁝 Top  Alt+↑";
-  text-color: ${ACTION_MOVE_BG};
-  border-color: ${ACTION_MOVE_BG};
+  content: "󰁝 Top Alt+↑";
+  text-color: ${SECTION_FG};
+  border-color: ${BORDER_FG};
   action: "kb-custom-7";
-}
-
-button-move selected,
-button-move selected.normal {
-  background-color: ${ACTION_MOVE_BG};
-  text-color: ${ACTION_FG};
 }
 
 button-critical {

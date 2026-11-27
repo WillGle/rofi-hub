@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+- Fix the UI-10 acceptance pass: Screen Time Auto accepts desktop matugen
+  palettes without an optional secondary palette instead of falling back to
+  amber/Gruvbox; peak activity is shown once with a readable zero state.
+- Calendar reserves six week rows so four-, five-, and six-week months keep the
+  same popup size and navigation-button positions.
+- Keybinds keeps its hint in the fixed message, keeps section headers with the
+  bindings they own while filtering, and uses substring matching so shortcut
+  and description filters activate the intended row.
+- Clipboard shows the history total once and reports the filtered match count
+  live with Rofi's `num-filtered-rows`, including zero matches, while the
+  `HISTORY` band stays fixed chrome so the first entry is selected on open.
+  Network keeps eight nearby networks visible with details expanded. Atomic
+  Tasks puts its inline controls below the fixed filter/status, uses neutral
+  routine buttons, and widens to fit the expanded toolbar at 640×480.
+- Keep selected rows consistent across Clipboard, Keybinds, Network, Atomic
+  Tasks, and the Hub: a `surface_alt` fill with a 6px accent outline instead of
+  a solid accent block, including after `Ctrl+1–4` palette changes. Normalize
+  toolbar buttons to the shared 8px outlined style, give Atomic Tasks' Actions
+  control a visible button treatment, and keep the Calendar hint and focused
+  date note fully visible at scaled fonts.
 - Show 12 nearby Wi-Fi candidates in the Network main view.
 - Use a 3-column × 10-row Keybinds list (10 visible rows maximum).
 - Default the optional app launcher to 3 columns × 10 rows (config clamps

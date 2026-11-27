@@ -350,6 +350,36 @@ THEME_STATIC_CYAN='#33cccc'
     }
 
     #[test]
+    fn auto_palette_without_secondary_keeps_the_desktop_accent() {
+        let dir = tempdir().unwrap();
+        let palette_path = dir.path().join("palette.json");
+        let static_path = dir.path().join("static.env");
+        write(
+            &palette_path,
+            r##"{
+              "colors": {
+                "surface": {"default": {"color": "#101410"}},
+                "surface_container": {"default": {"color": "#1c211b"}},
+                "surface_container_high": {"default": {"color": "#272b26"}},
+                "on_surface": {"default": {"color": "#e0e4db"}},
+                "on_surface_variant": {"default": {"color": "#c2c9bd"}},
+                "primary": {"default": {"color": "#9fd49c"}},
+                "outline_variant": {"default": {"color": "#424940"}}
+              }
+            }"##,
+        );
+        write(&static_path, static_env());
+        let theme =
+            Theme::resolve_with_paths(&Config::default(), dir.path(), &palette_path, &static_path);
+        assert_eq!(theme.base, "#101410");
+        assert_eq!(theme.surface_alt, "#272b26");
+        assert_eq!(theme.border, "#424940");
+        assert_eq!(theme.accent, "#9fd49c");
+        assert_ne!(theme.accent, "#3333ff");
+        assert_ne!(theme.accent, "#fabd2f");
+    }
+
+    #[test]
     fn stale_mode_uses_static_even_when_palette_exists() {
         let dir = tempdir().unwrap();
         let palette_path = dir.path().join("palette.json");

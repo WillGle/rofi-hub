@@ -32,7 +32,10 @@ if [[ ! -x "$BIN_DIR/rofi-calendar" ]]; then
 fi
 
 E="$WORK/env"
-mkdir -p "$E/home" "$E/bin" "$E/state" "$E/config" "$E/data" "$E/run" "$E/packaged/rofi"
+# Isolate XDG_DATA_DIRS so host packages cannot leak a fallback theme into
+# tests after the packaged-fallback case. THM-04 overrides it explicitly.
+mkdir -p "$E/home" "$E/bin" "$E/state" "$E/config" "$E/data" "$E/run" \
+    "$E/data-dirs" "$E/packaged/rofi"
 cat >"$E/bin/rofi" <<'EOF'
 #!/bin/sh
 printf '%s\n' "$@" >"${ROFI_LOG:-/dev/null}"
@@ -47,6 +50,7 @@ app_env() {
         XDG_STATE_HOME="$E/state" \
         XDG_CONFIG_HOME="$E/config" \
         XDG_DATA_HOME="$E/data" \
+        XDG_DATA_DIRS="$E/data-dirs" \
         XDG_RUNTIME_DIR="$E/run" \
         PATH="$E/bin:$PATH" \
         ROFI_LOG="$ROFI_LOG" \

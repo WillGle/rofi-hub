@@ -217,22 +217,7 @@ fn open(
     let mut filter = String::new();
 
     loop {
-        let mut items = hub_items(providers, &choice.theme);
-        items.push(
-            Item::new(
-                "hint",
-                ui::hint(
-                    &[
-                        ("\u{2191}/\u{2193}", "select"),
-                        ("Enter", "open"),
-                        ("Ctrl+1\u{2013}4", "theme"),
-                        ("esc", "close"),
-                    ],
-                    &choice.theme,
-                ),
-            )
-            .nonselectable(),
-        );
+        let items = hub_items(providers, &choice.theme);
         let mut options = DmenuOptions::new(config.prompt());
         if !no_theme {
             options.theme = choice.path.clone();
@@ -250,15 +235,25 @@ fn open(
         let active = ui::active_rows(&items);
         options.extra_args = vec![
             "-mesg".to_owned(),
+            // Keep navigation and launch hints in the fixed message so they
+            // stay visible with a full list, one result, or no results.
             format!(
-                "{}\n{}",
+                "{}\n{}\n",
                 ui::header(
                     "ROFI HUB",
                     &format!("{} apps", providers.len()),
                     &choice.label(),
                     &choice.theme
                 ),
-                String::new()
+                ui::hint(
+                    &[
+                        ("\u{2191}/\u{2193}", "select"),
+                        ("Enter", "open"),
+                        ("Ctrl+1\u{2013}4", "theme"),
+                        ("esc", "close"),
+                    ],
+                    &choice.theme,
+                ),
             ),
         ];
         if !active.is_empty() {
@@ -267,6 +262,9 @@ fn open(
         options
             .theme_str
             .push(ui::static_header_theme(&choice.theme));
+        options
+            .theme_str
+            .push(ui::selected_row_theme(&choice.theme));
         // Keep the popup height when a filter reduces the list. Menu theme
         // changes reopen the same list and must not resize the window.
         options

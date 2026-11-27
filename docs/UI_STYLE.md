@@ -36,7 +36,7 @@ roles and honor user theme overrides. Gruvbox Dark is the fallback palette.
   Screen Time hero.
 - Window inset 16px, zone spacing 12px, input padding `8px 12px` and standard row padding `6px 10px`.
 - Radii: window 12px, input/header/list cards 8px, selected rows 6px.
-- Selected row: `surface_alt` background with a rounded `accent` outline.
+- A selected data or action row uses a `surface_alt` fill, a 6px radius, and a visible `accent` outline around the whole row. Keep the label in the row foreground. This applies to lists, timeline rows, and individual cells in multi-column lists. Calendar’s current-day marker represents a date and has its own treatment.
 - Section headers use a fixed band with an accent marker, a heading label,
   and optional muted metadata. Make headers non-actionable. If Rofi moves its
   cursor onto a header, the cursor must produce no visible change in the band,
@@ -56,6 +56,7 @@ roles and honor user theme overrides. Gruvbox Dark is the fallback palette.
 - Section headers are fixed. Mark their rows active with `-a` (or equivalent
   metadata) and define the same background, text, and border for
   `element normal.active`, `alternate.active`, and `selected.active`.
+- Every clickable toolbar control, including a control that expands more actions, uses a visible outline around its label and shortcut. Use a `mantle` fill, 8px radius, and `6px 10px` padding for text buttons. Use `border` for routine controls, `accent` for the primary action, and `danger` for destructive actions. Passive shortcut hints use plain text.
 - Use real RASI buttons for mouse actions. A `button` uses `content` and
   `action`; keep the two quoted values on separate lines when they are passed
   through `-theme-str`, because Rofi 2.0 treats multiple quoted strings on one
@@ -92,27 +93,36 @@ Entertainment/System/Other to palette roles.
 | Clipboard | 110ch (auto-fit) | 16 | no | input, message, four RASI action buttons, list |
 | Keybinds | 110ch | 10 | no | input, message, 3-column shortcut list (10 rows max), searchable ids |
 | Network | 74ch | 13 | no | status, action buttons, filter, Wi-Fi and actions (12 candidates) |
-| Atomic Note | 54% | up to 12 | no | action bar, expandable task actions, filter, task status, task list |
+| Atomic Note | 54% | up to 12 | no | action bar, filter, task status, expandable task actions, task list |
 
 ## Controls and detail panels
 
-- **Calendar.** Keep the centered month grid and date input. Put Prev, Today,
-  and Next in one row of RASI buttons outside the filterable list, with the
-  same actions as Left, Ctrl+t, and Right. Distinguish today's date from a date
-  lookup; the buttons stay visible while the date text is incomplete.
+- **Calendar.** Keep the centered month grid and date input. Reserve six week
+  rows so four-, five-, and six-week months keep the same popup height and
+  button positions. Put Prev, Today, and Next in one row of RASI buttons
+  outside the filterable list, with the same actions as Left, Ctrl+t, and
+  Right. Distinguish today's date from a date lookup; the buttons stay visible
+  while the date text is incomplete.
 - **Network.** Keep nearby Wi-Fi and actions in one list. Show 12
   candidates plus the section header in the main view. Use a colored dot and bold SSID for a network,
   and an arrow or warning marker for an action. The Details button and `Alt+i`
   toggle the one panel above the list. Put IP, gateway, VPN, DNS and supplemental
-  link fields there once. Saved connections expand under their row.
+  link fields there once. With details expanded, keep more than four nearby
+  networks visible and leave the list scrollable. Saved connections expand
+  under their row.
 - **Screen Time.** Keep the day summary, timeline and the selected app's
-  expanded detail on the same screen. Open with the first available app
+  expanded detail on the same screen. Show peak activity once in the DAY
+  ACTIVITY header, never in both the summary and the header; when there is no
+  peak, keep the zero state readable. Open with the first available app
   selected. `Ctrl+PgUp` and `Ctrl+PgDn` move through app groups. The row under
   the cursor is separate from the expanded detail; after a theme change restore
   that app on the same page, falling back to the first app row only when it is
   gone. Read-only rows and section titles retain their appearance during
   navigation.
-- **Clipboard.** Use RASI buttons for Copy, Delete, Clear, and Refresh. They
+- **Clipboard.** Show the full history total once. Report the matching count
+  live while the user types, including zero matches, without repeating the
+  total in the section band. Use RASI buttons for Copy, Delete, Clear, and
+  Refresh. They
   share the keyboard paths: Enter copies, `Alt+d` deletes the highlighted entry,
   `Alt+x` clears the entire history after confirmation, and `Alt+r` refreshes.
 - **Hub Menu.** Keep the typed filter, selected provider id, and window height
@@ -120,9 +130,13 @@ Entertainment/System/Other to palette roles.
   of replacing the base layout.
 - **Keybinds.** Match both the shortcut and its description. Keep a stable row
   index for dispatch; section headers and empty results never run a command.
+  Keep the keyboard hint in the fixed message so it survives filtering, and
+  keep each match's section header in the filtered list.
 - **Atomic Tasks.** Keep the task list in view with Add, Open, Clear, and an
-  Actions control. `Enter` or Actions expands Done, Edit, Move, and the four
-  priorities for the task under the cursor. Use no second task menu; keep the
+  Actions control. Keep the filter and task status in place when Actions opens,
+  with the task-specific controls immediately below the status. `Enter` or
+  Actions expands Done, Edit, Move, and the four priorities for the task under
+  the cursor. Use no second task menu; keep the
   existing `Alt+d`, `Alt+e`, `Alt+Up`, `Alt+1–4`, undo, lock, and Waybar
   behavior. Preserve `Alt+1–4` for priorities.
 
@@ -163,7 +177,8 @@ matrix](screenshots/ui/README.md) describes the Xvfb workflow. Use the desktop
 theme and scale when reproducing a reported visual issue. Current §18
 interaction captures and fixtures are listed in the same screenshot document.
 
-- For a layout change, verify that the content and button outlines fit the
+- For a shared component change, open the affected app through its normal launcher and compare the component with another app under the same palette, font, and scale. Check both against the written rules, including styles applied by launcher arguments. Use a disposable configuration without app-specific overrides for this comparison.
+- For a layout change, verify that all labels, shortcut hints, and button outlines fit the
   window, the main action is visible, and the list remains readable when
   filtered or scrolled.
 - For a header or selection change, hover and click the header and navigate

@@ -1,0 +1,87 @@
+# Ctrl+2 (Solarized) and Ctrl+3 (Gruvbox) preservation, evaluated build
+# Rofi 2.0.0; :110 = 1920x1080/96 DPI, :111 = 2048x1280/144 DPI
+# keybinds enter-foot=| = the fixture logged one empty-argument invocation.
+atomic-note before geometry=1070x282+425+399 theme=auto
+atomic-note ctrl2 geometry=1070x282+425+399 theme=solarized
+atomic-note ctrl3 geometry=1070x282+425+399 theme=gruvbox
+screen-time before geometry=1504x741+208+170 theme=auto
+screen-time ctrl2 geometry=1504x741+208+170 theme=solarized
+screen-time ctrl3 geometry=1504x741+208+170 theme=gruvbox
+keybinds before geometry=944x280+488+400 theme=auto
+keybinds ctrl2 geometry=944x280+488+400 theme=solarized
+keybinds ctrl3 geometry=944x280+488+400 theme=gruvbox
+keybinds enter-foot=|
+hub before geometry=832x577+544+252 theme=auto
+hub ctrl2 geometry=832x577+544+252 theme=solarized
+hub ctrl3 geometry=832x577+544+252 theme=gruvbox
+clipboard before geometry=704x415+608+333 theme=auto
+clipboard ctrl2 geometry=704x415+608+333 theme=solarized
+clipboard ctrl3 geometry=704x415+608+333 theme=gruvbox
+clipboard enter-copy=2	https://example.com/docs/rofi-hub/themes|
+network before geometry=656x642+632+219 theme=auto
+network ctrl2 geometry=656x642+632+219 theme=solarized
+network ctrl3 geometry=656x642+632+219 theme=gruvbox
+calendar before geometry=406x435+757+323 theme=auto
+calendar ctrl2 geometry=406x435+757+323 theme=solarized
+calendar ctrl3 geometry=406x435+757+323 theme=gruvbox
+atomic-note before geometry=1139x282+455+499 theme=auto
+atomic-note ctrl2 geometry=1139x282+455+499 theme=solarized
+atomic-note ctrl3 geometry=1139x282+455+499 theme=gruvbox
+screen-time before geometry=1504x741+272+270 theme=auto
+screen-time ctrl2 geometry=1504x741+272+270 theme=solarized
+screen-time ctrl3 geometry=1504x741+272+270 theme=gruvbox
+keybinds before geometry=944x280+552+500 theme=auto
+keybinds ctrl2 geometry=944x280+552+500 theme=solarized
+keybinds ctrl3 geometry=944x280+552+500 theme=gruvbox
+keybinds enter-foot=|
+hub before geometry=832x577+608+352 theme=auto
+hub ctrl2 geometry=832x577+608+352 theme=solarized
+hub ctrl3 geometry=832x577+608+352 theme=gruvbox
+clipboard before geometry=704x415+672+433 theme=auto
+clipboard ctrl2 geometry=704x415+672+433 theme=solarized
+clipboard ctrl3 geometry=704x415+672+433 theme=gruvbox
+clipboard enter-copy=2	https://example.com/docs/rofi-hub/themes|
+network before geometry=656x642+696+319 theme=auto
+network ctrl2 geometry=656x642+696+319 theme=solarized
+network ctrl3 geometry=656x642+696+319 theme=gruvbox
+calendar before geometry=406x435+821+423 theme=auto
+calendar ctrl2 geometry=406x435+821+423 theme=solarized
+calendar ctrl3 geometry=406x435+821+423 theme=gruvbox
+
+# Clipboard live count and copy targeting
+initial:
+geometry=704x580+608+250 theme=auto
+before:
+geometry=704x415+608+333 theme=auto
+ctrl2:
+geometry=704x415+608+333 theme=solarized
+ctrl3:
+geometry=704x415+608+333 theme=gruvbox
+enter-copy=2	https://example.com/docs/rofi-hub/themes|
+zero:
+geometry=704x306+608+387 theme=auto
+initial:
+geometry=704x580+672+350 theme=auto
+before:
+geometry=704x415+672+433 theme=auto
+ctrl2:
+geometry=704x415+672+433 theme=solarized
+ctrl3:
+geometry=704x415+672+433 theme=gruvbox
+enter-copy=2	https://example.com/docs/rofi-hub/themes|
+zero:
+geometry=704x306+672+487 theme=auto
+
+# Calendar typed-input and applied-date preservation
+partial-before geometry=406x435+757+323 theme=auto
+partial-ctrl2 geometry=406x435+757+323 theme=solarized
+partial-ctrl3 geometry=406x435+757+323 theme=gruvbox
+applied-before geometry=406x452+757+314 theme=auto
+applied-ctrl2 geometry=406x452+757+314 theme=solarized
+applied-ctrl3 geometry=406x452+757+314 theme=gruvbox
+partial-before geometry=406x435+821+423 theme=auto
+partial-ctrl2 geometry=406x435+821+423 theme=solarized
+partial-ctrl3 geometry=406x435+821+423 theme=gruvbox
+applied-before geometry=406x452+821+414 theme=auto
+applied-ctrl2 geometry=406x452+821+414 theme=solarized
+applied-ctrl3 geometry=406x452+821+414 theme=gruvbox

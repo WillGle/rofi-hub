@@ -46,8 +46,16 @@ fn lists_sections_and_runs_exec_bindings() {
     assert!(args.contains("ARG:SHORTCUTS"), "{args}");
     assert!(args.contains("ARG:-no-custom"), "{args}");
     assert!(args.contains("ARG:-mesg"), "{args}");
+    assert!(
+        args.contains("Enter run"),
+        "fixed keyboard hint missing while filtering: {args}"
+    );
 
     let stdin = env.stdin_log();
+    assert!(
+        !stdin.contains("Enter run"),
+        "hint must not be filtered: {stdin}"
+    );
     for expected in [
         "\u{258c} BASIC",
         "Super+Enter",
