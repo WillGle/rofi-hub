@@ -45,6 +45,10 @@ fn renders_the_month_sheet_and_accepts_free_text() {
         args.contains("message { padding: 12px 14px 8px; }"),
         "{args}"
     );
+    assert!(
+        args.contains("padding: 4px 0;"),
+        "the action row must reserve its bottom outline: {args}"
+    );
     assert!(args.contains("location: center;"), "{args}");
     assert!(args.contains("anchor: center;"), "{args}");
     assert!(args.contains("51ch"), "{args}");

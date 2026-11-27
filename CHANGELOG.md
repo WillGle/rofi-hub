@@ -28,7 +28,8 @@
     expandable action area opened by Enter or Actions; the second task menu is
     gone.
   - Calendar moves Prev/Today/Next to RASI buttons outside the filtered list,
-    so they remain visible while typing a date.
+    so they remain visible while typing a date. The button row reserves space
+    for the full rounded outline at scaled/HiDPI font sizes.
 - Add the inline Atomic Tasks menu test and the §18 interaction screenshot set.
 - Revisit the README, UI guide, architecture, packaging, migration, screenshot,
   Screen Time, and goal documents for the current seven-app behavior.

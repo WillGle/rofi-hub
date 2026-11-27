@@ -197,7 +197,10 @@ box-calendar-actions {{
     orientation: horizontal;
     expand: false;
     spacing: 12px;
-    padding: 4px 0 0;
+    /* Bottom padding is part of the outline space: at scaled/fractional text
+       heights Rofi can fold the last row of a button's 1px border into the
+       box edge. Keep space below the buttons so the full outline renders. */
+    padding: 4px 0;
     children: [ button-prev, button-today, button-next ];
 }}
 button-prev, button-today, button-next {{
@@ -577,6 +580,15 @@ mod tests {
         assert_eq!((december.year, december.month), (2027, 1));
         let mesg = render_sheet(&december, today(), None, &palette);
         assert!(mesg.contains("January 2027"));
+    }
+
+    #[test]
+    fn action_row_keeps_space_for_the_button_outline() {
+        let theme = calendar_theme(&Theme::gruvbox());
+        assert!(
+            theme.contains("padding: 4px 0;"),
+            "the action box needs bottom padding so Rofi does not clip the button borders: {theme}"
+        );
     }
 
     #[test]
