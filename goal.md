@@ -1418,7 +1418,7 @@ bằng minisign key offline.
 
 ## 18. Báo cáo UI và lộ trình đạt 10/10
 
-**Trạng thái** · Đã triển khai và xác minh bản trong working tree ngày 2026-11-27.
+**Trạng thái** · Đã triển khai, xác minh và merge vào `main` ngày 2026-11-27.
 Mục này áp dụng cho bảy app và bổ sung tiêu chí nghiệm thu theo
 [AGENTS.md](AGENTS.md#required-ui-rules) và [chuẩn UI](docs/UI_STYLE.md). Các
 điểm dưới đây là điểm sau khi UI-01..08 pass trên Rofi thật; ảnh và log nằm
