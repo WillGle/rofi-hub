@@ -514,6 +514,14 @@
               map (package: package.outPath) calendarOnly.environment.systemPackages
             )
           );
+          module-paths-eval =
+            assert builtins.elem "/share/rofi" calendarOnly.environment.pathsToLink;
+            assert builtins.elem "/share/rofi-apps" calendarOnly.environment.pathsToLink;
+            assert builtins.elem "/share/rofi" menuOnly.environment.pathsToLink;
+            assert builtins.elem "/share/rofi-apps" menuOnly.environment.pathsToLink;
+            pkgs.writeText "rofi-apps-paths-eval" (
+              builtins.concatStringsSep "\n" calendarOnly.environment.pathsToLink
+            );
           module-screen-time-eval = pkgs.writeText "rofi-apps-screen-time-eval" (
             builtins.concatStringsSep "\n" (
               map (package: package.outPath) screenTimeOnly.environment.systemPackages

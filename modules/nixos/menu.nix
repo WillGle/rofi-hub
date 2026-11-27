@@ -27,5 +27,11 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
+    # The menu reads app manifests and its layout from XDG_DATA_DIRS; make
+    # both package directories visible on NixOS as well.
+    environment.pathsToLink = [
+      "/share/rofi"
+      "/share/rofi-apps"
+    ];
   };
 }

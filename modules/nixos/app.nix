@@ -1,4 +1,8 @@
-{ self, app, package }:
+{
+  self,
+  app,
+  package,
+}:
 {
   config,
   lib,
@@ -24,5 +28,12 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
+    # Provider manifests and fallback Rasi files live in the package's share
+    # tree. Link them into the system profile so rofi-hub-menu can discover
+    # installed apps and apps can fall back to their packaged layout.
+    environment.pathsToLink = [
+      "/share/rofi"
+      "/share/rofi-apps"
+    ];
   };
 }
