@@ -16,6 +16,7 @@ use rofi_dmenu::{Item, Level, MenuInput, Outcome, Rofi, Theme, app, escape_marku
 const BTN_PREV: &str = "\u{2190}";
 const BTN_TODAY: &str = "Today Ctrl+t";
 const BTN_NEXT: &str = "\u{2192}";
+const THEME_HINT: &str = "Ctrl+1–4 Theme";
 const WEEKDAY_SHORT: [&str; 7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const WEEKDAYS: [&str; 7] = [
     "Monday",
@@ -92,11 +93,6 @@ fn run() -> Result<()> {
 
         let mut mesg = render_sheet(&view, today, note.as_deref(), &palette);
         mesg.truncate(mesg.trim_end_matches('\n').len());
-        mesg.push('\n');
-        mesg.push_str(&format!(
-            "<span size=\"12000\">{}</span>",
-            ui::hint(&[("Ctrl+1–4", "Theme")], &palette)
-        ));
         mesg.push('\n');
         options.extra_args = vec![
             "-matching".to_owned(),
@@ -190,7 +186,7 @@ window {{
     padding: calc(20px + 1em) 20px;
 }}
 mainbox {{
-    children: [ message, inputbar, box-calendar-actions ];
+    children: [ message, inputbar, box-calendar-actions, textbox-calendar-theme ];
     spacing: 16px;
 }}
 message {{ padding: 12px 14px 8px; }}
@@ -242,6 +238,13 @@ button-next selected, button-next selected.normal {{
     background-color: {accent};
     text-color: {base};
 }}
+textbox-calendar-theme {{
+    content: "{hint}";
+    background-color: transparent;
+    text-color: {muted};
+    horizontal-align: 0.5;
+    padding: 0;
+}}
 "#,
         muted = theme.muted,
         mantle = theme.mantle,
@@ -251,6 +254,7 @@ button-next selected, button-next selected.normal {{
         prev = BTN_PREV,
         today = BTN_TODAY,
         next = BTN_NEXT,
+        hint = THEME_HINT,
     )
 }
 
@@ -607,6 +611,18 @@ mod tests {
             theme.contains("button-prev, button-next {\n    expand: false;"),
             "Prev and Next should shrink to icon buttons: {theme}"
         );
+    }
+
+    #[test]
+    fn theme_hint_sits_below_the_action_row() {
+        let theme = calendar_theme(&Theme::gruvbox());
+        assert!(
+            theme.contains(
+                "children: [ message, inputbar, box-calendar-actions, textbox-calendar-theme ];"
+            ),
+            "{theme}"
+        );
+        assert!(theme.contains("content: \"Ctrl+1–4 Theme\";"), "{theme}");
     }
 
     #[test]

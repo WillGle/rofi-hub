@@ -32,7 +32,9 @@
     for the full rounded outline at scaled/HiDPI font sizes. The window is
     about 5% narrower and 10% taller; Prev and Next are compact icon buttons
     while Today keeps the remaining row width. The month title and sheet text
-    use 18pt/12pt sizes for a clearer hierarchy.
+    use 18pt/12pt sizes for a clearer hierarchy. The theme hint moved out of
+    the month card to a centered line below the action row, so it is never
+    clipped by the card at scaled font sizes.
 - Link `/share/rofi` and `/share/rofi-apps` into the NixOS system profile so
   the optional menu discovers every enabled app and apps keep their packaged
   fallback layouts.

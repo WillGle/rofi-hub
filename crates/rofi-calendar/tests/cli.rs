@@ -59,6 +59,8 @@ fn renders_the_month_sheet_and_accepts_free_text() {
     assert!(args.contains("* 0.95"), "{args}");
     assert!(args.contains("size=\"18000\""), "{args}");
     assert!(args.contains("size=\"12000\""), "{args}");
+    assert!(args.contains("textbox-calendar-theme"), "{args}");
+    assert!(args.contains("content: \"Ctrl+1–4 Theme\";"), "{args}");
     assert!(env.stdin_log().is_empty(), "{}", env.stdin_log());
 }
 
