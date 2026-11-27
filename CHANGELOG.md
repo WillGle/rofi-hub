@@ -29,7 +29,8 @@
     gone.
   - Calendar moves Prev/Today/Next to RASI buttons outside the filtered list,
     so they remain visible while typing a date. The button row reserves space
-    for the full rounded outline at scaled/HiDPI font sizes.
+    for the full rounded outline at scaled/HiDPI font sizes, and the window
+    adds about 5% vertical breathing room with font-relative padding.
 - Link `/share/rofi` and `/share/rofi-apps` into the NixOS system profile so
   the optional menu discovers every enabled app and apps keep their packaged
   fallback layouts.

@@ -182,7 +182,9 @@ window {{
     width: calc( ( 51ch + 68px ) min 94% );
     location: center;
     anchor: center;
-    padding: 20px;
+    /* Keep the width unchanged and add roughly 5% to the content height in
+       the vertical padding. 0.5em per side scales with the configured font. */
+    padding: calc(20px + 0.5em) 20px;
 }}
 mainbox {{
     children: [ message, inputbar, box-calendar-actions ];
@@ -580,6 +582,15 @@ mod tests {
         assert_eq!((december.year, december.month), (2027, 1));
         let mesg = render_sheet(&december, today(), None, &palette);
         assert!(mesg.contains("January 2027"));
+    }
+
+    #[test]
+    fn window_adds_about_five_percent_height() {
+        let theme = calendar_theme(&Theme::gruvbox());
+        assert!(
+            theme.contains("padding: calc(20px + 0.5em) 20px;"),
+            "the calendar should keep its width but reserve a little more height: {theme}"
+        );
     }
 
     #[test]
