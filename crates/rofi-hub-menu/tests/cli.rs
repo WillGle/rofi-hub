@@ -379,6 +379,14 @@ fn fake_rofi(env: &TestEnv, log: &Path) -> PathBuf {
 #[test]
 fn manager_modes_dispatch_raw_rofi_modes() {
     let env = TestEnv::new();
+    // Keep the test independent of a packaged fallback installed on the host:
+    // a user base theme must take precedence and produce a runtime theme.
+    fs::create_dir_all(env.config.join("rofi")).unwrap();
+    fs::write(
+        env.config.join("rofi/theme.rasi"),
+        "* { background-color: #101010; }\n",
+    )
+    .unwrap();
     let log = env.root.path().join("rofi-args");
     let rofi = fake_rofi(&env, &log);
 
@@ -498,7 +506,7 @@ fn theme_dump_uses_app_profiles() {
         .unwrap();
     assert!(calendar.status.success(), "{}", stderr(&calendar));
     let calendar = stdout(&calendar);
-    assert!(calendar.contains("51ch"), "{calendar}");
+    assert!(calendar.contains("46ch"), "{calendar}");
     assert!(calendar.contains("lines: 1;"), "{calendar}");
     assert!(calendar.contains("columns: 3;"), "{calendar}");
     assert!(

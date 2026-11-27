@@ -33,9 +33,9 @@ fn renders_the_month_sheet_and_accepts_free_text() {
     assert!(args.contains("action: \"kb-custom-1\""), "{args}");
     assert!(args.contains("action: \"kb-custom-3\""), "{args}");
     assert!(args.contains("action: \"kb-custom-2\""), "{args}");
-    assert!(args.contains("Prev ←"), "{args}");
+    assert!(args.contains("content: \"←\""), "{args}");
     assert!(args.contains("Today Ctrl+t"), "{args}");
-    assert!(args.contains("Next →"), "{args}");
+    assert!(args.contains("content: \"→\""), "{args}");
     assert!(args.contains("listview { enabled: false; }"), "{args}");
     assert!(
         args.contains("textbox { horizontal-align: 0.5; }"),
@@ -55,7 +55,7 @@ fn renders_the_month_sheet_and_accepts_free_text() {
     );
     assert!(args.contains("location: center;"), "{args}");
     assert!(args.contains("anchor: center;"), "{args}");
-    assert!(args.contains("51ch"), "{args}");
+    assert!(args.contains("46ch"), "{args}");
     assert!(env.stdin_log().is_empty(), "{}", env.stdin_log());
 }
 

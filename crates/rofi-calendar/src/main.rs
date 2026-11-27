@@ -13,9 +13,9 @@ use anyhow::Result;
 use chrono::{Datelike, Local, NaiveDate, Weekday};
 use rofi_dmenu::{Item, Level, MenuInput, Outcome, Rofi, Theme, app, escape_markup, ui};
 
-const BTN_PREV: &str = "Prev \u{2190}";
+const BTN_PREV: &str = "\u{2190}";
 const BTN_TODAY: &str = "Today Ctrl+t";
-const BTN_NEXT: &str = "Next \u{2192}";
+const BTN_NEXT: &str = "\u{2192}";
 const WEEKDAY_SHORT: [&str; 7] = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const WEEKDAYS: [&str; 7] = [
     "Monday",
@@ -179,7 +179,7 @@ fn calendar_theme(theme: &Theme) -> String {
     format!(
         r#"
 window {{
-    width: calc( ( 51ch + 68px ) min 94% );
+    width: calc( ( 46ch + 60px ) min 94% );
     location: center;
     anchor: center;
     /* Keep the width unchanged and add roughly 5% to the content height in
@@ -215,6 +215,10 @@ button-prev, button-today, button-next {{
     background-color: {mantle};
     text-color: {text};
     horizontal-align: 0.5;
+}}
+button-prev, button-next {{
+    expand: false;
+    padding: 9px 14px;
 }}
 button-prev {{
     content: "{prev}";
@@ -582,6 +586,21 @@ mod tests {
         assert_eq!((december.year, december.month), (2027, 1));
         let mesg = render_sheet(&december, today(), None, &palette);
         assert!(mesg.contains("January 2027"));
+    }
+
+    #[test]
+    fn side_buttons_are_compact_icons() {
+        let theme = calendar_theme(&Theme::gruvbox());
+        assert!(
+            theme.contains("width: calc( ( 46ch + 60px ) min 94% );"),
+            "the calendar should be about 10% narrower: {theme}"
+        );
+        assert!(theme.contains("content: \"←\";"), "{theme}");
+        assert!(theme.contains("content: \"→\";"), "{theme}");
+        assert!(
+            theme.contains("button-prev, button-next {\n    expand: false;"),
+            "Prev and Next should shrink to icon buttons: {theme}"
+        );
     }
 
     #[test]
