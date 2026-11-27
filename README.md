@@ -71,9 +71,10 @@ The full four-palette matrix and the interaction captures are in
   window height; `Ctrl+4` restores the configured theme.
 - **Theme.** Calendar, Clipboard, Keybinds, Network, Atomic Tasks, and Screen
   Time all use `Ctrl+1–4` for Nord, Solarized Light, Gruvbox Dark, and Auto.
-  The chosen palette is app-owned in
-  `~/.local/state/rofi-apps/<app>/theme-choice`; `Ctrl+4` clears the lock and
-  returns to the configured theme. The hub menu keeps its own state.
+  The standalone apps store the chosen palette in
+  `~/.local/state/rofi-apps/<app>/theme-choice`; Screen Time uses its own state
+  directory. `Ctrl+4` clears the lock and returns to the configured theme. The
+  hub menu keeps its own state.
 - **Screen Time.** The row under the cursor is separate from the expanded
   detail and is restored by app name, page, and date after a theme change.
 - **Atomic Tasks.** `Enter` or the `Actions` button expands Done, Edit, Move,
@@ -221,7 +222,7 @@ Theme ownership is split into three layers:
 | Base theme | user / theme module | `~/.config/rofi/theme.rasi` or `ROFI_THEME` |
 | App layout | app package | `$XDG_DATA_DIRS/rofi/<app>.rasi` |
 | App override | user | `~/.config/rofi/<app>.rasi` |
-| App theme lock | app | `~/.local/state/rofi-apps/<app>/theme-choice` |
+| App theme lock | app | `~/.local/state/rofi-apps/<app>/theme-choice` (Screen Time: its own state dir) |
 | Menu theme | optional menu | `share/rofi/hub-menu.rasi` + `~/.config/rofi-hub-menu/theme` |
 
 Resolution order for every app:
